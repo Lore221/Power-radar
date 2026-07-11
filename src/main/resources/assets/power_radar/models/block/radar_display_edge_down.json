@@ -1,0 +1,15 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "edge": "power_radar:block/radar_display_edge"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 12.875],
+      "to": [16, 2, 13.125],
+      "faces": {
+        "north": { "texture": "#edge" }
+      }
+    }
+  ]
+}

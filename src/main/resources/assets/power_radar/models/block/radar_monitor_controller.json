@@ -1,0 +1,51 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "power_radar:block/radar_monitor_controller_side",
+    "down": "power_radar:block/radar_monitor_controller_bottom",
+    "up": "power_radar:block/radar_monitor_controller_top",
+    "north": "power_radar:block/radar_monitor_controller_front",
+    "south": "power_radar:block/radar_monitor_controller_side",
+    "east": "power_radar:block/radar_monitor_controller_side",
+    "west": "power_radar:block/radar_monitor_controller_side",
+    "terminal_copper": "power_radar:block/terminal_copper"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "down": { "texture": "#down" },
+        "up": { "texture": "#up" },
+        "north": { "texture": "#north" },
+        "south": { "texture": "#south" },
+        "east": { "texture": "#east" },
+        "west": { "texture": "#west" }
+      }
+    },
+    {
+      "from": [5, 9, 15.75],
+      "to": [7, 11, 16.25],
+      "faces": {
+        "down": { "texture": "#terminal_copper" },
+        "up": { "texture": "#terminal_copper" },
+        "north": { "texture": "#terminal_copper" },
+        "south": { "texture": "#terminal_copper" },
+        "east": { "texture": "#terminal_copper" },
+        "west": { "texture": "#terminal_copper" }
+      }
+    },
+    {
+      "from": [9, 9, 15.75],
+      "to": [11, 11, 16.25],
+      "faces": {
+        "down": { "texture": "#terminal_copper" },
+        "up": { "texture": "#terminal_copper" },
+        "north": { "texture": "#terminal_copper" },
+        "south": { "texture": "#terminal_copper" },
+        "east": { "texture": "#terminal_copper" },
+        "west": { "texture": "#terminal_copper" }
+      }
+    }
+  ]
+}

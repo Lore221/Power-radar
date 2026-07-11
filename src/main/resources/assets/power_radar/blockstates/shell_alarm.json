@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/shell_alarm" },
+    "facing=south": { "model": "power_radar:block/shell_alarm", "y": 180 },
+    "facing=east": { "model": "power_radar:block/shell_alarm", "y": 90 },
+    "facing=west": { "model": "power_radar:block/shell_alarm", "y": 270 }
+  }
+}

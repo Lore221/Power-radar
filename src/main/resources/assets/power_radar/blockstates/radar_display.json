@@ -1,0 +1,47 @@
+{
+  "multipart": [
+    { "when": { "facing": "north", "frame_shape": "single" }, "apply": { "model": "power_radar:block/radar_display_single" } },
+    { "when": { "facing": "north", "frame_shape": "center" }, "apply": { "model": "power_radar:block/radar_display_center" } },
+    { "when": { "facing": "north", "frame_shape": "top" }, "apply": { "model": "power_radar:block/radar_display_top" } },
+    { "when": { "facing": "north", "frame_shape": "bottom" }, "apply": { "model": "power_radar:block/radar_display_bottom" } },
+    { "when": { "facing": "north", "frame_shape": "left" }, "apply": { "model": "power_radar:block/radar_display_left" } },
+    { "when": { "facing": "north", "frame_shape": "right" }, "apply": { "model": "power_radar:block/radar_display_right" } },
+    { "when": { "facing": "north", "frame_shape": "top_left" }, "apply": { "model": "power_radar:block/radar_display_top_left" } },
+    { "when": { "facing": "north", "frame_shape": "top_right" }, "apply": { "model": "power_radar:block/radar_display_top_right" } },
+    { "when": { "facing": "north", "frame_shape": "bottom_left" }, "apply": { "model": "power_radar:block/radar_display_bottom_left" } },
+    { "when": { "facing": "north", "frame_shape": "bottom_right" }, "apply": { "model": "power_radar:block/radar_display_bottom_right" } },
+
+    { "when": { "facing": "east", "frame_shape": "single" }, "apply": { "model": "power_radar:block/radar_display_single", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "center" }, "apply": { "model": "power_radar:block/radar_display_center", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "top" }, "apply": { "model": "power_radar:block/radar_display_top", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "bottom" }, "apply": { "model": "power_radar:block/radar_display_bottom", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "left" }, "apply": { "model": "power_radar:block/radar_display_left", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "right" }, "apply": { "model": "power_radar:block/radar_display_right", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "top_left" }, "apply": { "model": "power_radar:block/radar_display_top_left", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "top_right" }, "apply": { "model": "power_radar:block/radar_display_top_right", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "bottom_left" }, "apply": { "model": "power_radar:block/radar_display_bottom_left", "y": 90 } },
+    { "when": { "facing": "east", "frame_shape": "bottom_right" }, "apply": { "model": "power_radar:block/radar_display_bottom_right", "y": 90 } },
+
+    { "when": { "facing": "south", "frame_shape": "single" }, "apply": { "model": "power_radar:block/radar_display_single", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "center" }, "apply": { "model": "power_radar:block/radar_display_center", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "top" }, "apply": { "model": "power_radar:block/radar_display_top", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "bottom" }, "apply": { "model": "power_radar:block/radar_display_bottom", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "left" }, "apply": { "model": "power_radar:block/radar_display_left", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "right" }, "apply": { "model": "power_radar:block/radar_display_right", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "top_left" }, "apply": { "model": "power_radar:block/radar_display_top_left", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "top_right" }, "apply": { "model": "power_radar:block/radar_display_top_right", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "bottom_left" }, "apply": { "model": "power_radar:block/radar_display_bottom_left", "y": 180 } },
+    { "when": { "facing": "south", "frame_shape": "bottom_right" }, "apply": { "model": "power_radar:block/radar_display_bottom_right", "y": 180 } },
+
+    { "when": { "facing": "west", "frame_shape": "single" }, "apply": { "model": "power_radar:block/radar_display_single", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "center" }, "apply": { "model": "power_radar:block/radar_display_center", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "top" }, "apply": { "model": "power_radar:block/radar_display_top", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "bottom" }, "apply": { "model": "power_radar:block/radar_display_bottom", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "left" }, "apply": { "model": "power_radar:block/radar_display_left", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "right" }, "apply": { "model": "power_radar:block/radar_display_right", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "top_left" }, "apply": { "model": "power_radar:block/radar_display_top_left", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "top_right" }, "apply": { "model": "power_radar:block/radar_display_top_right", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "bottom_left" }, "apply": { "model": "power_radar:block/radar_display_bottom_left", "y": 270 } },
+    { "when": { "facing": "west", "frame_shape": "bottom_right" }, "apply": { "model": "power_radar:block/radar_display_bottom_right", "y": 270 } }
+  ]
+}

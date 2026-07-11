@@ -1,0 +1,23 @@
+{
+  "parent": "block/block",
+  "loader": "neoforge:obj",
+  "render_type": "minecraft:translucent",
+  "flip_v": true,
+  "model": "power_radar:models/block/overview_module.obj",
+  "textures": {
+    "0": "power_radar:block/overview_module",
+    "particle": "power_radar:block/overview_module"
+  },
+  "display": {
+    "gui": {
+      "rotation": [30, 225, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.5, 0.5, 0.5]
+    },
+    "fixed": {
+      "rotation": [90, 0, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.5, 0.5, 0.5]
+    }
+  }
+}

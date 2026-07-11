@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "power_radar:block/interception_controller_side",
+    "up": "power_radar:block/interception_controller_top",
+    "north": "power_radar:block/interception_controller_front",
+    "south": "power_radar:block/interception_controller_back",
+    "west": "power_radar:block/interception_controller_side",
+    "east": "power_radar:block/interception_controller_side",
+    "particle": "power_radar:block/interception_controller_side"
+  }
+}

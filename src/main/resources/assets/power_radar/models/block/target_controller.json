@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "power_radar:block/target_controller_front",
+    "side": "power_radar:block/target_controller_side",
+    "top": "power_radar:block/target_controller_side"
+  }
+}

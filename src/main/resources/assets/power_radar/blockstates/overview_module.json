@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "power_radar:block/overview_module"
+    }
+  }
+}

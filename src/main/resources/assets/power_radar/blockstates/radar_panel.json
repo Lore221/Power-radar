@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "power_radar:block/radar_panel"
+    },
+    "facing=east": {
+      "model": "power_radar:block/radar_panel",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "power_radar:block/radar_panel",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "power_radar:block/radar_panel",
+      "y": 270
+    }
+  }
+}

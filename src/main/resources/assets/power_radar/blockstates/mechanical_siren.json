@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/mechanical_siren" },
+    "facing=east": { "model": "power_radar:block/mechanical_siren", "y": 90 },
+    "facing=south": { "model": "power_radar:block/mechanical_siren", "y": 180 },
+    "facing=west": { "model": "power_radar:block/mechanical_siren", "y": 270 }
+  }
+}

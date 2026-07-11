@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "power_radar:block/shell_alarm_side",
+    "north": "power_radar:block/shell_alarm_front",
+    "south": "power_radar:block/shell_alarm_back",
+    "east": "power_radar:block/shell_alarm_side",
+    "west": "power_radar:block/shell_alarm_side",
+    "up": "power_radar:block/shell_alarm_top",
+    "down": "power_radar:block/shell_alarm_top"
+  }
+}

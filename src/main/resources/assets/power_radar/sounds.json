@@ -1,0 +1,12 @@
+{
+  "mechanical_siren": {
+    "subtitle": "subtitles.power_radar.mechanical_siren",
+    "sounds": [
+      {
+        "name": "power_radar:mechanical_siren_loop",
+        "attenuation_distance": 64,
+        "stream": true
+      }
+    ]
+  }
+}

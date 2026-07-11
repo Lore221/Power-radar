@@ -1,0 +1,51 @@
+package com.limbo2136.powerradar.compat.create;
+
+import com.limbo2136.powerradar.block.RadarDisplayBlock;
+import com.limbo2136.powerradar.registry.ModBlocks;
+import java.util.List;
+import java.util.function.Predicate;
+import net.createmod.catnip.placement.IPlacementHelper;
+import net.createmod.catnip.placement.PlacementOffset;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+
+public class RadarDisplayPlacementHelper implements IPlacementHelper {
+    @Override
+    public Predicate<ItemStack> getItemPredicate() {
+        return stack -> stack.is(ModBlocks.RADAR_DISPLAY.get().asItem());
+    }
+
+    @Override
+    public Predicate<BlockState> getStatePredicate() {
+        return state -> state.is(ModBlocks.RADAR_DISPLAY.get()) && state.hasProperty(RadarDisplayBlock.FACING);
+    }
+
+    @Override
+    public PlacementOffset getOffset(Player player, Level level, BlockState state, BlockPos pos, BlockHitResult hitResult) {
+        if (!state.hasProperty(RadarDisplayBlock.FACING)) {
+            return PlacementOffset.fail();
+        }
+
+        Direction clickedFacing = state.getValue(RadarDisplayBlock.FACING);
+        Direction.Axis excludedAxis = clickedFacing.getAxis();
+        List<Direction> directions = IPlacementHelper.orderedByDistanceExceptAxis(
+                pos,
+                hitResult.getLocation(),
+                excludedAxis,
+                direction -> level.getBlockState(pos.relative(direction)).canBeReplaced()
+        );
+        if (directions.isEmpty()) {
+            return PlacementOffset.fail();
+        }
+
+        BlockPos targetPos = pos.relative(directions.getFirst());
+        return PlacementOffset.success(targetPos, newState -> newState.hasProperty(RadarDisplayBlock.FACING)
+                ? newState.setValue(RadarDisplayBlock.FACING, clickedFacing)
+                : newState);
+    }
+}
