@@ -1,0 +1,113 @@
+import groovy.json.JsonSlurper
+
+def powerRadarJavaRoot = file('src/main/java')
+def powerRadarResourceRoot = file('src/main/resources')
+
+tasks.register('verifyProjectStructure') {
+    group = 'verification'
+    description = 'Checks source layout and guards the common/client boundary.'
+
+    def javaSources = fileTree(powerRadarJavaRoot) {
+        include '**/*.java'
+    }
+    inputs.files(javaSources)
+    inputs.files(fileTree(powerRadarResourceRoot) {
+        include 'assets/power_radar/**/*.json'
+        include 'data/power_radar/**/*.json'
+    })
+
+    doLast {
+        def violations = []
+        def allowedCommonClientReferences = [
+                'com/limbo2136/powerradar/PowerRadar.java',
+                'com/limbo2136/powerradar/block/entity/MechanicalSirenBlockEntity.java',
+                'com/limbo2136/powerradar/block/entity/RadarLinkBlockEntity.java',
+                'com/limbo2136/powerradar/item/PowerRadarElectricalBlockItem.java'
+        ] as Set
+
+        javaSources.files.sort { left, right -> left.path <=> right.path }.each { sourceFile ->
+            def relativePath = powerRadarJavaRoot.toPath()
+                    .relativize(sourceFile.toPath())
+                    .toString()
+                    .replace('\\', '/')
+            def sourceText = sourceFile.getText('UTF-8')
+            def sourceLines = sourceText.readLines()
+
+            def packageMatcher = sourceText =~ /(?m)^package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*);/
+            if (!packageMatcher.find()) {
+                violations << "${relativePath}: missing package declaration"
+            } else {
+                def expectedPath = packageMatcher.group(1).replace('.', '/') + '/' + sourceFile.name
+                if (relativePath != expectedPath) {
+                    violations << "${relativePath}: package requires path ${expectedPath}"
+                }
+            }
+
+            def publicTypeMatcher = sourceText =~ /(?m)^public\s+(?:(?:final|abstract|sealed|non-sealed)\s+)*(?:class|interface|record|enum)\s+([A-Za-z_]\w*)/
+            if (publicTypeMatcher.find() && publicTypeMatcher.group(1) != sourceFile.name[0..<-5]) {
+                violations << "${relativePath}: public type ${publicTypeMatcher.group(1)} must match the file name"
+            }
+
+            sourceLines.eachWithIndex { line, index ->
+                if (line.startsWith('\t')) {
+                    violations << "${relativePath}:${index + 1}: use spaces instead of tab indentation"
+                }
+                if (line ==~ /.*[ \t]+$/) {
+                    violations << "${relativePath}:${index + 1}: trailing whitespace"
+                }
+            }
+
+            if (!relativePath.startsWith('com/limbo2136/powerradar/client/')) {
+                def importsClientCode = sourceText =~ /(?m)^\s*import\s+(?:net\.minecraft\.client|com\.limbo2136\.powerradar\.client)(?:\.|;)/
+                def usesQualifiedMinecraftClient = sourceText.contains('net.minecraft.client.')
+                if ((importsClientCode.find() || usesQualifiedMinecraftClient)
+                        && !allowedCommonClientReferences.contains(relativePath)) {
+                    violations << "${relativePath}: new client reference outside the client package"
+                }
+            }
+        }
+
+        def englishLangFile = file('src/main/resources/assets/power_radar/lang/en_us.json')
+        def russianLangFile = file('src/main/resources/assets/power_radar/lang/ru_ru.json')
+        def jsonSlurper = new JsonSlurper()
+        def englishTranslations = jsonSlurper.parse(englishLangFile) as Map
+        def russianTranslations = jsonSlurper.parse(russianLangFile) as Map
+        def missingInRussian = (englishTranslations.keySet() - russianTranslations.keySet()).sort()
+        def missingInEnglish = (russianTranslations.keySet() - englishTranslations.keySet()).sort()
+        if (!missingInRussian.isEmpty()) {
+            violations << "ru_ru.json is missing keys: ${missingInRussian.join(', ')}"
+        }
+        if (!missingInEnglish.isEmpty()) {
+            violations << "en_us.json is missing keys: ${missingInEnglish.join(', ')}"
+        }
+
+        def modBlocksText = file('src/main/java/com/limbo2136/powerradar/registry/ModBlocks.java').getText('UTF-8')
+        def registeredBlockMatcher = modBlocksText =~ /(?s)registerBlock\(\s*"([a-z0-9_]+)"/
+        while (registeredBlockMatcher.find()) {
+            def blockId = registeredBlockMatcher.group(1)
+            def requiredResources = [
+                    file("src/main/resources/assets/power_radar/blockstates/${blockId}.json"),
+                    file("src/main/resources/assets/power_radar/models/item/${blockId}.json"),
+                    file("src/main/resources/data/power_radar/loot_table/blocks/${blockId}.json")
+            ]
+            requiredResources.findAll { !it.isFile() }.each { missingFile ->
+                violations << "${blockId}: missing ${projectDir.toPath().relativize(missingFile.toPath()).toString()}"
+            }
+            def translationKey = "block.power_radar.${blockId}".toString()
+            if (!englishTranslations.containsKey(translationKey)) {
+                violations << "${blockId}: missing English translation ${translationKey}"
+            }
+            if (!russianTranslations.containsKey(translationKey)) {
+                violations << "${blockId}: missing Russian translation ${translationKey}"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException('Project structure violations:\n - ' + violations.join('\n - '))
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyProjectStructure')
+}

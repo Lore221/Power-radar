@@ -1,25 +1,43 @@
+# Power Radar
 
-Installation information
-=======
+Power Radar is a NeoForge 1.21.1 integration addon for Create, Create: Electro Energetics, and Create Big Cannons. It provides radar scanning, networked monitor displays, target control, shell alarms, and projectile interception.
 
-This template repository can be directly cloned to get you started with a new
-mod. Simply create a new repository cloned from this one, by following the
-instructions provided by [GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
+## Required dependencies
 
-Once you have your clone, simply open the repository in the IDE of your choice. The usual recommendation for an IDE is either IntelliJ IDEA or Eclipse.
+- NeoForge 21.1.229 or newer for Minecraft 1.21.1
+- Create 6.0.10
+- Ponder, Flywheel, and Registrate
+- Architectury API 13.0.8
+- Create: Electro Energetics 1.21.1-1.0.0 or newer
+- Create Big Cannons 5.11.6 or newer in the compatible 1.21.1 line
+- Ritchie's Projectile Library 2.1.2 or newer in the compatible 1.21.1 line
 
-If at any point you are missing libraries in your IDE, or you've run into problems you can
-run `gradlew --refresh-dependencies` to refresh the local cache. `gradlew clean` to reset everything 
-{this does not affect your code} and then start the process again.
+Gradle resolves every required development dependency from its official Maven repository or Modrinth Maven. Local JAR files in `libs/` are not required for compilation or CI.
 
-Mapping Names:
-============
-By default, the MDK is configured to use the official mapping names from Mojang for methods and fields 
-in the Minecraft codebase. These names are covered by a specific license. All modders should be aware of this
-license. For the latest license text, refer to the mapping file itself, or the reference copy here:
-https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
+## Build
 
-Additional Resources: 
-==========
-Community Documentation: https://docs.neoforged.net/  
-NeoForged Discord: https://discord.neoforged.net/
+Power Radar requires Java 21.
+
+Windows:
+
+```powershell
+.\gradlew.bat build
+```
+
+Linux or macOS:
+
+```bash
+bash ./gradlew build
+```
+
+The standard `check` lifecycle includes `verifyProjectStructure`, which validates Java source layout, the common/client boundary, translation parity, and required block resources.
+
+Development run configurations are generated for the client, dedicated server, data generation, and GameTest server. GameTests are not yet included, so use the client and dedicated server configurations for runtime verification.
+
+## Dependency sources
+
+- Create ecosystem: Create Maven and Registrate Maven
+- Architectury API: Architectury Maven
+- Electro Energetics, Create Big Cannons, and RPL: immutable Modrinth Maven version IDs pinned in `gradle.properties`
+
+Do not commit third-party mod JARs to this repository.

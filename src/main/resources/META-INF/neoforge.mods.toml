@@ -26,7 +26,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="architectury"
 type="required"
-versionRange="[13.0.8,)"
+versionRange="[${architectury_version},)"
 ordering="AFTER"
 side="BOTH"
 
@@ -40,20 +40,20 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="electroenergetics"
 type="required"
-versionRange="[1.21.1-1.0.0,)"
+versionRange="[${electroenergetics_version},)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="createbigcannons"
 type="required"
-versionRange="[5.11.6,)"
+versionRange="[${create_big_cannons_version},)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="ritchiesprojectilelib"
-type="optional"
-versionRange="[2.1.2,)"
+type="required"
+versionRange="[${ritchies_projectile_lib_version},)"
 ordering="AFTER"
 side="BOTH"

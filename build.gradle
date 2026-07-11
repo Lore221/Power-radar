@@ -4,6 +4,8 @@ plugins {
     id 'net.neoforged.gradle.userdev' version '7.1.27'
 }
 
+apply from: 'gradle/project-structure.gradle'
+
 tasks.named('wrapper', Wrapper).configure {
     // Define wrapper values here so as to not have to always do so when updating gradlew.properties.
     // Switching this to Wrapper.DistributionType.ALL will download the full gradle sources that comes with
@@ -26,9 +28,26 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
     maven { url = "https://maven.createmod.net" } // Create, Ponder, Flywheel
     maven { url = "https://maven.ithundxr.dev/snapshots" } // Registrate
+    maven {
+        name = "Architectury"
+        url = uri("https://maven.architectury.dev")
+        content {
+            includeGroup "dev.architectury"
+        }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = uri("https://api.modrinth.com/maven")
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
 }
 
 base {
@@ -96,26 +115,6 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
-def requiredLocalCompileMods = fileTree(dir: 'libs', include: [
-        'architectury-*.jar'
-])
-
-def optionalThirdPartyRuntimeMods = fileTree(dir: 'libs', include: [
-        'create_factory_logistics-*.jar'
-])
-
-def electroEnergeticsJar = fileTree(dir: 'libs', include: [
-        'electroenergetics-1.21.1-1.0.0*.jar'
-])
-
-def createBigCannonsJar = fileTree(dir: 'libs', include: [
-        'createbigcannons-*.jar'
-])
-
-def ritchiesProjectileLibJar = fileTree(dir: 'libs', include: [
-        'ritchiesprojectilelib-*.jar'
-])
-
 dependencies {
     // Specify the version of Minecraft to use.
     // Depending on the plugin applied there are several options. We will assume you applied the userdev plugin as shown above.
@@ -132,37 +131,18 @@ dependencies {
     runtimeOnly "dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}"
     implementation "com.tterrag.registrate:Registrate:${registrate_version}"
 
-    compileOnly requiredLocalCompileMods
-    localRuntime requiredLocalCompileMods
-    compileOnly electroEnergeticsJar
-    localRuntime electroEnergeticsJar
-    compileOnly createBigCannonsJar
-    localRuntime createBigCannonsJar
-    compileOnly ritchiesProjectileLibJar
-    localRuntime ritchiesProjectileLibJar
-    localRuntime optionalThirdPartyRuntimeMods
-
-    // Example optional mod dependency with JEI
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
-    // compileOnly "mezz.jei:jei-${mc_version}-neoforge-api:${jei_version}"
-    // We add the full version to localRuntime, not runtimeOnly, so that we do not publish a dependency on it
-    // localRuntime "mezz.jei:jei-${mc_version}-neoforge:${jei_version}"
-    // Local mod jars used for integration development live in ./libs.
-    // Example mod dependency using a mod jar from ./libs with a flat dir repository
-    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
-    // The group id is ignored when searching -- in this case, it is "blank"
-    // implementation "blank:coolmod-${mc_version}:${coolmod_version}"
-
-    // Example mod dependency using a file as dependency
-    // implementation files("libs/coolmod-${mc_version}-${coolmod_version}.jar")
-
-    // Example project dependency using a sister or child project:
-    // implementation project(":myproject")
-
-    // For more info:
-    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
-    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+    implementation("dev.architectury:architectury-neoforge:${architectury_version}") {
+        transitive = false
+    }
+    implementation("maven.modrinth:qYJdIoAx:${electroenergetics_modrinth_version}") {
+        transitive = false
+    }
+    implementation("maven.modrinth:GWp4jCJj:${create_big_cannons_modrinth_version}") {
+        transitive = false
+    }
+    implementation("maven.modrinth:B3pb093D:${ritchies_projectile_lib_modrinth_version}") {
+        transitive = false
+    }
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -180,7 +160,11 @@ tasks.withType(ProcessResources).configureEach {
             mod_license            : mod_license,
             mod_version            : mod_version,
             mod_authors            : mod_authors,
-            mod_description        : mod_description
+            mod_description        : mod_description,
+            architectury_version             : architectury_version,
+            electroenergetics_version        : electroenergetics_version,
+            create_big_cannons_version       : create_big_cannons_version,
+            ritchies_projectile_lib_version : ritchies_projectile_lib_version
     ]
     inputs.properties replaceProperties
 
@@ -198,7 +182,7 @@ publishing {
     }
     repositories {
         maven {
-            url "file://${project.projectDir}/repo"
+            url = uri(layout.projectDirectory.dir('repo'))
         }
     }
 }

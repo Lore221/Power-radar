@@ -1,5 +1,14 @@
 # Power Radar Changelog
 
+## Unreleased
+
+### Changed
+- Required Architectury, Electro Energetics, Create Big Cannons, and RPL development dependencies now resolve from reproducible Maven sources instead of local JAR files.
+- RPL is now declared as a required runtime dependency, matching the mandatory CBC integration.
+- Removed the unused Create Factory Logistics development runtime dependency.
+- GitHub Actions now invokes the Gradle wrapper portably through Bash.
+- Added automated project-structure, client-boundary, translation, and block-resource verification to the standard build.
+
 ## 0.4.4 - Experimental Radar and Interception Update
 
 ### Added
