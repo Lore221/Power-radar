@@ -1,5 +1,6 @@
 ### Gradle ###
 .gradle
+.gradle-user-home/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/**/build/
@@ -38,3 +39,12 @@ run/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
+
+### Local dependencies and development artifacts ###
+libs/
+scratch_cee_probe/
+tmp_*/
+
+### Working asset sources (runtime assets belong in src/) ###
+new textures/
+текстуры/
