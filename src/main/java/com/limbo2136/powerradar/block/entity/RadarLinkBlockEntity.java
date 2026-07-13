@@ -300,6 +300,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
     private void syncChanged() {
         setChanged();
         if (this.level instanceof ServerLevel serverLevel) {
+            if (this.networkId != null) {
+                RadarNetworkManager.get(serverLevel.getServer()).invalidateComputingCache(this.networkId);
+            }
             serverLevel.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(), 2);
         }
     }

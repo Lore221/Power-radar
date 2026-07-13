@@ -4,10 +4,8 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.network.RadarMonitorRequestPayload;
-import com.limbo2136.powerradar.network.RadarMonitorSettingsPayload;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.limbo2136.powerradar.network.RadarMonitorTargetSelectionPayload;
-import com.limbo2136.powerradar.network.RadarMonitorWhitelistPayload;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarDisplayCoverage;
 import com.limbo2136.powerradar.radar.RadarGeometry;
@@ -18,7 +16,6 @@ import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -138,21 +135,6 @@ public class RadarMonitorScreen extends Screen {
     private int targetButtonWidth;
     private int targetButtonHeight;
     private int clearTargetButtonY;
-    private int whitelistButtonX;
-    private int whitelistButtonY;
-    private int whitelistButtonWidth;
-    private int whitelistButtonHeight;
-    private boolean whitelistOpen;
-    private String whitelistPlayerInput = "";
-    private int whitelistPlayerIndex = -1;
-    private boolean whitelistPlayerSelectedByScroll;
-    private int whitelistPanelX;
-    private int whitelistPanelY;
-    private int whitelistPanelWidth;
-    private int whitelistPanelHeight;
-    private int whitelistPlayerMinusX;
-    private int whitelistPlayerPlusX;
-    private int whitelistPlayerRowY;
     private Component hoveredHubTooltip;
     private GridCacheKey gridCacheKey;
     private List<GridLine> gridLines = List.of();
@@ -561,47 +543,6 @@ public class RadarMonitorScreen extends Screen {
                 : RadarMonitorViewOrientation.viewYawDegrees(this.displayData);
     }
 
-    private void renderHubPanel(GuiGraphics graphics, int mouseX, int mouseY) {
-        int margin = GUI_MARGIN;
-        int panelWidth = sidePanelWidth();
-        int panelX = this.width - margin - panelWidth;
-        int panelY = margin;
-        int panelHeight = this.height - margin * 2;
-        drawPanel(graphics, panelX, panelY, panelWidth, panelHeight);
-        int textPadding = PANEL_TEXT_PADDING;
-        int contentX = panelX + textPadding;
-        int contentWidth = panelWidth - textPadding * 2;
-        int y = panelY + textPadding;
-
-        y = renderModeButtons(graphics, mouseX, mouseY, contentX, y, contentWidth);
-        y += HUB_ROW_GAP;
-        y = renderCategoryButtons(graphics, mouseX, mouseY, contentX, y, contentWidth,
-                Component.translatable("message.power_radar.monitor.detection_filter"), false);
-        y += HUB_ROW_GAP;
-        y = renderCategoryButtons(graphics, mouseX, mouseY, contentX, y, contentWidth,
-                Component.translatable("message.power_radar.monitor.target_filter"), true);
-        y += HUB_ROW_GAP + 2;
-        y = renderTrajectoryButtons(graphics, mouseX, mouseY, contentX, y, contentWidth);
-        y += HUB_ROW_GAP + 2;
-
-        String[] lines = selectedTarget()
-                .map(this::selectedTargetLines)
-                .orElse(this.rightLines);
-        for (int i = 0; i < lines.length; i++) {
-            int color = i == 0 && selectedTarget().isPresent() ? SELECTED_TARGET : TEXT_DIM;
-            graphics.drawString(this.font, fitLine(lines[i], contentWidth), contentX, y, color, false);
-            y += 11;
-        }
-        y += 4;
-        this.whitelistButtonX = contentX;
-        this.whitelistButtonY = y;
-        this.whitelistButtonWidth = contentWidth;
-        this.whitelistButtonHeight = 20;
-        renderSmallButton(graphics, mouseX, mouseY, this.whitelistButtonX, this.whitelistButtonY,
-                this.whitelistButtonWidth, this.whitelistButtonHeight,
-                Component.translatable("message.power_radar.monitor.whitelist"), false, true);
-    }
-
     private void rebuildLayoutCache() {
         this.cachedWidth = this.width;
         this.cachedHeight = this.height;
@@ -878,46 +819,6 @@ public class RadarMonitorScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private boolean activateHubButton(double mouseX, double mouseY) {
-        for (HubClickTarget target : this.hubClickTargets) {
-            if (!target.contains(mouseX, mouseY)) {
-                continue;
-            }
-            if (target.mode() != null) {
-                sendSettings(target.mode(), this.displayData.detectionFilterMask(), this.displayData.autotargetFilterMask(), this.displayData.targetTrajectoryMode());
-                return true;
-            }
-            if (target.category() != null) {
-                int bit = RadarDetectionFilters.bit(target.category().category());
-                if (bit == 0) {
-                    return true;
-                }
-                if (target.targetFilter()) {
-                    int nextMask = this.displayData.autotargetFilterMask() ^ bit;
-                    sendSettings(this.displayData.mode(), this.displayData.detectionFilterMask(), nextMask, this.displayData.targetTrajectoryMode());
-                } else {
-                    int nextMask = this.displayData.detectionFilterMask() ^ bit;
-                    sendSettings(this.displayData.mode(), nextMask, this.displayData.autotargetFilterMask(), this.displayData.targetTrajectoryMode());
-                }
-                return true;
-            }
-            if (target.trajectoryMode() != null) {
-                sendSettings(this.displayData.mode(), this.displayData.detectionFilterMask(), this.displayData.autotargetFilterMask(), target.trajectoryMode());
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void sendSettings(RadarScanMode mode, int detectionFilterMask, int autotargetFilterMask, TargetTrajectoryMode targetTrajectoryMode) {
-        PacketDistributor.sendToServer(new RadarMonitorSettingsPayload(
-                this.snapshot.monitorPos(),
-                mode,
-                RadarDetectionFilters.sanitize(detectionFilterMask),
-                RadarDetectionFilters.sanitize(autotargetFilterMask),
-                targetTrajectoryMode));
-    }
-
     private boolean selectTargetAt(double mouseX, double mouseY) {
         Optional<RadarBlipRenderData> nearest = hoveredBlip(mouseX, mouseY);
         if (nearest.isEmpty()) {
@@ -1105,23 +1006,6 @@ public class RadarMonitorScreen extends Screen {
         return y + HUB_CATEGORY_BUTTON_SIZE;
     }
 
-    private int renderTrajectoryButtons(GuiGraphics graphics, int mouseX, int mouseY, int x, int y, int width) {
-        graphics.drawString(this.font, Component.translatable("message.power_radar.monitor.trajectory"), x, y, TEXT_DIM, false);
-        y += 12;
-        int buttonWidth = Math.max(56, (width - HUB_BUTTON_GAP) / 2);
-        renderSmallButton(graphics, mouseX, mouseY, x, y, buttonWidth, HUB_MODE_BUTTON_HEIGHT,
-                Component.translatable("message.power_radar.monitor.trajectory_flat"),
-                this.displayData.targetTrajectoryMode() != TargetTrajectoryMode.HIGH_ARC,
-                true);
-        this.hubClickTargets.add(HubClickTarget.trajectory(x, y, buttonWidth, HUB_MODE_BUTTON_HEIGHT, TargetTrajectoryMode.FLAT));
-        renderSmallButton(graphics, mouseX, mouseY, x + buttonWidth + HUB_BUTTON_GAP, y, buttonWidth, HUB_MODE_BUTTON_HEIGHT,
-                Component.translatable("message.power_radar.monitor.trajectory_high"),
-                this.displayData.targetTrajectoryMode() == TargetTrajectoryMode.HIGH_ARC,
-                true);
-        this.hubClickTargets.add(HubClickTarget.trajectory(x + buttonWidth + HUB_BUTTON_GAP, y, buttonWidth, HUB_MODE_BUTTON_HEIGHT, TargetTrajectoryMode.HIGH_ARC));
-        return y + HUB_MODE_BUTTON_HEIGHT;
-    }
-
     private void renderSmallButton(
             GuiGraphics graphics,
             int mouseX,
@@ -1222,10 +1106,6 @@ public class RadarMonitorScreen extends Screen {
         return selectedTarget().isPresent();
     }
 
-    private boolean whitelistButtonVisible() {
-        return true;
-    }
-
     private boolean targetButtonHovered(double mouseX, double mouseY) {
         return mouseX >= this.targetButtonX
                 && mouseX < this.targetButtonX + this.targetButtonWidth
@@ -1240,193 +1120,12 @@ public class RadarMonitorScreen extends Screen {
                 && mouseY < this.clearTargetButtonY + this.targetButtonHeight;
     }
 
-    private boolean whitelistButtonHovered(double mouseX, double mouseY) {
-        return mouseX >= this.whitelistButtonX
-                && mouseX < this.whitelistButtonX + this.whitelistButtonWidth
-                && mouseY >= this.whitelistButtonY
-                && mouseY < this.whitelistButtonY + this.whitelistButtonHeight;
-    }
-
-    private void renderWhitelistOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
-        this.whitelistPanelWidth = Math.min(330, Math.max(260, this.width / 3));
-        this.whitelistPanelHeight = 176;
-        this.whitelistPanelX = (this.width - this.whitelistPanelWidth) / 2;
-        this.whitelistPanelY = (this.height - this.whitelistPanelHeight) / 2;
-        graphics.fill(0, 0, this.width, this.height, 0x90000000);
-        drawPanel(graphics, this.whitelistPanelX, this.whitelistPanelY, this.whitelistPanelWidth, this.whitelistPanelHeight);
-        int x = this.whitelistPanelX + 12;
-        int y = this.whitelistPanelY + 12;
-        int rowWidth = this.whitelistPanelWidth - 24;
-        graphics.drawString(this.font, Component.translatable("message.power_radar.monitor.whitelist"), x, y, SELECTED_TARGET, false);
-        y += 20;
-        this.whitelistPlayerRowY = y;
-        renderPlayerWhitelistRow(graphics, mouseX, mouseY, x, y, rowWidth);
-        y += 28;
-        renderWhitelistRow(graphics, mouseX, mouseY, x, y, rowWidth,
-                Component.translatable("message.power_radar.monitor.whitelist.sable").getString(), "-", false);
-        y += 34;
-        graphics.drawString(this.font, Component.translatable("message.power_radar.monitor.whitelist.players").getString(), x, y, TEXT_DIM, false);
-        graphics.drawString(this.font, Component.translatable("message.power_radar.monitor.whitelist.sable").getString(), x + rowWidth / 2, y, TEXT_DIM, false);
-        y += 12;
-        for (int i = 0; i < Math.min(5, this.displayData.whitelistedPlayerNames().size()); i++) {
-            graphics.drawString(this.font, fitLine(this.displayData.whitelistedPlayerNames().get(i), rowWidth / 2 - 8), x, y + i * 10, TEXT, false);
-        }
-        for (int i = 0; i < Math.min(5, this.displayData.whitelistedSableNames().size()); i++) {
-            graphics.drawString(this.font, fitLine(this.displayData.whitelistedSableNames().get(i), rowWidth / 2 - 8),
-                    x + rowWidth / 2, y + i * 10, TEXT, false);
-        }
-    }
-
-    private void renderWhitelistRow(GuiGraphics graphics, int mouseX, int mouseY, int x, int y, int width, String label, String value, boolean enabled) {
-        int buttonSize = 20;
-        if (enabled) {
-            this.whitelistPlayerMinusX = x;
-            this.whitelistPlayerPlusX = x + width - buttonSize;
-        }
-        renderSmallButton(graphics, mouseX, mouseY, x, y, buttonSize, buttonSize, Component.literal("-"), false, enabled);
-        renderSmallButton(graphics, mouseX, mouseY, x + width - buttonSize, y, buttonSize, buttonSize, Component.literal("+"), false, enabled);
-        graphics.drawString(this.font, label, x + buttonSize + 6, y + 1, enabled ? TEXT_DIM : TEXT_BAD, false);
-        graphics.drawString(this.font, fitLine(value == null ? "" : value, width - buttonSize * 2 - 12),
-                x + buttonSize + 6, y + 11, enabled ? TEXT : TEXT_DIM, false);
-    }
-
-    private void renderPlayerWhitelistRow(GuiGraphics graphics, int mouseX, int mouseY, int x, int y, int width) {
-        int buttonSize = 20;
-        this.whitelistPlayerMinusX = x;
-        this.whitelistPlayerPlusX = x + width - buttonSize;
-        renderSmallButton(graphics, mouseX, mouseY, x, y, buttonSize, buttonSize, Component.literal("-"), false, true);
-        renderSmallButton(graphics, mouseX, mouseY, x + width - buttonSize, y, buttonSize, buttonSize, Component.literal("+"), false, true);
-        int textX = x + buttonSize + 6;
-        int maxTextWidth = width - buttonSize * 2 - 12;
-        graphics.drawString(this.font,
-                Component.translatable("message.power_radar.monitor.whitelist.players"),
-                textX, y + 1, TEXT_DIM, false);
-
-        if (this.whitelistPlayerSelectedByScroll) {
-            graphics.drawString(this.font, fitLine(currentWhitelistCandidate(), maxTextWidth), textX, y + 11, TEXT, false);
-            return;
-        }
-
-        String input = this.whitelistPlayerInput == null ? "" : this.whitelistPlayerInput;
-        String visibleInput = this.font.plainSubstrByWidth(input, maxTextWidth);
-        graphics.drawString(this.font, visibleInput, textX, y + 11, TEXT, false);
-        String suggestion = suggestedWhitelistPlayer();
-        if (!input.isEmpty() && suggestion.regionMatches(true, 0, input, 0, input.length())) {
-            String suffix = suggestion.substring(input.length());
-            int suffixX = textX + this.font.width(visibleInput);
-            int remainingWidth = Math.max(0, maxTextWidth - this.font.width(visibleInput));
-            graphics.drawString(this.font, this.font.plainSubstrByWidth(suffix, remainingWidth),
-                    suffixX, y + 11, TEXT_SUGGESTION, false);
-        }
-    }
-
-    private boolean handleWhitelistClick(double mouseX, double mouseY) {
-        if (mouseX < this.whitelistPanelX || mouseX >= this.whitelistPanelX + this.whitelistPanelWidth
-                || mouseY < this.whitelistPanelY || mouseY >= this.whitelistPanelY + this.whitelistPanelHeight) {
-            this.whitelistOpen = false;
-            return true;
-        }
-        String candidate = currentWhitelistCandidate();
-        if (candidate.isBlank()) {
-            return true;
-        }
-        if (mouseY >= this.whitelistPlayerRowY && mouseY < this.whitelistPlayerRowY + 20) {
-            if (mouseX >= this.whitelistPlayerMinusX && mouseX < this.whitelistPlayerMinusX + 20) {
-                PacketDistributor.sendToServer(new RadarMonitorWhitelistPayload(this.snapshot.monitorPos(),
-                        RadarMonitorWhitelistPayload.Action.REMOVE_PLAYER, candidate));
-                return true;
-            }
-            if (mouseX >= this.whitelistPlayerPlusX && mouseX < this.whitelistPlayerPlusX + 20) {
-                PacketDistributor.sendToServer(new RadarMonitorWhitelistPayload(this.snapshot.monitorPos(),
-                        RadarMonitorWhitelistPayload.Action.ADD_PLAYER, candidate));
-                return true;
-            }
-        }
-        return true;
-    }
-
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (this.whitelistOpen && !this.displayData.onlinePlayerNames().isEmpty()) {
-            List<String> filtered = filteredOnlinePlayers();
-            int size = filtered.size();
-            if (size > 0) {
-                int step = scrollY > 0 ? -1 : 1;
-                if (this.whitelistPlayerIndex < 0) {
-                    this.whitelistPlayerIndex = step < 0 ? size - 1 : 0;
-                } else {
-                    this.whitelistPlayerIndex = Math.floorMod(this.whitelistPlayerIndex + step, size);
-                }
-                this.whitelistPlayerSelectedByScroll = true;
-            }
-            return true;
-        }
         if (isMouseOverRadar(mouseX, mouseY)) {
             return adjustMapZoom(scrollY);
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
-    }
-
-    @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (this.whitelistOpen && !Character.isISOControl(codePoint)) {
-            this.whitelistPlayerInput += codePoint;
-            this.whitelistPlayerIndex = filteredOnlinePlayers().isEmpty() ? -1 : 0;
-            this.whitelistPlayerSelectedByScroll = false;
-            return true;
-        }
-        return super.charTyped(codePoint, modifiers);
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.whitelistOpen) {
-            if (keyCode == 256) {
-                this.whitelistOpen = false;
-                return true;
-            }
-            if (keyCode == 259 && !this.whitelistPlayerInput.isEmpty()) {
-                this.whitelistPlayerInput = this.whitelistPlayerInput.substring(0, this.whitelistPlayerInput.length() - 1);
-                this.whitelistPlayerIndex = this.whitelistPlayerInput.isEmpty()
-                        ? -1
-                        : (filteredOnlinePlayers().isEmpty() ? -1 : 0);
-                this.whitelistPlayerSelectedByScroll = false;
-                return true;
-            }
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    private String currentWhitelistCandidate() {
-        List<String> filtered = filteredOnlinePlayers();
-        if (this.whitelistPlayerSelectedByScroll && !filtered.isEmpty() && this.whitelistPlayerIndex >= 0) {
-            this.whitelistPlayerIndex = Math.floorMod(this.whitelistPlayerIndex, filtered.size());
-            return filtered.get(this.whitelistPlayerIndex);
-        }
-        String input = this.whitelistPlayerInput == null ? "" : this.whitelistPlayerInput.trim();
-        return this.displayData.onlinePlayerNames().stream()
-                .filter(input::equalsIgnoreCase)
-                .findFirst()
-                .orElse("");
-    }
-
-    private String suggestedWhitelistPlayer() {
-        List<String> filtered = filteredOnlinePlayers();
-        if (filtered.isEmpty()) {
-            return "";
-        }
-        int index = Math.max(0, Math.min(this.whitelistPlayerIndex, filtered.size() - 1));
-        return filtered.get(index);
-    }
-
-    private List<String> filteredOnlinePlayers() {
-        String input = this.whitelistPlayerInput == null ? "" : this.whitelistPlayerInput.trim().toLowerCase(java.util.Locale.ROOT);
-        if (input.isEmpty()) {
-            return this.displayData.onlinePlayerNames();
-        }
-        return this.displayData.onlinePlayerNames().stream()
-                .filter(name -> name.toLowerCase(java.util.Locale.ROOT).startsWith(input))
-                .toList();
     }
 
     private static void drawNineSlice(
@@ -1534,19 +1233,14 @@ public class RadarMonitorScreen extends Screen {
             int height,
             RadarScanMode mode,
             HubCategory category,
-            boolean targetFilter,
-            TargetTrajectoryMode trajectoryMode
+            boolean targetFilter
     ) {
         private static HubClickTarget mode(int x, int y, int width, int height, RadarScanMode mode) {
-            return new HubClickTarget(x, y, width, height, mode, null, false, null);
+            return new HubClickTarget(x, y, width, height, mode, null, false);
         }
 
         private static HubClickTarget category(int x, int y, int width, int height, HubCategory category, boolean targetFilter) {
-            return new HubClickTarget(x, y, width, height, null, category, targetFilter, null);
-        }
-
-        private static HubClickTarget trajectory(int x, int y, int width, int height, TargetTrajectoryMode trajectoryMode) {
-            return new HubClickTarget(x, y, width, height, null, null, false, trajectoryMode);
+            return new HubClickTarget(x, y, width, height, null, category, targetFilter);
         }
 
         private boolean contains(double mouseX, double mouseY) {

@@ -28,6 +28,12 @@ public final class PowerRadarCeeDeviceTypes {
                     (type, level, pos, devicesSavedData) -> new MonitorControllerCeeDevice(level, pos, devicesSavedData, type),
                     List.of(ModBlocks.RADAR_MONITOR_CONTROLLER.get())));
 
+    public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<ComputingBlockCeeDevice>> COMPUTING_BLOCK =
+            register("computing_block", () -> new SimulatedDeviceType<ComputingBlockCeeDevice>(
+                    ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "computing_block"),
+                    (type, level, pos, data) -> new ComputingBlockCeeDevice(level, pos, data, type),
+                    List.of(ModBlocks.COMPUTING_BLOCK.get())));
+
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<TargetControllerCeeDevice>> TARGET_CONTROLLER =
             register("target_controller", () -> new SimulatedDeviceType<TargetControllerCeeDevice>(
                     ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "target_controller"),

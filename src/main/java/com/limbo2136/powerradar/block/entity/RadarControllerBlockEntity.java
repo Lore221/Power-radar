@@ -26,8 +26,8 @@ import com.limbo2136.powerradar.radar.RadarStructure;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCache;
 import com.limbo2136.powerradar.radar.RadarTargetTrack;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import com.limbo2136.powerradar.radar.TargetKey;
+import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -61,7 +62,6 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     private int baseStructureRange;
     private int currentRange;
     private int detectionFilterMask = RadarDetectionFilters.DEFAULT_MASK;
-    private TargetTrajectoryMode targetTrajectoryMode = TargetTrajectoryMode.FLAT;
     private Direction radarFacing = Direction.NORTH;
     private RadarOrientationState orientationState = RadarOrientationState.fixed(RadarGeometry.yawDegrees(Direction.NORTH), 0L);
     private long lastScanGameTime;
@@ -238,12 +238,11 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     private void refreshScanWindow(ServerLevel level) {
         RadarScanMode blockMode = fixedScanMode();
-        if (this.scanMode != blockMode
-                || this.detectionFilterMask != RadarDetectionFilters.DEFAULT_MASK
-                || this.targetTrajectoryMode != TargetTrajectoryMode.FLAT) {
+        int networkDisplayMask = RadarNetworkManager.get(level.getServer()).displayFilterMaskForController(
+                GlobalPos.of(level.dimension(), this.worldPosition));
+        if (this.scanMode != blockMode || this.detectionFilterMask != networkDisplayMask) {
             this.scanMode = blockMode;
-            this.detectionFilterMask = RadarDetectionFilters.DEFAULT_MASK;
-            this.targetTrajectoryMode = TargetTrajectoryMode.FLAT;
+            this.detectionFilterMask = networkDisplayMask;
             this.targetCache.clear();
             this.activeScanProfile = null;
             this.activeScanContext = null;
@@ -593,10 +592,6 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         return this.detectionFilterMask;
     }
 
-    public TargetTrajectoryMode targetTrajectoryMode() {
-        return this.targetTrajectoryMode;
-    }
-
     private boolean isScanPowered(PowerRadarCeeState state) {
         return state == PowerRadarCeeState.POWERED;
     }
@@ -650,7 +645,6 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         tag.putInt("BaseStructureRange", this.baseStructureRange);
         tag.putInt("CurrentRange", this.currentRange);
         tag.putInt("DetectionFilterMask", this.detectionFilterMask);
-        tag.putString("TargetTrajectoryMode", this.targetTrajectoryMode.name());
         tag.putString("RadarFacing", this.radarFacing.getName());
         tag.putString("RadarStructureType", this.orientationState.structureType().name());
         tag.putFloat("RadarYawDegrees", this.orientationState.referenceYawDegrees());
@@ -677,9 +671,6 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         this.detectionFilterMask = tag.contains("DetectionFilterMask")
                 ? RadarDetectionFilters.sanitize(tag.getInt("DetectionFilterMask"))
                 : RadarDetectionFilters.DEFAULT_MASK;
-        this.targetTrajectoryMode = tag.contains("TargetTrajectoryMode")
-                ? TargetTrajectoryMode.byName(tag.getString("TargetTrajectoryMode"))
-                : TargetTrajectoryMode.FLAT;
         this.radarFacing = Direction.byName(tag.getString("RadarFacing"));
         if (this.radarFacing == null) {
             this.radarFacing = Direction.NORTH;

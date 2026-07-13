@@ -6,7 +6,6 @@ import com.limbo2136.powerradar.api.radar.RadarTargetingDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.radar.RadarId;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -112,11 +111,6 @@ public final class CombinedRadarDataSource implements RadarTargetingDataSource {
         final int[] count = {0};
         forEachTrackedTarget(ignored -> count[0]++);
         return count[0];
-    }
-
-    @Override
-    public TargetTrajectoryMode targetTrajectoryMode() {
-        return primary().targetTrajectoryMode();
     }
 
     private RadarTargetingDataSource primary() {

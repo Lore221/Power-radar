@@ -11,7 +11,6 @@ import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.RadarTargetSourceKind;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +52,6 @@ public record RadarMonitorSnapshotPayload(
         int detectionFilterMask,
         int autotargetFilterMask,
         @Nullable UUID manualTargetUuid,
-        TargetTrajectoryMode targetTrajectoryMode,
         List<String> onlinePlayerNames,
         List<String> whitelistedPlayerNames,
         List<String> whitelistedSableNames,
@@ -73,7 +71,7 @@ public record RadarMonitorSnapshotPayload(
      * Increment when the encoded snapshot bytes change intentionally. The value also versions the
      * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
      */
-    public static final int WIRE_SCHEMA_VERSION = 1;
+    public static final int WIRE_SCHEMA_VERSION = 2;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
@@ -109,7 +107,6 @@ public record RadarMonitorSnapshotPayload(
                 buffer.readVarInt(),
                 buffer.readVarInt(),
                 readNullableUuid(buffer),
-                TargetTrajectoryMode.byName(buffer.readUtf()),
                 readStringList(buffer),
                 readStringList(buffer),
                 readStringList(buffer),
@@ -161,7 +158,6 @@ public record RadarMonitorSnapshotPayload(
                 data.detectionFilterMask(),
                 data.autotargetFilterMask(),
                 data.manualTargetUuid(),
-                data.targetTrajectoryMode(),
                 data.onlinePlayerNames(),
                 data.whitelistedPlayerNames(),
                 data.whitelistedSableNames(),
@@ -209,7 +205,6 @@ public record RadarMonitorSnapshotPayload(
                 this.detectionFilterMask,
                 this.autotargetFilterMask,
                 this.manualTargetUuid,
-                this.targetTrajectoryMode,
                 this.onlinePlayerNames,
                 this.whitelistedPlayerNames,
                 this.whitelistedSableNames,
@@ -256,7 +251,6 @@ public record RadarMonitorSnapshotPayload(
         buffer.writeVarInt(this.detectionFilterMask);
         buffer.writeVarInt(this.autotargetFilterMask);
         writeNullableUuid(buffer, this.manualTargetUuid);
-        buffer.writeUtf((this.targetTrajectoryMode == null ? TargetTrajectoryMode.FLAT : this.targetTrajectoryMode).name());
         writeStringList(buffer, this.onlinePlayerNames);
         writeStringList(buffer, this.whitelistedPlayerNames);
         writeStringList(buffer, this.whitelistedSableNames);
@@ -469,7 +463,6 @@ public record RadarMonitorSnapshotPayload(
                 this.detectionFilterMask,
                 this.autotargetFilterMask,
                 this.manualTargetUuid,
-                this.targetTrajectoryMode,
                 this.onlinePlayerNames,
                 this.whitelistedPlayerNames,
                 this.whitelistedSableNames,

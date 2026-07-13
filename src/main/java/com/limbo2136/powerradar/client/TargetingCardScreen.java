@@ -33,7 +33,7 @@ public class TargetingCardScreen extends Screen {
             RadarDetectionFilters.PASSIVE_MOBS,
             RadarDetectionFilters.HOSTILE_MOBS,
             RadarDetectionFilters.PLAYERS,
-            RadarDetectionFilters.PROJECTILES,
+            RadarDetectionFilters.TARGETING_PHANTOMS,
             RadarDetectionFilters.SABLE_STRUCTURES
     };
     private static final int[] CATEGORY_ICON_U = {3, 31, 59, 87, 115};
