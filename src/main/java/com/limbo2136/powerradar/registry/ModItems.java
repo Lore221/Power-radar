@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
+import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
@@ -17,6 +18,24 @@ public final class ModItems {
             "radar_controller",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.RADAR_CONTROLLER.get(), new Item.Properties(),
                     PowerRadarElectricalBlockItem.TooltipKind.RADAR_CONTROLLER));
+    public static final DeferredItem<BlockItem> AIR_RADAR_CONTROLLER = ITEMS.register(
+            "air_radar_controller",
+            () -> new PowerRadarElectricalBlockItem(ModBlocks.AIR_RADAR_CONTROLLER.get(), new Item.Properties(),
+                    PowerRadarElectricalBlockItem.TooltipKind.RADAR_CONTROLLER));
+    public static final DeferredItem<BlockItem> SURFACE_RADAR_CONTROLLER = ITEMS.register(
+            "surface_radar_controller",
+            () -> new PowerRadarElectricalBlockItem(ModBlocks.SURFACE_RADAR_CONTROLLER.get(), new Item.Properties(),
+                    PowerRadarElectricalBlockItem.TooltipKind.RADAR_CONTROLLER));
+    public static final DeferredItem<BlockItem> COMPUTING_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.COMPUTING_BLOCK);
+    public static final DeferredItem<RadarFilterCardItem> TARGETING_CARD = ITEMS.register(
+            "targeting_card", () -> new RadarFilterCardItem(RadarFilterCardItem.Kind.TARGETING,
+                    new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<RadarFilterCardItem> DISPLAY_CARD = ITEMS.register(
+            "display_card", () -> new RadarFilterCardItem(RadarFilterCardItem.Kind.DISPLAY,
+                    new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<RadarFilterCardItem> ALLOWLIST_CARD = ITEMS.register(
+            "allowlist_card", () -> new RadarFilterCardItem(RadarFilterCardItem.Kind.ALLOWLIST,
+                    new Item.Properties().stacksTo(1)));
     public static final DeferredItem<BlockItem> RADAR_PANEL = ITEMS.register(
             "radar_panel",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.RADAR_PANEL.get(), new Item.Properties(),

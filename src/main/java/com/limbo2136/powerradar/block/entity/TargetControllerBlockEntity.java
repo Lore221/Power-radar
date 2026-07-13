@@ -364,11 +364,12 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             return Optional.empty();
         }
         WeaponBallistics cachedBallistics = cachedBigCannonBallistics(mountPos, gameTime);
+        WeaponKind cachedKind = cachedWeaponKind(mountPos, gameTime);
         Optional<WeaponMount> mount = CbcWeaponAdapter.inspectForPreciseTargeting(
                 level,
                 mountPos,
                 cachedBallistics,
-                null);
+                cachedKind);
         if (mount.isEmpty()) {
             this.lastMissingWeaponMountPos = mountPos.immutable();
             this.lastMissingWeaponMountGameTime = gameTime;
@@ -385,7 +386,9 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             if (cachedBallistics == null) {
                 rememberAimBallistics(cannonState, gameTime);
             }
-            rememberWeaponKind(cannonState, gameTime);
+            if (cachedKind == null) {
+                rememberWeaponKind(cannonState, gameTime);
+            }
         }
         return mount;
     }

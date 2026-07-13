@@ -20,7 +20,6 @@ tasks.register('verifyProjectStructure') {
         def violations = []
         def allowedCommonClientReferences = [
                 'com/limbo2136/powerradar/PowerRadar.java',
-                'com/limbo2136/powerradar/block/entity/MechanicalSirenBlockEntity.java',
                 'com/limbo2136/powerradar/block/entity/RadarLinkBlockEntity.java',
                 'com/limbo2136/powerradar/item/PowerRadarElectricalBlockItem.java'
         ] as Set

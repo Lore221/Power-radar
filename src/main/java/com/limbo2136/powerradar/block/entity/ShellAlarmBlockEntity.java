@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
+import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.radar.RadarDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
@@ -16,6 +17,7 @@ import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
@@ -49,8 +51,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
-    private static final int ANALYTIC_CROSSING_BISECTION_ITERATIONS = 20;
-    private static final double MIN_ANALYTIC_DRAG = 1.0E-6;
     private final Map<UUID, Evaluation> evaluations = new HashMap<>();
     private ShellAlarmSideBehaviour protectionSide;
     private boolean networkConnected;
@@ -125,7 +125,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             return;
         }
         long radarScanGameTime = controller.lastScanGameTime();
-        if (radarScanGameTime == this.lastProcessedRadarScanGameTime) {
+        long previousRadarScanGameTime = this.lastProcessedRadarScanGameTime;
+        if (radarScanGameTime == previousRadarScanGameTime) {
             return;
         }
         this.lastProcessedRadar = controller;
@@ -199,7 +200,12 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 }
             }
             InterceptionCoordinator.publishThreats(
-                    level, connectedNetworkId, this.worldPosition, threatSnapshots);
+                    level,
+                    connectedNetworkId,
+                    this.worldPosition,
+                    threatSnapshots,
+                    InterceptionCoordinator.threatTtlTicksForScanInterval(
+                            radarScanIntervalTicks(radarScanGameTime, previousRadarScanGameTime)));
             if (PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
                 PowerRadar.LOGGER.info(
                         "[PowerRadar BugReport][ShellAlarm][Scan] alarm={} network={} scanTick={} side={} trackedShells={} dangerousShells={}",
@@ -311,6 +317,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 protectedSquare);
     }
 
+    private static long radarScanIntervalTicks(long scanGameTime, long previousScanGameTime) {
+        if (previousScanGameTime == Long.MIN_VALUE || scanGameTime <= previousScanGameTime) {
+            return RadarConstants.radarScanUpdateIntervalTicks();
+        }
+        return scanGameTime - previousScanGameTime;
+    }
+
     private ThreatEvaluation analyticTrajectoryThreatens(
             TrackedTargetView track,
             Vec3 position,
@@ -320,9 +333,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             double lowerPlaneY,
             AABB protectedSquare
     ) {
-        if (ballistics.quadraticDrag()
-                || ballistics.drag() <= MIN_ANALYTIC_DRAG
-                || ballistics.drag() >= 1.0) {
+        if (ballistics.quadraticDrag() || !LinearDragTrajectory.supported(ballistics.drag())) {
             return null;
         }
         Double upperTick = descendingPlaneCrossingTick(position, velocity, ballistics, upperPlaneY);
@@ -440,43 +451,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             ShellAlarmCbcCompat.Ballistics ballistics,
             double planeY
     ) {
-        double previousTick = 0.0;
-        double previousY = position.y;
-        for (int tick = 1; tick <= PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS; tick++) {
-            double currentY = linearDragPositionAfterTicks(position, velocity, ballistics, tick).y;
-            if (previousY >= planeY && currentY <= planeY && currentY < previousY) {
-                return bisectDescendingPlaneCrossing(
-                        position, velocity, ballistics, planeY, previousTick, tick);
-            }
-            if (currentY < planeY && currentY < previousY) {
-                return null;
-            }
-            previousTick = tick;
-            previousY = currentY;
-        }
-        return null;
-    }
-
-    private static double bisectDescendingPlaneCrossing(
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double planeY,
-            double lowTick,
-            double highTick
-    ) {
-        double low = lowTick;
-        double high = highTick;
-        for (int i = 0; i < ANALYTIC_CROSSING_BISECTION_ITERATIONS; i++) {
-            double mid = (low + high) * 0.5;
-            double y = linearDragPositionAfterTicks(position, velocity, ballistics, mid).y;
-            if (y > planeY) {
-                low = mid;
-            } else {
-                high = mid;
-            }
-        }
-        return (low + high) * 0.5;
+        return LinearDragTrajectory.descendingPlaneCrossingTicks(
+                position.y,
+                velocity.y,
+                ballistics.gravity(),
+                ballistics.drag(),
+                planeY,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
     }
 
     private static Vec3 linearDragPositionAfterTicks(
@@ -485,16 +466,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             ShellAlarmCbcCompat.Ballistics ballistics,
             double ticks
     ) {
-        double drag = ballistics.drag();
-        double retention = 1.0 - drag;
-        double stepScale = 1.0 - drag * 0.5;
-        double velocityGeometricSum = (1.0 - Math.pow(retention, ticks)) / drag;
-        double gravityVelocitySum = ballistics.gravity() / drag * (ticks - velocityGeometricSum);
-        double x = position.x + velocity.x * stepScale * velocityGeometricSum;
-        double y = position.y + stepScale * (velocity.y * velocityGeometricSum - gravityVelocitySum)
-                - ballistics.gravity() * ticks * 0.5;
-        double z = position.z + velocity.z * stepScale * velocityGeometricSum;
-        return new Vec3(x, y, z);
+        return LinearDragTrajectory.positionAfterTicks(
+                position, velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static Vec3 linearDragVelocityAfterTicks(
@@ -502,12 +475,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             ShellAlarmCbcCompat.Ballistics ballistics,
             double ticks
     ) {
-        double retentionPower = Math.pow(1.0 - ballistics.drag(), ticks);
-        double gravityVelocity = ballistics.gravity() / ballistics.drag() * (1.0 - retentionPower);
-        return new Vec3(
-                velocity.x * retentionPower,
-                velocity.y * retentionPower - gravityVelocity,
-                velocity.z * retentionPower);
+        return LinearDragTrajectory.velocityAfterTicks(
+                velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static String shortVec(Vec3 vec) {

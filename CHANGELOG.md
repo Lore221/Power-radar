@@ -9,6 +9,19 @@
 - GitHub Actions now invokes the Gradle wrapper portably through Bash.
 - Added automated project-structure, client-boundary, translation, and block-resource verification to the standard build.
 
+## 0.5.1 - Analytic Linear-Drag Targeting
+
+### Changed
+- Linear-drag Target Controller aiming now finds the trajectory-height maximum and solves the low and high pitch branches independently with safeguarded Newton iterations.
+- Linear-drag lifetime limits now constrain the pitch domain before root solving, preventing unreachable high arcs from entering the targeting solution.
+- Shell Alarm now finds descending protected-layer crossings analytically instead of scanning every future tick.
+- Interception Controllers now reuse the analytic linear-drag pitch solver and refine interception-time brackets with safeguarded secant steps.
+- Shared linear-drag trajectory equations now keep targeting, threat prediction, and interception on the same CBC tick-physics contract.
+- Target and Interception Controllers now cache assembled CBC muzzle geometry, reuse cached weapon kinds, and avoid physical-pitch geometry reads for non-mortar weapons.
+- Radar scanning now separates acquisition from tracking: acquired entities refresh directly every scan window, projectile discovery remains fast, and regular entity discovery runs as a slower rotating overview pass.
+- Multi-radar monitors now derive structure/active state across the whole network and use the first active assembled radar for primary orientation instead of blindly trusting the first controller record.
+- Quadratic-drag targeting retains the previous simulated bracket-and-bisection solver.
+
 ## 0.4.4 - Experimental Radar and Interception Update
 
 ### Added

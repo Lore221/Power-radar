@@ -5,9 +5,11 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -37,6 +39,8 @@ public final class TargetControllerCbcCompat {
     private static final Map<MethodKey, Optional<Method>> DECLARED_METHOD_CACHE = new ConcurrentHashMap<>();
     private static final Map<FieldKey, Optional<Field>> PUBLIC_FIELD_CACHE = new ConcurrentHashMap<>();
     private static final Map<FieldKey, Optional<Field>> DECLARED_FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Object, MuzzleGeometry> MUZZLE_GEOMETRY_CACHE =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private TargetControllerCbcCompat() {
     }
@@ -161,10 +165,11 @@ public final class TargetControllerCbcCompat {
         CannonKind kind = cachedKind != null && contraptionEntity != null && contraption != null
                 ? cachedKind
                 : cannonKind(mount);
-        Vec3 muzzle = muzzleOrigin(contraptionEntity, contraption, kind, mountPos);
-        float physicalPitch = fastAutocannonBallistics
-                ? logicalPitch
-                : physicalPitchDegrees(muzzleDirection(contraptionEntity, contraption, kind));
+        MuzzlePose muzzlePose = muzzlePose(contraptionEntity, contraption, kind, mountPos);
+        Vec3 muzzle = muzzlePose.origin();
+        float physicalPitch = kind == CannonKind.DROP_MORTAR && !fastAutocannonBallistics
+                ? physicalPitchDegrees(muzzlePose.direction())
+                : logicalPitch;
         float currentPitch = kind == CannonKind.DROP_MORTAR ? physicalPitch : logicalPitch;
         return Optional.of(new CannonState(mountPos, muzzle,
                 yaw, currentPitch, physicalPitch, 1.0F,
@@ -192,10 +197,11 @@ public final class TargetControllerCbcCompat {
         CannonKind kind = cachedKind != null && contraptionEntity != null && contraption != null
                 ? cachedKind
                 : cannonKind(mount);
-        Vec3 muzzle = muzzleOrigin(contraptionEntity, contraption, kind, mountPos);
-        float physicalPitch = fastAutocannonBallistics
-                ? 0.0F
-                : physicalPitchDegrees(muzzleDirection(contraptionEntity, contraption, kind));
+        MuzzlePose muzzlePose = muzzlePose(contraptionEntity, contraption, kind, mountPos);
+        Vec3 muzzle = muzzlePose.origin();
+        float physicalPitch = kind == CannonKind.DROP_MORTAR && !fastAutocannonBallistics
+                ? physicalPitchDegrees(muzzlePose.direction())
+                : 0.0F;
         return Optional.of(new CannonState(mountPos, muzzle,
                 yaw, 0.0F, physicalPitch, 1.0F,
                 kind, kind != CannonKind.NONE,
@@ -251,15 +257,49 @@ public final class TargetControllerCbcCompat {
         }
     }
 
-    private static Vec3 muzzleOrigin(Object contraptionEntity, Object contraption, CannonKind kind, BlockPos fallbackMountPos) {
+    private static MuzzlePose muzzlePose(
+            Object contraptionEntity,
+            Object contraption,
+            CannonKind kind,
+            BlockPos fallbackMountPos
+    ) {
+        Vec3 fallback = Vec3.atCenterOf(fallbackMountPos).add(0.0, 2.0, 0.0);
         if (contraptionEntity == null || contraption == null) {
-            return Vec3.atCenterOf(fallbackMountPos).add(0.0, 2.0, 0.0);
+            return new MuzzlePose(fallback, Vec3.ZERO);
+        }
+        MuzzleGeometry geometry = cachedMuzzleGeometry(contraption, kind);
+        if (geometry == null) {
+            return new MuzzlePose(fallback, Vec3.ZERO);
+        }
+        Vec3 muzzleCenter = invokeVec3(contraptionEntity, "toGlobalVector",
+                new Class<?>[] { Vec3.class, float.class },
+                new Object[] { geometry.localMuzzleCenter(), 0.0F });
+        Vec3 localCenter = invokeVec3(contraptionEntity, "toGlobalVector",
+                new Class<?>[] { Vec3.class, float.class },
+                new Object[] { Vec3.atCenterOf(BlockPos.ZERO), 0.0F });
+        if (muzzleCenter == null || localCenter == null) {
+            return new MuzzlePose(fallback, Vec3.ZERO);
+        }
+        Vec3 direction = muzzleCenter.subtract(localCenter);
+        if (direction.lengthSqr() < 0.0001) {
+            return new MuzzlePose(muzzleCenter, Vec3.ZERO);
+        }
+        Vec3 normalizedDirection = direction.normalize();
+        return new MuzzlePose(
+                muzzleCenter.subtract(normalizedDirection.scale(2.0)),
+                normalizedDirection);
+    }
+
+    private static MuzzleGeometry cachedMuzzleGeometry(Object contraption, CannonKind kind) {
+        MuzzleGeometry cached = MUZZLE_GEOMETRY_CACHE.get(contraption);
+        if (cached != null && cached.kind() == kind) {
+            return cached;
         }
         Direction orientation = readDirectionFieldRecursive(contraption, "initialOrientation");
         BlockPos startPos = readBlockPosFieldRecursive(contraption, "startPos");
         Map<?, ?> presentBlockEntities = readMapFieldRecursive(contraption, "presentBlockEntities");
         if (orientation == null || startPos == null || presentBlockEntities == null) {
-            return Vec3.atCenterOf(fallbackMountPos).add(0.0, 2.0, 0.0);
+            return null;
         }
         BlockPos cursor = startPos.immutable();
         BlockPos lastCannonBlock = null;
@@ -273,58 +313,13 @@ public final class TargetControllerCbcCompat {
             cursor = cursor.relative(orientation);
         }
         if (lastCannonBlock == null) {
-            return Vec3.atCenterOf(fallbackMountPos).add(0.0, 2.0, 0.0);
+            return null;
         }
-        Vec3 muzzleCenter = invokeVec3(contraptionEntity, "toGlobalVector",
-                new Class<?>[] { Vec3.class, float.class },
-                new Object[] { Vec3.atCenterOf(lastCannonBlock.relative(orientation)), 0.0F });
-        Vec3 localCenter = invokeVec3(contraptionEntity, "toGlobalVector",
-                new Class<?>[] { Vec3.class, float.class },
-                new Object[] { Vec3.atCenterOf(BlockPos.ZERO), 0.0F });
-        if (muzzleCenter == null || localCenter == null) {
-            return Vec3.atCenterOf(fallbackMountPos).add(0.0, 2.0, 0.0);
-        }
-        Vec3 direction = muzzleCenter.subtract(localCenter);
-        if (direction.lengthSqr() < 0.0001) {
-            return muzzleCenter;
-        }
-        return muzzleCenter.subtract(direction.normalize().scale(2.0));
-    }
-
-    private static Vec3 muzzleDirection(Object contraptionEntity, Object contraption, CannonKind kind) {
-        if (contraptionEntity == null || contraption == null) {
-            return Vec3.ZERO;
-        }
-        Direction orientation = readDirectionFieldRecursive(contraption, "initialOrientation");
-        BlockPos startPos = readBlockPosFieldRecursive(contraption, "startPos");
-        Map<?, ?> presentBlockEntities = readMapFieldRecursive(contraption, "presentBlockEntities");
-        if (orientation == null || startPos == null || presentBlockEntities == null) {
-            return Vec3.ZERO;
-        }
-        BlockPos cursor = startPos.immutable();
-        BlockPos lastCannonBlock = null;
-        String cannonBlockEntityType =
-                kind == CannonKind.AUTOCANNON ? I_AUTOCANNON_BLOCK_ENTITY : I_BIG_CANNON_BLOCK_ENTITY;
-        for (int i = 0; i < 256; i++) {
-            Object blockEntity = presentBlockEntities.get(cursor);
-            if (blockEntity == null || !isInstance(blockEntity.getClass(), cannonBlockEntityType)) {
-                break;
-            }
-            lastCannonBlock = cursor.immutable();
-            cursor = cursor.relative(orientation);
-        }
-        if (lastCannonBlock == null) {
-            return Vec3.ZERO;
-        }
-        Vec3 muzzleCenter = invokeVec3(contraptionEntity, "toGlobalVector",
-                new Class<?>[] { Vec3.class, float.class },
-                new Object[] { Vec3.atCenterOf(lastCannonBlock.relative(orientation)), 0.0F });
-        Vec3 localCenter = invokeVec3(contraptionEntity, "toGlobalVector",
-                new Class<?>[] { Vec3.class, float.class },
-                new Object[] { Vec3.atCenterOf(BlockPos.ZERO), 0.0F });
-        return muzzleCenter == null || localCenter == null
-                ? Vec3.ZERO
-                : muzzleCenter.subtract(localCenter).normalize();
+        MuzzleGeometry geometry = new MuzzleGeometry(
+                kind,
+                Vec3.atCenterOf(lastCannonBlock.relative(orientation)));
+        MUZZLE_GEOMETRY_CACHE.put(contraption, geometry);
+        return geometry;
     }
 
     private static float physicalPitchDegrees(Vec3 direction) {
@@ -883,6 +878,12 @@ public final class TargetControllerCbcCompat {
     }
 
     private record FieldKey(Class<?> owner, String name) {
+    }
+
+    private record MuzzleGeometry(CannonKind kind, Vec3 localMuzzleCenter) {
+    }
+
+    private record MuzzlePose(Vec3 origin, Vec3 direction) {
     }
 
     public enum CannonKind {

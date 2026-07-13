@@ -1,0 +1,4 @@
+{
+  "parent": "power_radar:item/targeting_card",
+  "textures": { "card": "minecraft:block/green_concrete" }
+}

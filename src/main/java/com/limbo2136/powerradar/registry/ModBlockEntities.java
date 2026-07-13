@@ -9,6 +9,7 @@ import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -21,12 +22,20 @@ public final class ModBlockEntities {
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarControllerBlockEntity>> RADAR_CONTROLLER =
             BLOCK_ENTITIES.register("radar_controller", () -> BlockEntityType.Builder
-                    .of(RadarControllerBlockEntity::new, ModBlocks.RADAR_CONTROLLER.get())
+                    .of(RadarControllerBlockEntity::new,
+                            ModBlocks.RADAR_CONTROLLER.get(),
+                            ModBlocks.AIR_RADAR_CONTROLLER.get(),
+                            ModBlocks.SURFACE_RADAR_CONTROLLER.get())
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarMonitorControllerBlockEntity>> RADAR_MONITOR_CONTROLLER =
             BLOCK_ENTITIES.register("radar_monitor_controller", () -> BlockEntityType.Builder
                     .of(RadarMonitorControllerBlockEntity::new, ModBlocks.RADAR_MONITOR_CONTROLLER.get())
+                    .build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ComputingBlockEntity>> COMPUTING_BLOCK =
+            BLOCK_ENTITIES.register("computing_block", () -> BlockEntityType.Builder
+                    .of(ComputingBlockEntity::new, ModBlocks.COMPUTING_BLOCK.get())
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OverviewModuleBlockEntity>> OVERVIEW_MODULE =

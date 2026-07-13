@@ -166,7 +166,17 @@ public final class RadarMonitorDisplayBuilder {
                     monitorElectricalState, monitorVoltageVolts, monitorResistanceOhms,
                     monitorDisplayCount, monitorScreenSize, monitorRendererEnabled);
         }
-        RadarControllerBlockEntity controller = controllers.get(0);
+        boolean structureValid = controllers.stream()
+                .anyMatch(radar -> radar.assembled() && radar.validPanelCount() > 0);
+        boolean active = controllers.stream()
+                .anyMatch(radar -> radar.assembled() && radar.displayCurrentRange() > 0);
+        RadarControllerBlockEntity controller = controllers.stream()
+                .filter(radar -> radar.assembled() && radar.displayCurrentRange() > 0)
+                .findFirst()
+                .orElseGet(() -> controllers.stream()
+                        .filter(radar -> radar.assembled() && radar.validPanelCount() > 0)
+                        .findFirst()
+                        .orElse(controllers.get(0)));
         Map<String, RadarDisplayTarget> targetsByKey = new LinkedHashMap<>();
         ArrayList<RadarDisplayCoverage> coverages = new ArrayList<>(controllers.size());
         int trackUpdateIntervalTicks = 5;
@@ -226,8 +236,8 @@ public final class RadarMonitorDisplayBuilder {
                 controller.radarFacing(),
                 monitorViewYawDegrees(monitorFacing),
                 controller.orientationState(),
-                controller.assembled(),
-                controller.assembled(),
+                structureValid,
+                active,
                 monitorElectricalState,
                 monitorVoltageVolts,
                 monitorResistanceOhms,

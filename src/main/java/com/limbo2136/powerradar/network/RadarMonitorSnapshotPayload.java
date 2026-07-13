@@ -69,6 +69,11 @@ public record RadarMonitorSnapshotPayload(
         List<RadarDisplayCoverage> coverages,
         List<RadarDisplayTarget> targets
 ) implements CustomPacketPayload {
+    /**
+     * Increment when the encoded snapshot bytes change intentionally. The value also versions the
+     * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
+     */
+    public static final int WIRE_SCHEMA_VERSION = 1;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =

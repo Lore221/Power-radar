@@ -1,7 +1,7 @@
 package com.limbo2136.powerradar.block;
 
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
-import com.limbo2136.powerradar.network.RadarControllerSnapshotPayload;
+import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
@@ -15,11 +15,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -32,9 +30,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 public class RadarControllerBlock extends BaseEntityBlock implements ElectricalDeviceBlock<RadarControllerCeeDevice> {
     public static final MapCodec<RadarControllerBlock> CODEC = simpleCodec(RadarControllerBlock::new);
@@ -62,16 +58,8 @@ public class RadarControllerBlock extends BaseEntityBlock implements ElectricalD
         return this.defaultBlockState().setValue(FACING, facing);
     }
 
-    @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-        if (hitResult.getDirection() != state.getValue(FACING)) {
-            return InteractionResult.PASS;
-        }
-        if (level instanceof ServerLevel && player instanceof ServerPlayer serverPlayer
-                && level.getBlockEntity(pos) instanceof RadarControllerBlockEntity controller) {
-            PacketDistributor.sendToPlayer(serverPlayer, RadarControllerSnapshotPayload.fromController(controller));
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide());
+    public RadarScanMode scanMode() {
+        return RadarScanMode.GROUND;
     }
 
     @Override

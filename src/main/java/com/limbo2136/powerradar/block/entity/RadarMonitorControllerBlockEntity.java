@@ -340,48 +340,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         return RadarMonitorSnapshotPayload.fromDisplayData(displayData, revision);
     }
 
-    public static RadarMonitorSnapshotPayload applySettingsFromMonitor(
-            ServerPlayer player,
-            BlockPos monitorPos,
-            RadarScanMode mode,
-            int detectionFilterMask,
-            int autotargetFilterMask,
-            TargetTrajectoryMode targetTrajectoryMode
-    ) {
-        ServerLevel level = player.serverLevel();
-        BlockEntity blockEntity = level.getBlockEntity(monitorPos);
-        Direction monitorFacing = level.getBlockState(monitorPos).hasProperty(RadarMonitorControllerBlock.FACING)
-                ? level.getBlockState(monitorPos).getValue(RadarMonitorControllerBlock.FACING)
-                : Direction.NORTH;
-        if (!(blockEntity instanceof RadarMonitorControllerBlockEntity monitorController)
-                || monitorController.structureStatus != RadarDisplayStructureResolver.StructureStatus.ACTIVE
-                || monitorController.activeSize <= 0
-                || !monitorController.isRendererEnabled()) {
-            return createSnapshotPayload(level, monitorPos);
-        }
-
-        RadarLinkConnectionResolver.Resolution linkResolution =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpoint(level, monitorPos);
-        if (linkResolution.status() != RadarLinkConnectionResolver.Status.SINGLE
-                || linkResolution.link().networkId() == null) {
-            return createSnapshotPayload(level, monitorPos);
-        }
-
-        RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
-        UUID networkId = linkResolution.link().networkId();
-        RadarNetworkManager.ControllersResolution controllerResolution = networkManager
-                .resolveControllersForConsumer(
-                        networkId,
-                        GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
-        if (controllerResolution.status() == RadarNetworkConnectionStatus.CONNECTED) {
-            for (RadarControllerBlockEntity controller : controllerResolution.controllers()) {
-                controller.applyMonitorSettings(mode, detectionFilterMask, targetTrajectoryMode);
-            }
-            networkManager.setAutotargetFilterMask(networkId, autotargetFilterMask);
-        }
-        return createSnapshotPayload(level, monitorPos);
-    }
-
     public Direction facing() {
         return this.getBlockState().hasProperty(RadarMonitorControllerBlock.FACING)
                 ? this.getBlockState().getValue(RadarMonitorControllerBlock.FACING)

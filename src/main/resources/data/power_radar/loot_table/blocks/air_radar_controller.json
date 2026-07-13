@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:block",
+  "pools": [{
+    "rolls": 1,
+    "entries": [{ "type": "minecraft:item", "name": "power_radar:air_radar_controller" }],
+    "conditions": [{ "condition": "minecraft:survives_explosion" }]
+  }]
+}

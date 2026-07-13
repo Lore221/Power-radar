@@ -1,6 +1,5 @@
 package com.limbo2136.powerradar.radar;
 
-import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 
 public record RadarScanProfile(
@@ -34,11 +33,13 @@ public record RadarScanProfile(
         boolean overview = structureType == RadarStructureType.OVERVIEW;
         int minOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMinYOffset();
-            case GROUND, SURFACE_SCANNER -> -PowerRadarCeeConstants.groundDownBlocks();
+            case GROUND -> -PowerRadarCeeConstants.groundDownBlocks();
+            case SURFACE_SCANNER -> -range;
         };
         int maxOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMaxYOffset();
-            case GROUND, SURFACE_SCANNER -> PowerRadarCeeConstants.groundUpBlocks();
+            case GROUND -> PowerRadarCeeConstants.groundUpBlocks();
+            case SURFACE_SCANNER -> 0;
         };
         return new RadarScanProfile(
                 overview ? RadarProfileType.OVERVIEW_CONTROLLER : RadarProfileType.SECTOR_CONTROLLER,
@@ -52,11 +53,11 @@ public record RadarScanProfile(
                 !overview,
                 mode.sectorAngleDegrees(),
                 true,
-                overview || mode != RadarScanMode.SKY,
-                overview || mode == RadarScanMode.GROUND,
-                overview || mode == RadarScanMode.GROUND && RadarConstants.detectPassiveMobsByDefault(),
-                overview || mode == RadarScanMode.SKY || mode == RadarScanMode.GROUND,
-                overview || mode == RadarScanMode.SKY || mode == RadarScanMode.SURFACE_SCANNER,
+                mode == RadarScanMode.GROUND || mode == RadarScanMode.SURFACE_SCANNER,
+                mode == RadarScanMode.GROUND,
+                mode == RadarScanMode.GROUND,
+                mode == RadarScanMode.SKY || mode == RadarScanMode.GROUND,
+                mode == RadarScanMode.SKY || mode == RadarScanMode.SURFACE_SCANNER,
                 false
         );
     }
@@ -80,6 +81,28 @@ public record RadarScanProfile(
                 this.detectProjectiles && RadarDetectionFilters.enabled(detectionFilterMask, RadarTargetCategory.PROJECTILE),
                 this.detectSableStructures && RadarDetectionFilters.enabled(detectionFilterMask, RadarTargetCategory.SABLE_STRUCTURE),
                 this.detectUnknown
+        );
+    }
+
+    public RadarScanProfile projectilesOnly() {
+        return new RadarScanProfile(
+                this.radarType,
+                this.structureType,
+                this.scanMode,
+                this.range,
+                this.verticalScanHeight,
+                this.verticalMinOffset,
+                this.verticalMaxOffset,
+                this.coverageShape,
+                this.useFovCheck,
+                this.sectorAngle,
+                this.ignoreItems,
+                false,
+                false,
+                false,
+                this.detectProjectiles,
+                false,
+                false
         );
     }
 }

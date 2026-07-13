@@ -20,6 +20,12 @@ public final class ModCreativeTabs {
                     .icon(() -> new ItemStack(ModItems.RADAR_CONTROLLER.get()))
                     .displayItems((parameters, output) -> {
                         output.accept(ModItems.RADAR_CONTROLLER.get());
+                        output.accept(ModItems.AIR_RADAR_CONTROLLER.get());
+                        output.accept(ModItems.SURFACE_RADAR_CONTROLLER.get());
+                        output.accept(ModItems.COMPUTING_BLOCK.get());
+                        output.accept(ModItems.TARGETING_CARD.get());
+                        output.accept(ModItems.DISPLAY_CARD.get());
+                        output.accept(ModItems.ALLOWLIST_CARD.get());
                         output.accept(ModItems.RADAR_PANEL.get());
                         output.accept(ModItems.OVERVIEW_MODULE.get());
                         output.accept(ModItems.RADAR_MONITOR_CONTROLLER.get());

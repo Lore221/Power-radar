@@ -29,6 +29,7 @@ import com.limbo2136.powerradar.radar.RadarTargetTrack;
 import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import com.limbo2136.powerradar.radar.TargetKey;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
@@ -46,12 +47,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 public class RadarControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation, RadarTargetingDataSource {
+    private static final int REGULAR_DISCOVERY_WINDOW_MULTIPLIER = 5;
     private RadarScanMode scanMode = RadarScanMode.GROUND;
     private boolean assembled;
     private int validPanelCount;
@@ -132,37 +133,10 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         blockEntity.runBudgetedScan(serverLevel);
     }
 
-    public void toggleMode(Player player) {
-        this.scanMode = this.scanMode.next();
-        syncChanged();
-        player.displayClientMessage(Component.translatable(this.scanMode.messageKey()), true);
-        PowerRadar.LOGGER.debug("[PowerRadar] Radar at {} {} {} switched to mode={}",
-                this.worldPosition.getX(), this.worldPosition.getY(), this.worldPosition.getZ(), this.scanMode);
-    }
-
-    public void applyMonitorSettings(RadarScanMode mode, int detectionFilterMask) {
-        applyMonitorSettings(mode, detectionFilterMask, this.targetTrajectoryMode);
-    }
-
-    public void applyMonitorSettings(RadarScanMode mode, int detectionFilterMask, TargetTrajectoryMode targetTrajectoryMode) {
-        RadarScanMode nextMode = mode == null ? RadarScanMode.GROUND : mode;
-        int nextMask = RadarDetectionFilters.sanitize(detectionFilterMask);
-        TargetTrajectoryMode nextTrajectoryMode = targetTrajectoryMode == null ? TargetTrajectoryMode.FLAT : targetTrajectoryMode;
-        boolean changed = this.scanMode != nextMode
-                || this.detectionFilterMask != nextMask
-                || this.targetTrajectoryMode != nextTrajectoryMode;
-        this.scanMode = nextMode;
-        this.detectionFilterMask = nextMask;
-        this.targetTrajectoryMode = nextTrajectoryMode;
-        if (changed) {
-            this.targetCache.clear();
-            this.activeScanProfile = null;
-            this.activeScanContext = null;
-            this.activeScanSlicePlan = null;
-            this.activeScanPowered = false;
-            this.displayRevision++;
-            syncChanged();
-        }
+    private RadarScanMode fixedScanMode() {
+        return this.getBlockState().getBlock() instanceof RadarControllerBlock controllerBlock
+                ? controllerBlock.scanMode()
+                : RadarScanMode.GROUND;
     }
 
     private void runBudgetedScan(ServerLevel level) {
@@ -184,17 +158,24 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 if (this.activeScanSlicePlan == null) {
                     this.activeScanSlicePlan = RadarScanner.buildSlicePlan(this.activeScanProfile, tickContext);
                 }
-                RadarScanner.scanBucket(
-                        this.activeScanProfile,
-                        tickContext,
-                        this.targetCache,
-                        scanSliceTicks,
-                        bucket,
-                        false,
-                        this.scanSeenScratch,
-                        this.activeScanSlicePlan);
+                RadarScanProfile discoveryProfile = isRegularDiscoveryWindow(
+                        level.getGameTime(), updateIntervalTicks)
+                        ? this.activeScanProfile
+                        : this.activeScanProfile.projectilesOnly();
+                if (hasDiscoveryTargets(discoveryProfile)) {
+                    RadarScanner.scanBucket(
+                            discoveryProfile,
+                            tickContext,
+                            this.targetCache,
+                            scanSliceTicks,
+                            bucket,
+                            false,
+                            this.scanSeenScratch,
+                            this.activeScanSlicePlan);
+                }
             }
             if (publishTick) {
+                RadarScanner.refreshTrackedEntities(this.activeScanProfile, tickContext, this.targetCache);
                 RadarScanner.housekeeping(tickContext, this.targetCache);
             }
         } else if (publishTick && this.activeScanContext != null) {
@@ -207,6 +188,20 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     private int scanBucket(long gameTime, int scanWindowTicks) {
         return Math.floorMod((int) gameTime - scanPhase(scanWindowTicks), scanWindowTicks);
+    }
+
+    private boolean isRegularDiscoveryWindow(long gameTime, int scanWindowTicks) {
+        long window = Math.floorDiv(gameTime - scanPhase(scanWindowTicks), scanWindowTicks);
+        return Math.floorMod(window, REGULAR_DISCOVERY_WINDOW_MULTIPLIER) == 0;
+    }
+
+    private static boolean hasDiscoveryTargets(RadarScanProfile profile) {
+        return profile.detectPlayers()
+                || profile.detectHostileMobs()
+                || profile.detectPassiveMobs()
+                || profile.detectProjectiles()
+                || profile.detectSableStructures()
+                || profile.detectUnknown();
     }
 
     private int scanPhase(int scanWindowTicks) {
@@ -242,6 +237,20 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     }
 
     private void refreshScanWindow(ServerLevel level) {
+        RadarScanMode blockMode = fixedScanMode();
+        if (this.scanMode != blockMode
+                || this.detectionFilterMask != RadarDetectionFilters.DEFAULT_MASK
+                || this.targetTrajectoryMode != TargetTrajectoryMode.FLAT) {
+            this.scanMode = blockMode;
+            this.detectionFilterMask = RadarDetectionFilters.DEFAULT_MASK;
+            this.targetTrajectoryMode = TargetTrajectoryMode.FLAT;
+            this.targetCache.clear();
+            this.activeScanProfile = null;
+            this.activeScanContext = null;
+            this.activeScanSlicePlan = null;
+            this.displayRevision++;
+            syncChanged();
+        }
         this.ensureRadarId(level);
         long structureValidationInterval = RadarConstants.structureValidationIntervalTicks();
         if (this.cachedStructure == null

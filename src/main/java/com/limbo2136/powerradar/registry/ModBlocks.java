@@ -11,6 +11,9 @@ import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.limbo2136.powerradar.block.ShellAlarmBlock;
 import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.block.InterceptionControllerBlock;
+import com.limbo2136.powerradar.block.AirRadarControllerBlock;
+import com.limbo2136.powerradar.block.SurfaceRadarControllerBlock;
+import com.limbo2136.powerradar.block.ComputingBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -22,6 +25,24 @@ public final class ModBlocks {
     public static final DeferredBlock<RadarControllerBlock> RADAR_CONTROLLER = BLOCKS.registerBlock(
             "radar_controller",
             RadarControllerBlock::new,
+            BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
+    );
+
+    public static final DeferredBlock<AirRadarControllerBlock> AIR_RADAR_CONTROLLER = BLOCKS.registerBlock(
+            "air_radar_controller",
+            AirRadarControllerBlock::new,
+            BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
+    );
+
+    public static final DeferredBlock<SurfaceRadarControllerBlock> SURFACE_RADAR_CONTROLLER = BLOCKS.registerBlock(
+            "surface_radar_controller",
+            SurfaceRadarControllerBlock::new,
+            BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
+    );
+
+    public static final DeferredBlock<ComputingBlock> COMPUTING_BLOCK = BLOCKS.registerBlock(
+            "computing_block",
+            ComputingBlock::new,
             BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
     );
 

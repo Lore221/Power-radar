@@ -1,0 +1,7 @@
+{
+  "parent": "power_radar:block/radar_controller",
+  "textures": {
+    "0": "power_radar:block/computing_block",
+    "particle": "power_radar:block/computing_block"
+  }
+}

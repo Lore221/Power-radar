@@ -161,6 +161,37 @@ public final class RadarScanner {
         return housekeeping(context, targetCache, PowerRadarDebugOptions.scanOptimizationLogging() ? System.nanoTime() : 0L);
     }
 
+    /** Refreshes acquired tracks directly, without another spatial entity query. */
+    public static int refreshTrackedEntities(
+            RadarScanProfile profile,
+            RadarScanContext context,
+            RadarTargetCache targetCache
+    ) {
+        int[] refreshed = { 0 };
+        targetCache.forEachTrack(track -> {
+            Entity entity = resolveTrackedEntity(context, track);
+            if (entity == null || !entity.isAlive()) {
+                return;
+            }
+            RadarTargetCategory category = RadarTargetClassifier.classify(entity, profile);
+            if (category == null || !RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
+                return;
+            }
+            updateTrack(context, targetCache, track.key(), entity, category);
+            refreshed[0]++;
+        });
+        return refreshed[0];
+    }
+
+    private static Entity resolveTrackedEntity(RadarScanContext context, RadarTargetTrack track) {
+        if (!context.dimensionId().equals(track.dimensionId())) {
+            return null;
+        }
+        return track.targetUuid() != null
+                ? context.level().getEntity(track.targetUuid())
+                : context.level().getEntity(track.targetId());
+    }
+
     private static RadarScanResult housekeeping(RadarScanContext context, RadarTargetCache targetCache, long totalStart) {
         boolean measurePerf = PowerRadarDebugOptions.scanOptimizationLogging();
         long staleValidationStart = measurePerf ? System.nanoTime() : 0L;

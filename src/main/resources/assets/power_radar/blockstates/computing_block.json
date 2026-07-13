@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/computing_block" },
+    "facing=east": { "model": "power_radar:block/computing_block", "y": 90 },
+    "facing=south": { "model": "power_radar:block/computing_block", "y": 180 },
+    "facing=west": { "model": "power_radar:block/computing_block", "y": 270 }
+  }
+}

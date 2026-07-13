@@ -4,6 +4,8 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
@@ -239,7 +241,8 @@ public class RadarNetworkManager {
     }
 
     public int autotargetFilterMask(UUID id) {
-        return this.runtime(id).autotargetFilterMask();
+        ComputingResolution computing = resolveComputingBlock(id);
+        return computing.active() == null ? 0 : computing.active().targetingMask();
     }
 
     public long settingsRevision(UUID id) {
@@ -263,10 +266,18 @@ public class RadarNetworkManager {
             List<String> onlinePlayerNames
     ) {
         RadarNetworkRuntime runtime = this.runtime(id);
+        ComputingResolution computing = resolveComputingBlock(id);
+        int displayMask = computing.active() == null
+                ? RadarDetectionFilters.DEFAULT_MASK
+                : computing.active().displayMask();
+        int targetingMask = computing.active() == null ? 0 : computing.active().targetingMask();
+        List<String> allowlistedPlayers = computing.active() == null
+                ? List.of()
+                : computing.active().allowlistedPlayers();
         long revision = displaySnapshotRevision(runtime, controllers, onlinePlayersHash);
         RadarNetworkRuntime.DisplaySnapshotCacheEntry cached = runtime.displaySnapshot();
         RadarMonitorDisplayData baseData;
-        if (cached != null && cached.revision() == revision) {
+        if (computing.active() == null && cached != null && cached.revision() == revision) {
             baseData = cached.data();
         } else {
             baseData = RadarMonitorDisplayBuilder.fromControllers(
@@ -280,12 +291,17 @@ public class RadarNetworkManager {
                     0,
                     0,
                     true,
-                    runtime.autotargetFilterMask(),
+                    targetingMask,
                     runtime.selectedTargetUuid().orElse(null),
                     onlinePlayerNames,
-                    runtime.whitelistedPlayerNames(),
+                    allowlistedPlayers,
                     runtime.whitelistedSableNames());
-            runtime.putDisplaySnapshot(revision, baseData);
+            baseData = baseData.withTargets(baseData.targets().stream()
+                    .filter(target -> RadarDetectionFilters.enabled(displayMask, target.category()))
+                    .toList());
+            if (computing.active() == null) {
+                runtime.putDisplaySnapshot(revision, baseData);
+            }
         }
         return baseData.withMonitorContext(
                 monitorPos,
@@ -328,7 +344,8 @@ public class RadarNetworkManager {
     }
 
     public List<String> whitelistedPlayerNames(UUID id) {
-        return this.runtime(id).whitelistedPlayerNames();
+        ComputingResolution computing = resolveComputingBlock(id);
+        return computing.active() == null ? List.of() : computing.active().allowlistedPlayers();
     }
 
     public List<String> whitelistedSableNames(UUID id) {
@@ -336,7 +353,33 @@ public class RadarNetworkManager {
     }
 
     public boolean isPlayerWhitelisted(UUID id, String playerName) {
-        return this.runtime(id).isPlayerWhitelisted(playerName);
+        return playerName != null && whitelistedPlayerNames(id).stream().anyMatch(playerName::equalsIgnoreCase);
+    }
+
+    public ComputingResolution resolveComputingBlock(UUID id) {
+        List<ComputingBlockEntity> computers = new ArrayList<>();
+        this.runtime(id).loadedLinks().stream()
+                .sorted(java.util.Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
+                        .thenComparingLong(pos -> pos.pos().asLong()))
+                .forEach(linkPos -> {
+                    ServerLevel level = this.server.getLevel(linkPos.dimension());
+                    if (level == null || !level.isLoaded(linkPos.pos())
+                            || !(level.getBlockEntity(linkPos.pos()) instanceof RadarLinkBlockEntity link)
+                            || link.endpointRole() != RadarLinkEndpointRole.COMPUTING_BLOCK
+                            || link.endpointPos() == null
+                            || !link.endpointPos().dimension().equals(linkPos.dimension())
+                            || !level.isLoaded(link.endpointPos().pos())
+                            || !(level.getBlockEntity(link.endpointPos().pos()) instanceof ComputingBlockEntity computer)) {
+                        return;
+                    }
+                    if (!computers.contains(computer)) {
+                        computers.add(computer);
+                    }
+                });
+        return new ComputingResolution(computers.size() == 1 ? computers.get(0) : null, computers.size() > 1);
+    }
+
+    public record ComputingResolution(ComputingBlockEntity active, boolean conflict) {
     }
 
     public void addWhitelistedPlayerName(UUID id, String playerName) {

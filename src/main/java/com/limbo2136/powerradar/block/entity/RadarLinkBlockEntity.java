@@ -114,7 +114,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
         GlobalPos newEndpointPos = GlobalPos.of(serverLevel.dimension(), frontPos);
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
 
-        if (frontState.is(ModBlocks.RADAR_CONTROLLER.get())
+        if (frontState.getBlock() instanceof com.limbo2136.powerradar.block.RadarControllerBlock
                 && serverLevel.getBlockEntity(frontPos) instanceof RadarControllerBlockEntity) {
             if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
                 manager.detachMonitorFromLink(this.networkId, linkGlobalPos);
@@ -143,6 +143,15 @@ public class RadarLinkBlockEntity extends BlockEntity {
                 return RadarLinkReconcileResult.OUT_OF_RANGE;
             }
             return RadarLinkReconcileResult.MONITOR_ATTACHED;
+        }
+
+        if (frontState.is(ModBlocks.COMPUTING_BLOCK.get())
+                && serverLevel.getBlockEntity(frontPos) instanceof ComputingBlockEntity) {
+            detachCurrentEndpoint(manager, linkGlobalPos);
+            this.endpointRole = RadarLinkEndpointRole.COMPUTING_BLOCK;
+            this.endpointPos = newEndpointPos;
+            syncChanged();
+            return RadarLinkReconcileResult.NONE;
         }
 
         if (frontState.is(ModBlocks.TARGET_CONTROLLER.get())

@@ -21,6 +21,7 @@ import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import java.util.ArrayList;
@@ -52,7 +53,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     private static final int MIN_INTERCEPTION_TICKS = 4;
     private static final int INTERCEPT_COARSE_STEP_TICKS = 3;
     private static final int INTERCEPT_FAST_STEP_TICKS = 5;
-    private static final int INTERCEPT_FAST_BISECTION_ITERATIONS = 16;
+    private static final int INTERCEPT_FAST_ROOT_ITERATIONS = 16;
+    private static final int INTERCEPT_FAST_SECANT_ITERATIONS = 8;
     private static final int INTERCEPT_FAST_MINIMIZE_ITERATIONS = 12;
     private static final double MIN_LINEAR_DRAG = 1.0E-6;
     private static final double INTERCEPT_PITCH_HINT_RANGE_DEGREES = 10.0;
@@ -805,28 +807,55 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
         }
         double lowError = interceptTimingErrorSigned(lowIntercept);
         Intercept best = lowIntercept;
+        Intercept highIntercept = evaluateLinearDragInterceptAt(
+                muzzle, threatReferencePoint, shellPosition, shellVelocity, shellBallistics,
+                interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration, high, pitchHint);
+        if (betterIntercept(highIntercept, best)) {
+            best = highIntercept;
+        }
+        if (highIntercept.reachable) {
+            pitchHint = highIntercept.pitchDegrees;
+        }
+        double highError = interceptTimingErrorSigned(highIntercept);
 
-        for (int i = 0; i < INTERCEPT_FAST_BISECTION_ITERATIONS; i++) {
-            double mid = (low + high) * 0.5;
-            Intercept midIntercept = evaluateLinearDragInterceptAt(
+        for (int i = 0; i < INTERCEPT_FAST_ROOT_ITERATIONS; i++) {
+            double candidateTick = (low + high) * 0.5;
+            if (i < INTERCEPT_FAST_SECANT_ITERATIONS
+                    && Double.isFinite(lowError)
+                    && Double.isFinite(highError)
+                    && Math.signum(lowError) != Math.signum(highError)
+                    && Math.abs(highError - lowError) > 1.0E-9) {
+                double secantTick = low - lowError * (high - low) / (highError - lowError);
+                if (Double.isFinite(secantTick) && secantTick > low && secantTick < high) {
+                    candidateTick = secantTick;
+                }
+            }
+            Intercept candidate = evaluateLinearDragInterceptAt(
                     muzzle, threatReferencePoint, shellPosition, shellVelocity, shellBallistics,
-                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration, mid, pitchHint);
-            if (betterIntercept(midIntercept, best)) {
-                best = midIntercept;
+                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration,
+                    candidateTick, pitchHint);
+            if (betterIntercept(candidate, best)) {
+                best = candidate;
             }
-            if (midIntercept.reachable) {
-                pitchHint = midIntercept.pitchDegrees;
+            if (candidate.reachable) {
+                pitchHint = candidate.pitchDegrees;
             }
-            double midError = interceptTimingErrorSigned(midIntercept);
-            if (!Double.isFinite(midError)) {
-                high = mid;
+            double candidateError = interceptTimingErrorSigned(candidate);
+            if (!Double.isFinite(candidateError)) {
+                high = candidateTick;
+                highError = candidateError;
                 continue;
             }
-            if (Math.signum(midError) == Math.signum(lowError)) {
-                low = mid;
-                lowError = midError;
+            if (Math.abs(candidateError) <= 0.05) {
+                return candidate;
+            }
+            if (Double.isFinite(lowError)
+                    && Math.signum(candidateError) == Math.signum(lowError)) {
+                low = candidateTick;
+                lowError = candidateError;
             } else {
-                high = mid;
+                high = candidateTick;
+                highError = candidateError;
             }
         }
         return best;
@@ -939,16 +968,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             ShellAlarmCbcCompat.Ballistics ballistics,
             double ticks
     ) {
-        double drag = ballistics.drag();
-        double retention = 1.0 - drag;
-        double stepScale = 1.0 - drag * 0.5;
-        double velocityGeometricSum = (1.0 - Math.pow(retention, ticks)) / drag;
-        double gravityVelocitySum = ballistics.gravity() / drag * (ticks - velocityGeometricSum);
-        return new Vec3(
-                position.x + velocity.x * stepScale * velocityGeometricSum,
-                position.y + stepScale * (velocity.y * velocityGeometricSum - gravityVelocitySum)
-                        - ballistics.gravity() * ticks * 0.5,
-                position.z + velocity.z * stepScale * velocityGeometricSum);
+        return LinearDragTrajectory.positionAfterTicks(
+                position, velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static Vec3 linearDragShellVelocity(
@@ -956,12 +977,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             ShellAlarmCbcCompat.Ballistics ballistics,
             double ticks
     ) {
-        double retentionPower = Math.pow(1.0 - ballistics.drag(), ticks);
-        double gravityVelocity = ballistics.gravity() / ballistics.drag() * (1.0 - retentionPower);
-        return new Vec3(
-                velocity.x * retentionPower,
-                velocity.y * retentionPower - gravityVelocity,
-                velocity.z * retentionPower);
+        return LinearDragTrajectory.velocityAfterTicks(
+                velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static boolean hasPassedReference(
@@ -1230,7 +1247,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     private void releaseAssignment(ServerLevel level) {
         if (this.networkId != null) {
             InterceptionCoordinator.unregisterController(
-                    level.getServer(), this.networkId, this.worldPosition);
+                    level, this.networkId, this.worldPosition);
         }
         this.assignedThreatUuid = null;
         this.trackingThreatUuid = null;

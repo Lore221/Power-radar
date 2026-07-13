@@ -19,7 +19,8 @@ public final class PowerRadarCeeDeviceTypes {
             register("radar_controller", () -> new SimulatedDeviceType<RadarControllerCeeDevice>(
                     ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_controller"),
                     (type, level, pos, devicesSavedData) -> new RadarControllerCeeDevice(level, pos, devicesSavedData, type),
-                    List.of(ModBlocks.RADAR_CONTROLLER.get())));
+                    List.of(ModBlocks.RADAR_CONTROLLER.get(), ModBlocks.AIR_RADAR_CONTROLLER.get(),
+                            ModBlocks.SURFACE_RADAR_CONTROLLER.get())));
 
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<MonitorControllerCeeDevice>> RADAR_MONITOR_CONTROLLER =
             register("radar_monitor_controller", () -> new SimulatedDeviceType<MonitorControllerCeeDevice>(

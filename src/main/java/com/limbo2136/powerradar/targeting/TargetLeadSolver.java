@@ -165,6 +165,41 @@ public final class TargetLeadSolver {
     ) {
         double minElevation = minimumElevationDegrees(ballistics);
         double maxElevation = maximumElevationDegrees(ballistics);
+        if (!ballistics.quadraticDrag()) {
+            LinearDragAimSolver.Roots analyticRoots = LinearDragAimSolver.solve(
+                    minElevation,
+                    maxElevation,
+                    horizontalDistance,
+                    delta.y,
+                    ballistics);
+            if (analyticRoots != null) {
+                LinearDragAimSolver.Root lowRoot = analyticRoots.low();
+                LinearDragAimSolver.Root highRoot = analyticRoots.high();
+                if (lowRoot == null && highRoot == null) {
+                    return new BallisticAim(fallbackPitch, false, ballistics.mode() + ":linear-drag-no-solution", 0.0);
+                }
+                boolean highArcSelected = preferHighArc && highRoot != null && !sameAngle(
+                        lowRoot == null ? null : lowRoot.pitchRadians(),
+                        highRoot.pitchRadians());
+                LinearDragAimSolver.Root selected = highArcSelected
+                        ? highRoot
+                        : (lowRoot != null ? lowRoot : highRoot);
+                String suffix = highArcSelected
+                        ? ":linear-drag-high"
+                        : (preferHighArc ? ":linear-drag-flat/high-unavailable" : ":linear-drag-flat");
+                ProjectileSimulation validation = simulateLinearDragProjectileAtHorizontalDistance(
+                        selected.pitchRadians(),
+                        horizontalDistance,
+                        ballistics);
+                if (validation != null && !Double.isNaN(validation.height())) {
+                    return new BallisticAim(
+                            (float) Math.toDegrees(selected.pitchRadians()),
+                            true,
+                            ballistics.mode() + suffix,
+                            validation.flightTicks());
+                }
+            }
+        }
         DragAimRoots roots = DragAimRoots.EMPTY;
         if (Double.isFinite(pitchHint)) {
             roots = dragAimRootsByBrackets(

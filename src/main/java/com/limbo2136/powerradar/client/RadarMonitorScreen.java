@@ -63,7 +63,16 @@ public class RadarMonitorScreen extends Screen {
             ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_sweep_cone_120.png");
     private static final ResourceLocation RADAR_OVERVIEW_OCTAGON =
             ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_overview_octagon.png");
+    private static final ResourceLocation RADAR_GRID_SCALE_100 =
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_grid_scale_100x.png");
+    private static final ResourceLocation RADAR_GRID_SCALE_500 =
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_grid_scale_500x.png");
+    private static final ResourceLocation RADAR_GRID_SCALE_1000 =
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_grid_scale_1000x.png");
     private static final int BACKGROUND_TEXTURE_SIZE = 32;
+    private static final int GRID_SCALE_TEXTURE_SIZE = 256;
+    private static final int GUI_HEIGHT_PERCENT = 90;
+    private static final int GUI_INNER_INSET_TEXTURE_PIXELS = 2;
     private static final int PANEL_TEXTURE_SIZE = 128;
     private static final int RADAR_SCREEN_TEXTURE_SIZE = 128;
     private static final int MIN_VISIBLE_MAP_SIZE_BLOCKS = RadarDisplayProjector.MONITOR_MAP_SIZE_BLOCKS;
@@ -110,6 +119,10 @@ public class RadarMonitorScreen extends Screen {
     private int radarOriginX;
     private int radarOriginY;
     private int radarRadius;
+    private int guiX;
+    private int guiY;
+    private int guiSize;
+    private ResourceLocation cachedGridScaleTexture = RADAR_GRID_SCALE_100;
     private int visibleMapSizeBlocks = MIN_VISIBLE_MAP_SIZE_BLOCKS;
     private double mapCenterOffsetX;
     private double mapCenterOffsetZ;
@@ -230,15 +243,6 @@ public class RadarMonitorScreen extends Screen {
         this.hubClickTargets.clear();
         drawBackgroundAsset(graphics);
         renderRadarDisplay(graphics, mouseX, mouseY, partialTick);
-        updateTargetButtonBounds();
-        renderHubPanel(graphics, mouseX, mouseY);
-        renderTargetButton(graphics, mouseX, mouseY);
-        if (this.whitelistOpen) {
-            renderWhitelistOverlay(graphics, mouseX, mouseY);
-        }
-        if (this.hoveredHubTooltip != null) {
-            graphics.renderTooltip(this.font, this.hoveredHubTooltip, mouseX, mouseY);
-        }
     }
 
     private void renderRadarDisplay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -271,6 +275,18 @@ public class RadarMonitorScreen extends Screen {
             }
             this.spriteDrawCount++;
         }
+        drawGridScaleOverlay(graphics);
+    }
+
+    private void drawGridScaleOverlay(GuiGraphics graphics) {
+        int size = this.radarRadius * 2;
+        int x = this.radarOriginX - this.radarRadius;
+        int y = this.radarOriginY - this.radarRadius;
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        graphics.blit(this.cachedGridScaleTexture, x, y, size, size, 0.0F, 0.0F,
+                GRID_SCALE_TEXTURE_SIZE, GRID_SCALE_TEXTURE_SIZE, GRID_SCALE_TEXTURE_SIZE, GRID_SCALE_TEXTURE_SIZE);
+        RenderSystem.disableBlend();
     }
 
     private void drawRadarWorkArea(GuiGraphics graphics, float partialTick) {
@@ -589,14 +605,16 @@ public class RadarMonitorScreen extends Screen {
     private void rebuildLayoutCache() {
         this.cachedWidth = this.width;
         this.cachedHeight = this.height;
-        int panelReserve = sidePanelWidth() + GUI_MARGIN * 3;
-        int availableWidth = Math.max(80, this.width - panelReserve);
-        int availableHeight = Math.max(80, this.height - GUI_MARGIN * 2);
-        int maxDiameter = Math.max(80, Math.min(availableWidth, availableHeight));
-        int texturePixelScale = Math.max(1, maxDiameter / RADAR_SCREEN_TEXTURE_SIZE);
-        this.radarRadius = RADAR_SCREEN_TEXTURE_SIZE * texturePixelScale / 2;
-        this.radarOriginX = GUI_MARGIN + availableWidth / 2;
-        this.radarOriginY = this.height / 2 + 4;
+        int targetGuiSize = this.height * GUI_HEIGHT_PERCENT / 100;
+        this.guiSize = Math.max(32, Math.min(targetGuiSize, this.width - GUI_MARGIN * 2));
+        this.guiSize -= this.guiSize & 1;
+        this.guiX = (this.width - this.guiSize) / 2;
+        this.guiY = (this.height - this.guiSize) / 2;
+        int guiInnerInset = Math.max(1, (int) Math.ceil(
+                this.guiSize * GUI_INNER_INSET_TEXTURE_PIXELS / (double) BACKGROUND_TEXTURE_SIZE));
+        this.radarRadius = Math.max(1, (this.guiSize - guiInnerInset * 2) / 2);
+        this.radarOriginX = this.width / 2;
+        this.radarOriginY = this.height / 2;
         rebuildBlipCache();
         rebuildTextCache();
         updateTargetButtonBounds();
@@ -768,10 +786,22 @@ public class RadarMonitorScreen extends Screen {
         if (this.visibleMapSizeBlocks == previous) {
             return true;
         }
+        updateCachedGridScaleTexture();
         clampMapCenter();
         rebuildBlipCache();
         rebuildTextCache();
         return true;
+    }
+
+    private void updateCachedGridScaleTexture() {
+        ResourceLocation nextTexture = switch (visibleGridCellBlocks()) {
+            case GRID_LOD_NEAR_STEP_BLOCKS -> RADAR_GRID_SCALE_100;
+            case GRID_LOD_MID_STEP_BLOCKS -> RADAR_GRID_SCALE_500;
+            default -> RADAR_GRID_SCALE_1000;
+        };
+        if (!nextTexture.equals(this.cachedGridScaleTexture)) {
+            this.cachedGridScaleTexture = nextTexture;
+        }
     }
 
     private static int clampMapSize(int value) {
@@ -811,38 +841,15 @@ public class RadarMonitorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && activateHubButton(mouseX, mouseY)) {
-            return true;
-        }
-        if (button == 0 && targetButtonVisible() && targetButtonHovered(mouseX, mouseY)) {
-            selectedTarget().ifPresent(target -> {
-                if (target.targetUuid() != null) {
-                    PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), target.targetUuid()));
-                }
-            });
-            return true;
-        }
-        if (button == 0 && clearTargetButtonVisible() && clearTargetButtonHovered(mouseX, mouseY)) {
-            PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), null));
-            this.selectedTargetKey = null;
-            this.targetSelectionChangedInScreen = true;
-            return true;
-        }
-        if (button == 0 && whitelistButtonVisible() && whitelistButtonHovered(mouseX, mouseY)) {
-            this.whitelistOpen = true;
-            this.whitelistPlayerInput = "";
-            this.whitelistPlayerIndex = -1;
-            this.whitelistPlayerSelectedByScroll = false;
-            return true;
-        }
-        if (button == 0 && this.whitelistOpen && handleWhitelistClick(mouseX, mouseY)) {
-            return true;
-        }
-        if (button == 0 && selectTargetAt(mouseX, mouseY)) {
-            updateTargetButtonBounds();
-            return true;
-        }
         if (button == 0 && isMouseOverRadar(mouseX, mouseY)) {
+            if (!selectTargetAt(mouseX, mouseY)) {
+                PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), null));
+                this.selectedTargetKey = null;
+                this.targetSelectionChangedInScreen = true;
+            }
+            return true;
+        }
+        if (button == 1 && isMouseOverRadar(mouseX, mouseY)) {
             this.draggingMap = true;
             this.lastDragMouseX = mouseX;
             this.lastDragMouseY = mouseY;
@@ -853,7 +860,7 @@ public class RadarMonitorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == 0 && this.draggingMap) {
+        if (button == 1 && this.draggingMap) {
             panMapByPixels(mouseX - this.lastDragMouseX, mouseY - this.lastDragMouseY);
             this.lastDragMouseX = mouseX;
             this.lastDragMouseY = mouseY;
@@ -864,7 +871,7 @@ public class RadarMonitorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && this.draggingMap) {
+        if (button == 1 && this.draggingMap) {
             this.draggingMap = false;
             return true;
         }
@@ -919,6 +926,9 @@ public class RadarMonitorScreen extends Screen {
         RadarDisplayTarget target = this.displayData.targets().get(nearest.get().targetIndex());
         this.selectedTargetKey = target.stableSelectionKey();
         this.targetSelectionChangedInScreen = true;
+        if (target.targetUuid() != null) {
+            PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), target.targetUuid()));
+        }
         return true;
     }
 
@@ -1179,7 +1189,7 @@ public class RadarMonitorScreen extends Screen {
     }
 
     private void drawBackgroundAsset(GuiGraphics graphics) {
-        graphics.blit(GUI_BACKGROUND, 0, 0, this.width, this.height, 0.0F, 0.0F,
+        graphics.blit(GUI_BACKGROUND, this.guiX, this.guiY, this.guiSize, this.guiSize, 0.0F, 0.0F,
                 BACKGROUND_TEXTURE_SIZE, BACKGROUND_TEXTURE_SIZE, BACKGROUND_TEXTURE_SIZE, BACKGROUND_TEXTURE_SIZE);
     }
 

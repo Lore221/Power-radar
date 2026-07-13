@@ -16,6 +16,7 @@ public final class PowerRadarClient {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         RadarLinkClientRuntime.init();
+        MechanicalSirenClientAudioRuntime.init();
         event.registerBlockEntityRenderer(ModBlockEntities.OVERVIEW_MODULE.get(), OverviewModuleRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), RadarMonitorControllerBlockEntityRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);

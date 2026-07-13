@@ -4,6 +4,9 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.item.RadarFilterCardItem;
+import com.limbo2136.powerradar.radar.RadarDetectionFilters;
+import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.lang.reflect.InvocationTargetException;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,6 +18,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
 public final class ModNetwork {
+    public static final String PROTOCOL_VERSION = Integer.toString(RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
+
     private ModNetwork() {
     }
 
@@ -24,17 +29,17 @@ public final class ModNetwork {
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         // Snapshot payload remains a lightweight full monitor view. TODO: add a v2 delta payload if full snapshots become measurable.
-        PayloadRegistrar registrar = event.registrar("1");
+        PayloadRegistrar registrar = event.registrar(PROTOCOL_VERSION);
         registrar.playToClient(RadarMonitorSnapshotPayload.TYPE, RadarMonitorSnapshotPayload.STREAM_CODEC, ModNetwork::handleSnapshot);
         registrar.playToClient(RadarMonitorBlockSnapshotPayload.TYPE, RadarMonitorBlockSnapshotPayload.STREAM_CODEC, ModNetwork::handleBlockSnapshot);
         registrar.playToClient(RadarMonitorBlockStaticPayload.TYPE, RadarMonitorBlockStaticPayload.STREAM_CODEC, ModNetwork::handleBlockStatic);
         registrar.playToClient(RadarMonitorBlockTargetsPayload.TYPE, RadarMonitorBlockTargetsPayload.STREAM_CODEC, ModNetwork::handleBlockTargets);
-        registrar.playToClient(RadarControllerSnapshotPayload.TYPE, RadarControllerSnapshotPayload.STREAM_CODEC, ModNetwork::handleControllerSnapshot);
         registrar.playToServer(RadarMonitorRequestPayload.TYPE, RadarMonitorRequestPayload.STREAM_CODEC, ModNetwork::handleRequest);
-        registrar.playToServer(RadarMonitorSettingsPayload.TYPE, RadarMonitorSettingsPayload.STREAM_CODEC, ModNetwork::handleSettings);
         registrar.playToServer(RadarMonitorTargetSelectionPayload.TYPE, RadarMonitorTargetSelectionPayload.STREAM_CODEC, ModNetwork::handleTargetSelection);
-        registrar.playToServer(RadarMonitorWhitelistPayload.TYPE, RadarMonitorWhitelistPayload.STREAM_CODEC, ModNetwork::handleWhitelist);
-        registrar.playToServer(RadarControllerSettingsPayload.TYPE, RadarControllerSettingsPayload.STREAM_CODEC, ModNetwork::handleControllerSettings);
+        registrar.playToClient(TargetingCardOpenPayload.TYPE, TargetingCardOpenPayload.STREAM_CODEC, ModNetwork::handleTargetingCardOpen);
+        registrar.playToServer(TargetingCardSavePayload.TYPE, TargetingCardSavePayload.STREAM_CODEC, ModNetwork::handleTargetingCardSave);
+        registrar.playToClient(AllowlistCardOpenPayload.TYPE, AllowlistCardOpenPayload.STREAM_CODEC, ModNetwork::handleAllowlistCardOpen);
+        registrar.playToServer(AllowlistCardSavePayload.TYPE, AllowlistCardSavePayload.STREAM_CODEC, ModNetwork::handleAllowlistCardSave);
     }
 
     private static void handleSnapshot(RadarMonitorSnapshotPayload payload, IPayloadContext context) {
@@ -74,22 +79,6 @@ public final class ModNetwork {
         context.enqueueWork(() -> invokeClientBlockTargetsHandler(payload));
     }
 
-    private static void handleControllerSnapshot(RadarControllerSnapshotPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientControllerSnapshotHandler(payload));
-    }
-
-    private static void invokeClientControllerSnapshotHandler(RadarControllerSnapshotPayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarControllerClientHooks");
-            hooks.getMethod("handleSnapshot", RadarControllerSnapshotPayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to open radar controller screen", exception);
-        }
-    }
-
     private static void invokeClientBlockSnapshotHandler(RadarMonitorBlockSnapshotPayload payload) {
         try {
             Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
@@ -117,6 +106,73 @@ public final class ModNetwork {
         }
     }
 
+    private static void handleTargetingCardOpen(TargetingCardOpenPayload payload, IPayloadContext context) {
+        if (!FMLEnvironment.dist.isClient()) {
+            return;
+        }
+        context.enqueueWork(() -> {
+            try {
+                Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.TargetingCardClientHooks");
+                hooks.getMethod("open", TargetingCardOpenPayload.class).invoke(null, payload);
+            } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
+                PowerRadar.LOGGER.error("[PowerRadar] Failed to open targeting card screen", exception);
+            }
+        });
+    }
+
+    private static void handleTargetingCardSave(TargetingCardSavePayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
+        context.enqueueWork(() -> {
+            var stack = player.getItemInHand(payload.hand());
+            if (!(stack.getItem() instanceof RadarFilterCardItem card)
+                    || payload.cardKind() < 0 || payload.cardKind() > 1
+                    || card.kind() != (payload.cardKind() == 1
+                    ? RadarFilterCardItem.Kind.DISPLAY
+                    : RadarFilterCardItem.Kind.TARGETING)) {
+                return;
+            }
+            stack.set(ModDataComponents.RADAR_FILTER_MASK.get(),
+                    RadarDetectionFilters.sanitize(payload.filterMask()));
+            stack.set(ModDataComponents.TARGETING_CARD_OPTION.get(), payload.option() == 0 ? 0 : 1);
+        });
+    }
+
+    private static void handleAllowlistCardOpen(AllowlistCardOpenPayload payload, IPayloadContext context) {
+        if (!FMLEnvironment.dist.isClient()) return;
+        context.enqueueWork(() -> {
+            try {
+                Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.AllowlistCardClientHooks");
+                hooks.getMethod("open", AllowlistCardOpenPayload.class).invoke(null, payload);
+            } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
+                PowerRadar.LOGGER.error("[PowerRadar] Failed to open allowlist card screen", exception);
+            }
+        });
+    }
+
+    private static void handleAllowlistCardSave(AllowlistCardSavePayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) return;
+        context.enqueueWork(() -> {
+            var stack = player.getItemInHand(payload.hand());
+            if (!(stack.getItem() instanceof RadarFilterCardItem card)
+                    || card.kind() != RadarFilterCardItem.Kind.ALLOWLIST) {
+                return;
+            }
+            java.util.LinkedHashMap<String, String> unique = new java.util.LinkedHashMap<>();
+            for (String rawName : payload.storedNames()) {
+                if (rawName == null) continue;
+                String name = rawName.trim();
+                if (name.isEmpty() || name.length() > 64) continue;
+                unique.putIfAbsent(name.toLowerCase(java.util.Locale.ROOT), name);
+                if (unique.size() >= 1024) break;
+            }
+            stack.set(ModDataComponents.RADAR_ALLOWLIST.get(), String.join("\n", unique.values()));
+            stack.set(ModDataComponents.ALLOWLIST_SABLE_MODE.get(), payload.sableMode());
+            stack.set(ModDataComponents.TARGETING_CARD_OPTION.get(), payload.option() == 0 ? 0 : 1);
+        });
+    }
+
     private static void handleRequest(RadarMonitorRequestPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             RadarMonitorSnapshotPayload snapshot = RadarMonitorControllerBlockEntity.getOrCreateSnapshotPayload(
@@ -125,27 +181,6 @@ public final class ModNetwork {
             if (snapshot.revision() != payload.knownRevision()) {
                 PacketDistributor.sendToPlayer(player, snapshot);
             }
-        }
-    }
-
-    private static void handleSettings(RadarMonitorSettingsPayload payload, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player) {
-            RadarMonitorSnapshotPayload snapshot = RadarMonitorControllerBlockEntity.applySettingsFromMonitor(
-                    player,
-                    payload.monitorPos(),
-                    payload.mode(),
-                    payload.detectionFilterMask(),
-                    payload.autotargetFilterMask(),
-                    payload.targetTrajectoryMode());
-            PacketDistributor.sendToPlayer(player, snapshot);
-        }
-    }
-
-    private static void handleControllerSettings(RadarControllerSettingsPayload payload, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player
-                && player.serverLevel().getBlockEntity(payload.controllerPos()) instanceof com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity controller) {
-            controller.applyMonitorSettings(payload.mode(), payload.detectionFilterMask(), payload.targetTrajectoryMode());
-            PacketDistributor.sendToPlayer(player, RadarControllerSnapshotPayload.fromController(controller));
         }
     }
 
@@ -175,26 +210,4 @@ public final class ModNetwork {
         });
     }
 
-    private static void handleWhitelist(RadarMonitorWhitelistPayload payload, IPayloadContext context) {
-        if (!(context.player() instanceof ServerPlayer player)) {
-            return;
-        }
-        context.enqueueWork(() -> {
-            RadarLinkConnectionResolver.Resolution linkResolution =
-                    RadarLinkConnectionResolver.findSingleLinkFacingEndpoint(player.serverLevel(), payload.monitorPos());
-            if (linkResolution.status() != RadarLinkConnectionResolver.Status.SINGLE
-                    || linkResolution.link().networkId() == null
-                    || payload.value() == null
-                    || payload.value().isBlank()) {
-                return;
-            }
-            RadarNetworkManager manager = RadarNetworkManager.get(player.server);
-            switch (payload.action()) {
-                case ADD_PLAYER -> manager.addWhitelistedPlayerName(linkResolution.link().networkId(), payload.value());
-                case REMOVE_PLAYER -> manager.removeWhitelistedPlayerName(linkResolution.link().networkId(), payload.value());
-            }
-            PacketDistributor.sendToPlayer(player,
-                    RadarMonitorControllerBlockEntity.getOrCreateSnapshotPayload(player.serverLevel(), payload.monitorPos()));
-        });
-    }
 }

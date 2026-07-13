@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.radar;
 
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 public final class RadarCoverageFilter {
@@ -16,6 +17,15 @@ public final class RadarCoverageFilter {
         }
         if (delta.y < profile.verticalMinOffset() || delta.y > profile.verticalMaxOffset()) {
             return false;
+        }
+        if (profile.scanMode() == RadarScanMode.SURFACE_SCANNER) {
+            int surfaceY = context.level().getHeight(
+                    Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    entity.getBlockX(),
+                    entity.getBlockZ());
+            if (entity.getY() < surfaceY - 10.0D) {
+                return false;
+            }
         }
         return !profile.useFovCheck() || Math.abs(bearingDegrees(context.radarYawDegrees(), delta)) <= profile.sectorAngle() / 2.0;
     }

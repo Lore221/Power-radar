@@ -1,0 +1,8 @@
+{
+  "textures": { "card": "minecraft:block/red_concrete", "contact": "minecraft:block/gold_block" },
+  "elements": [
+    { "from": [2, 3, 7.5], "to": [14, 13, 8.5], "faces": { "north": { "texture": "#card" }, "south": { "texture": "#card" } } },
+    { "from": [4, 2, 7.4], "to": [6, 4, 8.6], "faces": { "north": { "texture": "#contact" }, "south": { "texture": "#contact" } } },
+    { "from": [10, 2, 7.4], "to": [12, 4, 8.6], "faces": { "north": { "texture": "#contact" }, "south": { "texture": "#contact" } } }
+  ]
+}
