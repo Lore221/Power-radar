@@ -1,0 +1,3 @@
+1) Сделать различимыми radar_controller, air_radar_controller, surface_radar_controller (Создать 2 json - air_radar_controller и surface_radar_controller)
+2) target_controleller, shell alarm, interception controller
+3) текстуры для 4 пердметов: interception_fuze, targeting_card, dispaly_card, allowlist_card
