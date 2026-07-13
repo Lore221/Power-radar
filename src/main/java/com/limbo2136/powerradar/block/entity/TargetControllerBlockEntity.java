@@ -53,7 +53,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.BlockHitResult;
@@ -70,6 +69,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private static final double TARGET_LEAD_CACHE_AIM_SHIFT_SQR = 0.25;
     private static final double TARGET_LEAD_CACHE_ORIGIN_SHIFT_SQR = 0.01;
     private static final long AUTOTARGET_READINESS_CACHE_TICKS = 20L;
+    private static final double[] LINE_OF_SIGHT_HEIGHT_FACTORS = {0.2, 0.5, 0.9};
 
     private boolean readyToFire;
     private double powerVoltageVolts;
@@ -112,6 +112,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private UUID cachedLeadTargetUuid;
     private BlockPos cachedLeadMountPos;
     private WeaponBallistics cachedLeadBallistics;
+    private WeaponKind cachedLeadWeaponKind;
     private boolean cachedLeadPreferHighArc;
     private boolean cachedLeadAccelerationReady;
     private long cachedLeadGameTime = Long.MIN_VALUE;
@@ -282,8 +283,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             invalidateTargetLeadCache();
             return TargetSolution.invalid("no-target");
         }
-        RadarNetworkManager.ControllersResolution controllerResolution = RadarNetworkManager.get(level.getServer())
-                .resolveControllersForConsumer(
+        RadarNetworkManager.ControllersResolution controllerResolution = networkManager.resolveControllersForConsumer(
                         networkId,
                         GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
         RadarTargetingDataSource radarController = new CombinedRadarDataSource(controllerResolution.controllers());
@@ -366,6 +366,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         long gameTime = level.getGameTime();
         TrackedTargetView aimTrack = liveTargetView(level, track, gameTime);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
+                cannonState.kind(),
                 preferHighArc,
                 lockTicks,
                 gameTime);
@@ -538,7 +539,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return false;
         }
         TargetLeadSolver.LeadSolution leadSolution = solveLead(
-                aimTrack, origin, aimBallistics, preferHighArc, TARGET_LOCK_WARMUP_TICKS, level.getGameTime());
+                aimTrack, origin, aimBallistics, cannonKind, preferHighArc,
+                TARGET_LOCK_WARMUP_TICKS, level.getGameTime());
         Vec3 delta = leadSolution.aimPoint().subtract(origin);
         TargetLeadSolver.BallisticAim aim = leadSolution.ballisticAim();
         return aim.reachable()
@@ -730,11 +732,13 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             TrackedTargetView track,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             int lockTicks,
             long gameTime
     ) {
-        return TargetLeadSolver.solve(track, origin, ballistics, preferHighArc, lockTicks, TARGET_LOCK_WARMUP_TICKS, gameTime);
+        return TargetLeadSolver.solve(track, origin, ballistics, weaponKind, preferHighArc,
+                lockTicks, TARGET_LOCK_WARMUP_TICKS, gameTime);
     }
 
     private TargetLeadSolver.LeadSolution cachedLeadSolution(
@@ -743,6 +747,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             BlockPos mountPos,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             int lockTicks,
             long gameTime
@@ -752,6 +757,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         boolean reusable = targetUuid.equals(this.cachedLeadTargetUuid)
                 && mountPos.equals(this.cachedLeadMountPos)
                 && sameBallistics(ballistics, this.cachedLeadBallistics)
+                && weaponKind == this.cachedLeadWeaponKind
                 && preferHighArc == this.cachedLeadPreferHighArc
                 && accelerationReady == this.cachedLeadAccelerationReady
                 && this.cachedLeadBaseTargetPoint != null
@@ -772,8 +778,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             }
         }
         TargetLeadSolver.LeadSolution solution = solveLead(
-                track, origin, ballistics, preferHighArc, lockTicks, gameTime);
-        rememberTargetLeadSolution(targetUuid, mountPos, origin, ballistics, preferHighArc,
+                track, origin, ballistics, weaponKind, preferHighArc, lockTicks, gameTime);
+        rememberTargetLeadSolution(targetUuid, mountPos, origin, ballistics, weaponKind, preferHighArc,
                 accelerationReady, gameTime, baseTargetPoint, solution);
         return solution;
     }
@@ -783,6 +789,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             BlockPos mountPos,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             boolean accelerationReady,
             long gameTime,
@@ -792,6 +799,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         this.cachedLeadTargetUuid = targetUuid;
         this.cachedLeadMountPos = mountPos.immutable();
         this.cachedLeadBallistics = ballistics;
+        this.cachedLeadWeaponKind = weaponKind;
         this.cachedLeadPreferHighArc = preferHighArc;
         this.cachedLeadAccelerationReady = accelerationReady;
         this.cachedLeadGameTime = gameTime;
@@ -807,6 +815,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         this.cachedLeadTargetUuid = null;
         this.cachedLeadMountPos = null;
         this.cachedLeadBallistics = null;
+        this.cachedLeadWeaponKind = null;
         this.cachedLeadGameTime = Long.MIN_VALUE;
         this.cachedLeadOrigin = null;
         this.cachedLeadBaseTargetPoint = null;
@@ -903,9 +912,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
 
     private static boolean hasLineOfSightToTrack(ServerLevel level, Vec3 origin, TrackedTargetView track) {
         double height = Math.max(0.1, track.boundingHeight());
-        double[] heightFactors = { 0.2, 0.5, 0.9 };
         Vec3 position = track.position();
-        for (double factor : heightFactors) {
+        for (double factor : LINE_OF_SIGHT_HEIGHT_FACTORS) {
             Vec3 targetPoint = new Vec3(position.x, position.y + height * factor, position.z);
             if (hasClearLine(level, origin, targetPoint)) {
                 return true;

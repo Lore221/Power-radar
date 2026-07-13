@@ -874,8 +874,14 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             double acceleration,
             double targetTicks
     ) {
-        Vec3 position = linearDragShellPosition(shellPosition, shellVelocity, shellBallistics, targetTicks);
-        Vec3 velocity = linearDragShellVelocity(shellVelocity, shellBallistics, targetTicks);
+        LinearDragTrajectory.TrajectoryState shellState = LinearDragTrajectory.stateAfterTicks(
+                shellPosition,
+                shellVelocity,
+                shellBallistics.gravity(),
+                shellBallistics.drag(),
+                targetTicks);
+        Vec3 position = shellState.position();
+        Vec3 velocity = shellState.velocity();
         if (hasPassedReference(position, velocity, threatReferencePoint)) {
             return new CheapTimingSample(targetTicks, Double.NaN, Double.MAX_VALUE, true);
         }
@@ -946,8 +952,14 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             double targetTicks,
             double pitchHint
     ) {
-        Vec3 position = linearDragShellPosition(shellPosition, shellVelocity, shellBallistics, targetTicks);
-        Vec3 velocity = linearDragShellVelocity(shellVelocity, shellBallistics, targetTicks);
+        LinearDragTrajectory.TrajectoryState shellState = LinearDragTrajectory.stateAfterTicks(
+                shellPosition,
+                shellVelocity,
+                shellBallistics.gravity(),
+                shellBallistics.drag(),
+                targetTicks);
+        Vec3 position = shellState.position();
+        Vec3 velocity = shellState.velocity();
         if (hasPassedReference(position, velocity, threatReferencePoint)) {
             return Intercept.PASSED_REFERENCE;
         }
@@ -960,25 +972,6 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
         return intercept.reachable
                 ? intercept.flightTicks + intercept.aimTicks - intercept.targetTicks
                 : Double.NaN;
-    }
-
-    private static Vec3 linearDragShellPosition(
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double ticks
-    ) {
-        return LinearDragTrajectory.positionAfterTicks(
-                position, velocity, ballistics.gravity(), ballistics.drag(), ticks);
-    }
-
-    private static Vec3 linearDragShellVelocity(
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double ticks
-    ) {
-        return LinearDragTrajectory.velocityAfterTicks(
-                velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static boolean hasPassedReference(
@@ -1051,7 +1044,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     }
 
     private static BallisticAim ballisticAim(Vec3 delta, WeaponBallistics ballistics, double pitchHint) {
-        InterceptionBallistics.Aim aim = InterceptionBallistics.solveLowArc(
+        InterceptionBallistics.Aim aim = InterceptionBallistics.solveAutocannonLowArc(
                 delta,
                 ballistics,
                 pitchHint,

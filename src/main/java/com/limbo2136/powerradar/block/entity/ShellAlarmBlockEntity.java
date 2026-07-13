@@ -336,22 +336,26 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (ballistics.quadraticDrag() || !LinearDragTrajectory.supported(ballistics.drag())) {
             return null;
         }
-        Double upperTick = descendingPlaneCrossingTick(position, velocity, ballistics, upperPlaneY);
-        if (upperTick == null) {
+        LinearDragTrajectory.DescendingPlaneCrossings crossings =
+                LinearDragTrajectory.descendingPlaneCrossings(
+                        position,
+                        velocity,
+                        ballistics.gravity(),
+                        ballistics.drag(),
+                        upperPlaneY,
+                        lowerPlaneY,
+                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
+        if (crossings == null) {
             return null;
         }
-        Double lowerTick = descendingPlaneCrossingTick(position, velocity, ballistics, lowerPlaneY);
-        if (lowerTick == null || lowerTick < upperTick) {
-            return null;
-        }
-        Vec3 upperCrossing = linearDragPositionAfterTicks(position, velocity, ballistics, upperTick);
-        Vec3 lowerCrossing = linearDragPositionAfterTicks(position, velocity, ballistics, lowerTick);
+        Vec3 upperCrossing = crossings.upper().position();
+        Vec3 lowerCrossing = crossings.lower().position();
         AABB trajectoryBounds = horizontalBounds(upperCrossing, lowerCrossing);
         boolean dangerous = horizontalIntersects(trajectoryBounds, protectedSquare);
         return trajectoryResult(
                 track,
                 lowerCrossing,
-                linearDragVelocityAfterTicks(velocity, ballistics, lowerTick),
+                crossings.lower().velocity(),
                 upperCrossing,
                 lowerCrossing,
                 dangerous ? "analytic-protected-zone-hit" : "analytic-protected-zone-miss",
@@ -443,40 +447,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                     dangerous);
         }
         return new ThreatEvaluation(dangerous, ballistics, upperCrossing, lowerCrossing);
-    }
-
-    private static Double descendingPlaneCrossingTick(
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double planeY
-    ) {
-        return LinearDragTrajectory.descendingPlaneCrossingTicks(
-                position.y,
-                velocity.y,
-                ballistics.gravity(),
-                ballistics.drag(),
-                planeY,
-                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-    }
-
-    private static Vec3 linearDragPositionAfterTicks(
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double ticks
-    ) {
-        return LinearDragTrajectory.positionAfterTicks(
-                position, velocity, ballistics.gravity(), ballistics.drag(), ticks);
-    }
-
-    private static Vec3 linearDragVelocityAfterTicks(
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double ticks
-    ) {
-        return LinearDragTrajectory.velocityAfterTicks(
-                velocity, ballistics.gravity(), ballistics.drag(), ticks);
     }
 
     private static String shortVec(Vec3 vec) {

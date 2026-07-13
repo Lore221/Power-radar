@@ -107,7 +107,7 @@ public class RadarNetworkManager {
 
     public RadarLinkReconcileResult attachControllerFromLink(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         this.addPersistentLink(id, linkPos);
-        boolean changed = this.upsertControllerBinding(id, linkPos, controllerPos);
+        this.upsertControllerBinding(id, linkPos, controllerPos);
         this.reconcileConsumerLeases(id);
         return RadarLinkReconcileResult.CONTROLLER_ATTACHED;
     }
@@ -118,7 +118,7 @@ public class RadarNetworkManager {
     }
 
     public void attachMonitorFromLink(UUID id, GlobalPos linkPos, GlobalPos monitorPos) {
-        GlobalPos previous = this.runtime(id).monitorLinkToMonitorPos().put(linkPos, monitorPos);
+        this.runtime(id).monitorLinkToMonitorPos().put(linkPos, monitorPos);
         this.reconcileConsumerLease(id, linkPos);
     }
 
@@ -430,6 +430,8 @@ public class RadarNetworkManager {
                 this.removeAllTickets(id);
                 this.savedData.remove(id);
                 this.runtimeNetworks.remove(id);
+                this.computingResolutionCache.remove(id);
+                this.computingPolicyCache.remove(id);
             }
         });
     }

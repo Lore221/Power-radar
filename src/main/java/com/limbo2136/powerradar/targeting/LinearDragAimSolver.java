@@ -25,45 +25,22 @@ public final class LinearDragAimSolver {
             double targetHeight,
             WeaponBallistics ballistics
     ) {
-        double drag = ballistics.drag();
-        double speed = ballistics.speedBlocksPerTick();
-        if (drag <= 1.0E-6 || drag >= 1.0 || speed <= 1.0E-6 || horizontalDistance <= 0.0) {
-            return null;
-        }
-
-        int maximumTicks = ballistics.hasLifetimeLimit()
-                ? Math.min(MAX_PROJECTILE_TICKS, Math.max(1, ballistics.lifetimeTicks() + 1))
-                : MAX_PROJECTILE_TICKS;
-        double retention = LinearDragTrajectory.retention(drag);
-        double stepScale = LinearDragTrajectory.stepScale(drag);
-        double horizontalScale = speed * stepScale * LinearDragTrajectory.geometricSum(maximumTicks, drag);
-        double reachRatio = horizontalDistance / horizontalScale;
-        if (!Double.isFinite(reachRatio) || reachRatio > 1.0) {
-            return Roots.EMPTY;
-        }
-
-        double lifetimeLimit = Math.acos(clamp(reachRatio, -1.0, 1.0));
-        double minimumPitch = Math.max(Math.toRadians(minimumPitchDegrees), -lifetimeLimit);
-        double maximumPitch = Math.min(Math.toRadians(maximumPitchDegrees), lifetimeLimit);
-        if (!(minimumPitch <= maximumPitch)) {
-            return Roots.EMPTY;
-        }
-
-        Context context = new Context(
+        PreparedSearch prepared = prepareSearch(
+                minimumPitchDegrees,
+                maximumPitchDegrees,
                 horizontalDistance,
                 targetHeight,
-                speed,
-                ballistics.gravityBlocksPerTickSquared(),
-                drag,
-                retention,
-                stepScale,
-                maximumTicks);
-        Evaluation minimum = evaluate(minimumPitch, context);
-        Evaluation maximum = evaluate(maximumPitch, context);
-        if (!minimum.reachable() || !maximum.reachable()) {
+                ballistics);
+        if (prepared == null) {
             return null;
         }
+        if (prepared.terminalResult() != null) {
+            return prepared.terminalResult();
+        }
 
+        Evaluation minimum = prepared.minimum();
+        Evaluation maximum = prepared.maximum();
+        Context context = prepared.context();
         Evaluation peak;
         if (minimum.firstDerivative() <= 0.0) {
             peak = minimum;
@@ -83,6 +60,96 @@ public final class LinearDragAimSolver {
             high = low;
         }
         return new Roots(low, high);
+    }
+
+    /**
+     * Attempts the lifetime-truncated, single-root path used only by autocannons.
+     * A non-negative derivative at the upper reachable pitch proves that the
+     * permitted part of the trajectory has not passed its peak, so there is no
+     * high branch to search. {@code null} asks the caller to use the full solver.
+     */
+    public static Roots solveAutocannonLowArc(
+            double minimumPitchDegrees,
+            double maximumPitchDegrees,
+            double horizontalDistance,
+            double targetHeight,
+            WeaponBallistics ballistics
+    ) {
+        if (ballistics == null || !ballistics.hasLifetimeLimit()) {
+            return null;
+        }
+        PreparedSearch prepared = prepareSearch(
+                minimumPitchDegrees,
+                maximumPitchDegrees,
+                horizontalDistance,
+                targetHeight,
+                ballistics);
+        if (prepared == null) {
+            return null;
+        }
+        if (prepared.terminalResult() != null) {
+            return prepared.terminalResult();
+        }
+
+        Evaluation minimum = prepared.minimum();
+        Evaluation maximum = prepared.maximum();
+        if (minimum.firstDerivative() < -DERIVATIVE_EPSILON
+                || maximum.firstDerivative() < -DERIVATIVE_EPSILON) {
+            return null;
+        }
+        Root root = solveBranch(minimum, maximum, prepared.context());
+        return root == null ? Roots.EMPTY : new Roots(root, null);
+    }
+
+    private static PreparedSearch prepareSearch(
+            double minimumPitchDegrees,
+            double maximumPitchDegrees,
+            double horizontalDistance,
+            double targetHeight,
+            WeaponBallistics ballistics
+    ) {
+        if (ballistics == null) {
+            return null;
+        }
+        double drag = ballistics.drag();
+        double speed = ballistics.speedBlocksPerTick();
+        if (drag <= 1.0E-6 || drag >= 1.0 || speed <= 1.0E-6 || horizontalDistance <= 0.0) {
+            return null;
+        }
+
+        int maximumTicks = ballistics.hasLifetimeLimit()
+                ? Math.min(MAX_PROJECTILE_TICKS, Math.max(1, ballistics.lifetimeTicks() + 1))
+                : MAX_PROJECTILE_TICKS;
+        double retention = LinearDragTrajectory.retention(drag);
+        double stepScale = LinearDragTrajectory.stepScale(drag);
+        double horizontalScale = speed * stepScale * LinearDragTrajectory.geometricSum(maximumTicks, drag);
+        double reachRatio = horizontalDistance / horizontalScale;
+        if (!Double.isFinite(reachRatio) || reachRatio > 1.0) {
+            return PreparedSearch.empty();
+        }
+
+        double lifetimeLimit = Math.acos(clamp(reachRatio, -1.0, 1.0));
+        double minimumPitch = Math.max(Math.toRadians(minimumPitchDegrees), -lifetimeLimit);
+        double maximumPitch = Math.min(Math.toRadians(maximumPitchDegrees), lifetimeLimit);
+        if (!(minimumPitch <= maximumPitch)) {
+            return PreparedSearch.empty();
+        }
+
+        Context context = new Context(
+                horizontalDistance,
+                targetHeight,
+                speed,
+                ballistics.gravityBlocksPerTickSquared(),
+                drag,
+                retention,
+                stepScale,
+                maximumTicks);
+        Evaluation minimum = evaluate(minimumPitch, context);
+        Evaluation maximum = evaluate(maximumPitch, context);
+        if (!minimum.reachable() || !maximum.reachable()) {
+            return null;
+        }
+        return new PreparedSearch(context, minimum, maximum, null);
     }
 
     private static Evaluation solvePeak(Evaluation low, Evaluation high, Context context) {
@@ -293,6 +360,17 @@ public final class LinearDragAimSolver {
             double stepScale,
             int maximumTicks
     ) {
+    }
+
+    private record PreparedSearch(
+            Context context,
+            Evaluation minimum,
+            Evaluation maximum,
+            Roots terminalResult
+    ) {
+        private static PreparedSearch empty() {
+            return new PreparedSearch(null, null, null, Roots.EMPTY);
+        }
     }
 
     private record Evaluation(

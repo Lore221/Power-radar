@@ -28,16 +28,15 @@ public final class RadarConstants {
     public static final int RADAR_LINK_OUTLINE_COLOR_B = 0x8ADFFF;
     public static final int RADAR_DISPLAY_LINK_REFRESH_INTERVAL_TICKS = 5;
 
-    public static final int BLIP_TEXTURE_SIZE = 20;
-    public static final int GUI_BLIP_DRAW_SIZE = 12;
     public static final float RADAR_DISPLAY_CONTENT_SCALE = 0.88F;
-    public static final float IN_WORLD_BLIP_SIZE_RATIO = 0.015F;
+    public static final float RADAR_BLIP_RENDER_SCALE = 0.5F;
+    public static final float RADAR_BLIP_CELL_TEXTURE_RATIO = 11.0F / 128.0F * RADAR_BLIP_RENDER_SCALE;
 
     private RadarConstants() {
     }
 
     public static float computeInWorldBlipSize(float displaySurfaceSize) {
-        return displaySurfaceSize * IN_WORLD_BLIP_SIZE_RATIO;
+        return displaySurfaceSize * RADAR_BLIP_CELL_TEXTURE_RATIO;
     }
 
     public static int sectorRadarGroundAngleDegrees() {

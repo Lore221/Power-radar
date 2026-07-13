@@ -28,7 +28,6 @@ public final class ModNetwork {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        // Snapshot payload remains a lightweight full monitor view. TODO: add a v2 delta payload if full snapshots become measurable.
         PayloadRegistrar registrar = event.registrar(PROTOCOL_VERSION);
         registrar.playToClient(RadarMonitorSnapshotPayload.TYPE, RadarMonitorSnapshotPayload.STREAM_CODEC, ModNetwork::handleSnapshot);
         registrar.playToClient(RadarMonitorBlockSnapshotPayload.TYPE, RadarMonitorBlockSnapshotPayload.STREAM_CODEC, ModNetwork::handleBlockSnapshot);

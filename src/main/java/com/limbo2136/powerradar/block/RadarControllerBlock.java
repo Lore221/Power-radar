@@ -69,6 +69,16 @@ public class RadarControllerBlock extends BaseEntityBlock implements ElectricalD
     }
 
     @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())
+                && !level.isClientSide
+                && level.getBlockEntity(pos) instanceof RadarControllerBlockEntity controller) {
+            controller.deactivateRadarStructureEntity();
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    @Override
     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         ensureNodesExist(level, pos, state);
         super.tick(state, level, pos, random);

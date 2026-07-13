@@ -1,12 +1,34 @@
 package com.limbo2136.powerradar.radar;
 
 public final class RadarDisplayProjector {
-    public static final int MONITOR_MAP_SIZE_BLOCKS = 1000;
+    public static final int MONITOR_MAP_SIZE_BLOCKS = 300;
     public static final int MONITOR_MAP_RADIUS_BLOCKS = MONITOR_MAP_SIZE_BLOCKS / 2;
     public static final int MONITOR_GRID_CELL_BLOCKS = 100;
     public static final int MONITOR_GRID_CELLS = MONITOR_MAP_SIZE_BLOCKS / MONITOR_GRID_CELL_BLOCKS;
+    public static final int MIN_MONITOR_MAP_SIZE_BLOCKS = 100;
+    public static final int MAX_MONITOR_MAP_SIZE_BLOCKS = 10_000;
+    public static final int MINIMUM_RADAR_REFERENCE_MAP_SIZE_BLOCKS =
+            (RadarModuleConstants.BASE_RANGE_BLOCKS + RadarModuleConstants.PHASED_ARRAY_RANGE_BONUS_BLOCKS) * 2;
 
     private RadarDisplayProjector() {
+    }
+
+    public static int maximumRadarRange(RadarMonitorDisplayData displayData) {
+        if (displayData == null) {
+            return 0;
+        }
+        int maximumRange = Math.max(0, displayData.currentRange());
+        for (RadarDisplayCoverage coverage : displayData.coverages()) {
+            maximumRange = Math.max(maximumRange, coverage.currentRange());
+        }
+        return maximumRange;
+    }
+
+    public static int recommendedMapSizeBlocks(RadarMonitorDisplayData displayData) {
+        int requiredDiameter = maximumRadarRange(displayData) * 2;
+        int roundedToGrid = ((requiredDiameter + MONITOR_GRID_CELL_BLOCKS - 1) / MONITOR_GRID_CELL_BLOCKS)
+                * MONITOR_GRID_CELL_BLOCKS;
+        return Math.max(MIN_MONITOR_MAP_SIZE_BLOCKS, Math.min(MAX_MONITOR_MAP_SIZE_BLOCKS, roundedToGrid));
     }
 
     public static RadarDisplayProjection project(RadarMonitorDisplayData displayData, RadarDisplayTarget target) {
@@ -107,6 +129,24 @@ public final class RadarDisplayProjector {
                 centerOffsetZ);
     }
 
+    public static RadarDisplayProjection projectWorldPointUnclipped(
+            RadarMonitorDisplayData displayData,
+            net.minecraft.resources.ResourceLocation dimensionId,
+            double x,
+            double y,
+            double z,
+            float viewYawDegrees,
+            int mapRadiusBlocks,
+            double centerOffsetX,
+            double centerOffsetZ
+    ) {
+        if (!dimensionId.equals(displayData.radarDimensionId())) {
+            return RadarDisplayProjection.HIDDEN;
+        }
+        return projectWorldPointCoordinates(
+                displayData, x, z, viewYawDegrees, mapRadiusBlocks, centerOffsetX, centerOffsetZ, false, false);
+    }
+
     private static RadarDisplayProjection projectWorldPoint(
             RadarMonitorDisplayData displayData,
             net.minecraft.resources.ResourceLocation dimensionId,
@@ -122,6 +162,21 @@ public final class RadarDisplayProjector {
         if (!dimensionId.equals(displayData.radarDimensionId())) {
             return RadarDisplayProjection.HIDDEN;
         }
+        return projectWorldPointCoordinates(
+                displayData, x, z, viewYawDegrees, mapRadiusBlocks, centerOffsetX, centerOffsetZ, stale, true);
+    }
+
+    private static RadarDisplayProjection projectWorldPointCoordinates(
+            RadarMonitorDisplayData displayData,
+            double x,
+            double z,
+            float viewYawDegrees,
+            int mapRadiusBlocks,
+            double centerOffsetX,
+            double centerOffsetZ,
+            boolean stale,
+            boolean clipFreshToBounds
+    ) {
         int safeRadius = Math.max(1, mapRadiusBlocks);
 
         double dx = x - (displayData.monitorPos().getX() + 0.5D) - centerOffsetX;
@@ -135,7 +190,7 @@ public final class RadarDisplayProjector {
         double screenHorizontal = dx * rightX + dz * rightZ;
         double screenVertical = dx * upX + dz * upZ;
         double edgeDistance = Math.max(Math.abs(screenHorizontal), Math.abs(screenVertical));
-        if (!stale && edgeDistance > safeRadius) {
+        if (!stale && clipFreshToBounds && edgeDistance > safeRadius) {
             return RadarDisplayProjection.HIDDEN;
         }
 

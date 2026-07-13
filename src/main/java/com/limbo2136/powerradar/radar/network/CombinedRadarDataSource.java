@@ -37,28 +37,50 @@ public final class CombinedRadarDataSource implements RadarTargetingDataSource {
 
     @Override
     public boolean assembled() {
-        return this.sources.stream().anyMatch(RadarDataSource::assembled);
+        for (RadarDataSource source : this.sources) {
+            if (source.assembled()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public boolean isElectricallyOperational() {
-        return this.sources.stream().anyMatch(RadarDataSource::isElectricallyOperational);
+        for (RadarDataSource source : this.sources) {
+            if (source.isElectricallyOperational()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public int effectiveScanRangeBlocks() {
-        return this.sources.stream()
-                .mapToInt(RadarDataSource::effectiveScanRangeBlocks)
-                .max()
-                .orElse(0);
+        int maximumRange = 0;
+        boolean found = false;
+        for (RadarDataSource source : this.sources) {
+            int range = source.effectiveScanRangeBlocks();
+            if (!found || range > maximumRange) {
+                maximumRange = range;
+                found = true;
+            }
+        }
+        return maximumRange;
     }
 
     @Override
     public long lastScanGameTime() {
-        return this.sources.stream()
-                .mapToLong(RadarDataSource::lastScanGameTime)
-                .max()
-                .orElse(0L);
+        long latestScanGameTime = 0L;
+        boolean found = false;
+        for (RadarDataSource source : this.sources) {
+            long scanGameTime = source.lastScanGameTime();
+            if (!found || scanGameTime > latestScanGameTime) {
+                latestScanGameTime = scanGameTime;
+                found = true;
+            }
+        }
+        return latestScanGameTime;
     }
 
     @Override

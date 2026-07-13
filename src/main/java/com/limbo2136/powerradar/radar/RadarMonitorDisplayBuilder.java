@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 
 public final class RadarMonitorDisplayBuilder {
@@ -67,7 +66,7 @@ public final class RadarMonitorDisplayBuilder {
                 0.0,
                 0.0,
                 Direction.NORTH,
-                monitorViewYawDegrees(monitorFacing),
+                monitorViewYawDegrees(),
                 RadarOrientationState.fixed(RadarGeometry.yawDegrees(Direction.NORTH), serverGameTime),
                 false,
                 false,
@@ -165,30 +164,39 @@ public final class RadarMonitorDisplayBuilder {
                     monitorElectricalState, monitorVoltageVolts, monitorResistanceOhms,
                     monitorDisplayCount, monitorScreenSize, monitorRendererEnabled);
         }
-        boolean structureValid = controllers.stream()
-                .anyMatch(radar -> radar.assembled() && radar.validPanelCount() > 0);
-        boolean active = controllers.stream()
-                .anyMatch(radar -> radar.assembled() && radar.displayCurrentRange() > 0);
-        RadarControllerBlockEntity controller = controllers.stream()
-                .filter(radar -> radar.assembled() && radar.displayCurrentRange() > 0)
-                .findFirst()
-                .orElseGet(() -> controllers.stream()
-                        .filter(radar -> radar.assembled() && radar.validPanelCount() > 0)
-                        .findFirst()
-                        .orElse(controllers.get(0)));
         Map<String, RadarDisplayTarget> targetsByKey = new LinkedHashMap<>();
         ArrayList<RadarDisplayCoverage> coverages = new ArrayList<>(controllers.size());
-        int trackUpdateIntervalTicks = 5;
+        RadarControllerBlockEntity firstActiveController = null;
+        RadarControllerBlockEntity firstValidController = null;
+        boolean structureValid = false;
+        boolean active = false;
+        int trackUpdateIntervalTicks = Integer.MAX_VALUE;
         long lastScanGameTime = 0L;
         int validPanelCount = 0;
         int currentRange = 0;
         int maxRange = 0;
         for (RadarControllerBlockEntity radar : controllers) {
+            boolean radarAssembled = radar.assembled();
+            int radarValidPanelCount = radar.validPanelCount();
+            int radarCurrentRange = radar.displayCurrentRange();
             int radarTrackUpdateIntervalTicks = radar.trackUpdateIntervalTicks();
+            long radarLastScanGameTime = radar.lastScanGameTime();
+            if (radarAssembled && radarValidPanelCount > 0) {
+                structureValid = true;
+                if (firstValidController == null) {
+                    firstValidController = radar;
+                }
+            }
+            if (radarAssembled && radarCurrentRange > 0) {
+                active = true;
+                if (firstActiveController == null) {
+                    firstActiveController = radar;
+                }
+            }
             trackUpdateIntervalTicks = Math.min(trackUpdateIntervalTicks, radarTrackUpdateIntervalTicks);
-            lastScanGameTime = Math.max(lastScanGameTime, radar.lastScanGameTime());
-            validPanelCount += radar.validPanelCount();
-            currentRange = Math.max(currentRange, radar.displayCurrentRange());
+            lastScanGameTime = Math.max(lastScanGameTime, radarLastScanGameTime);
+            validPanelCount += radarValidPanelCount;
+            currentRange = Math.max(currentRange, radarCurrentRange);
             maxRange = Math.max(maxRange, radar.maxRange());
             int radarSectorAngle = radar.orientationState().structureType() == RadarStructureType.OVERVIEW
                     ? 360
@@ -201,15 +209,12 @@ public final class RadarMonitorDisplayBuilder {
                     radar.radarOriginY(),
                     radar.radarOriginZ(),
                     radar.orientationState(),
-                    radar.displayCurrentRange(),
+                    radarCurrentRange,
                     radarSectorAngle));
-            long targetDisplayGameTime = radar.lastScanGameTime() > 0L
-                    ? radar.lastScanGameTime()
+            long targetDisplayGameTime = radarLastScanGameTime > 0L
+                    ? radarLastScanGameTime
                     : serverGameTime;
             radar.forEachTargetTrack(track -> {
-                if (!isDisplayedOnMonitor(track.category())) {
-                    return;
-                }
                 if (!RadarDetectionFilters.enabled(radar.detectionFilterMask(), track.category())) {
                     return;
                 }
@@ -218,6 +223,9 @@ public final class RadarMonitorDisplayBuilder {
                         (previous, next) -> next.displayAgeTicks() < previous.displayAgeTicks() ? next : previous);
             });
         }
+        RadarControllerBlockEntity controller = firstActiveController != null
+                ? firstActiveController
+                : firstValidController != null ? firstValidController : controllers.get(0);
         List<RadarDisplayTarget> targets = List.copyOf(targetsByKey.values());
         int sectorAngle = controller.orientationState().structureType() == RadarStructureType.OVERVIEW
                 ? 360
@@ -233,7 +241,7 @@ public final class RadarMonitorDisplayBuilder {
                 controller.radarOriginY(),
                 controller.radarOriginZ(),
                 controller.radarFacing(),
-                monitorViewYawDegrees(monitorFacing),
+                monitorViewYawDegrees(),
                 controller.orientationState(),
                 structureValid,
                 active,
@@ -287,14 +295,7 @@ public final class RadarMonitorDisplayBuilder {
         return data;
     }
 
-    private static float monitorViewYawDegrees(Direction monitorFacing) {
+    private static float monitorViewYawDegrees() {
         return RadarGeometry.yawDegrees(Direction.NORTH);
-    }
-
-    private static boolean isDisplayedOnMonitor(RadarTargetCategory category) {
-        return switch (category) {
-            case PLAYER, HOSTILE_MOB, PASSIVE_MOB, PROJECTILE, SABLE_STRUCTURE -> true;
-            case UNKNOWN -> false;
-        };
     }
 }

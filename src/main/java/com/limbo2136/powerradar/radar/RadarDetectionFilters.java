@@ -24,7 +24,7 @@ public final class RadarDetectionFilters {
             case PLAYER -> (mask & PLAYERS) != 0;
             case SABLE_STRUCTURE -> (mask & SABLE_STRUCTURES) != 0;
             case PROJECTILE -> (mask & PROJECTILES) != 0;
-            case UNKNOWN -> false;
+            case UNKNOWN -> true;
         };
     }
 

@@ -1,7 +1,6 @@
 package com.limbo2136.powerradar.block;
 
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
-import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -264,29 +263,6 @@ public final class RadarDisplayStructureResolver {
         return state
                 .setValue(RadarDisplayBlock.ACTIVE, true)
                 .setValue(RadarDisplayBlock.FRAME_SHAPE, candidate.frameShape(pos));
-    }
-
-    private static void resetNearbyDisplays(Level level, BlockPos changedPos) {
-        applyingDisplayStates = true;
-        try {
-            for (int x = -MAX_SIZE; x <= MAX_SIZE; x++) {
-                for (int y = -MAX_SIZE; y <= MAX_SIZE; y++) {
-                    for (int z = -MAX_SIZE; z <= MAX_SIZE; z++) {
-                        BlockPos pos = changedPos.offset(x, y, z);
-                        if (!isLoaded(level, pos)) {
-                            continue;
-                        }
-                        BlockState state = level.getBlockState(pos);
-                        if (state.is(ModBlocks.RADAR_DISPLAY.get())) {
-                            BlockState target = inactiveState(state);
-                            setDisplayStateIfChanged(level, pos, target);
-                        }
-                    }
-                }
-            }
-        } finally {
-            applyingDisplayStates = false;
-        }
     }
 
     private static List<RadarMonitorControllerBlockEntity> findNearbyControllers(Level level, BlockPos center) {

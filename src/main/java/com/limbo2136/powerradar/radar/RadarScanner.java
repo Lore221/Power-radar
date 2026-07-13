@@ -5,6 +5,8 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.limbo2136.powerradar.compat.createbigcannons.RadarCbcProjectileCompat;
+import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
+import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.ArrayDeque;
@@ -17,7 +19,6 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -177,7 +178,7 @@ public final class RadarScanner {
             if (category == null || !RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
                 return;
             }
-            updateTrack(context, targetCache, track.key(), entity, category);
+            updateTrack(context, targetCache, track.key(), entity, category, track);
             refreshed[0]++;
         });
         return refreshed[0];
@@ -316,9 +317,6 @@ public final class RadarScanner {
     }
 
     private static boolean shouldUseBroadQuery(RadarScanProfile profile) {
-        if (profile.detectUnknown()) {
-            return true;
-        }
         int typedQueries = 0;
         if (profile.detectPlayers()) {
             typedQueries++;
@@ -327,6 +325,9 @@ public final class RadarScanner {
             typedQueries++;
         }
         if (profile.detectPassiveMobs() || profile.detectHostileMobs()) {
+            typedQueries++;
+        }
+        if (profile.detectUnknown()) {
             typedQueries++;
         }
         return typedQueries >= 3;
@@ -384,22 +385,20 @@ public final class RadarScanner {
         }
 
         if (profile.detectProjectiles()) {
-            if (profile.scanMode() != RadarScanMode.SKY) {
-                queryCount++;
-                long queryStart = measurePerf ? System.nanoTime() : 0L;
-                List<Projectile> entities = context.level().getEntities(EntityTypeTest.forClass(Projectile.class), slice, Entity::isAlive);
-                stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-                addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-            }
+            queryCount++;
+            long vanillaProjectileQueryStart = measurePerf ? System.nanoTime() : 0L;
+            List<Projectile> entities = context.level().getEntities(EntityTypeTest.forClass(Projectile.class), slice, Entity::isAlive);
+            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - vanillaProjectileQueryStart : 0L;
+            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
 
             if (cbcProjectileClass.isPresent()) {
                 queryCount++;
-                long queryStart = measurePerf ? System.nanoTime() : 0L;
+                long cbcProjectileQueryStart = measurePerf ? System.nanoTime() : 0L;
                 List<? extends Entity> cbcProjectiles = context.level().getEntities(
                         EntityTypeTest.forClass(cbcProjectileClass.get()),
                         slice,
                         Entity::isAlive);
-                stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
+                stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - cbcProjectileQueryStart : 0L;
                 addDeduplicatedCandidates(profile, context, targetCache, seen, stats, cbcProjectiles, measurePerf);
             }
         }
@@ -411,6 +410,21 @@ public final class RadarScanner {
                     entity -> entity.isAlive() && isDetectedMobCategory(RadarTargetClassifier.classify(entity, profile)));
             stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
             addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
+        }
+        if (profile.detectUnknown()) {
+            queryCount++;
+            long queryStart = measurePerf ? System.nanoTime() : 0L;
+            List<AbstractContraptionEntity> entities = context.level().getEntities(
+                    EntityTypeTest.forClass(AbstractContraptionEntity.class), slice, Entity::isAlive);
+            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
+            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
+
+            queryCount++;
+            queryStart = measurePerf ? System.nanoTime() : 0L;
+            List<RadarStructureEntity> radarStructures = context.level().getEntities(
+                    EntityTypeTest.forClass(RadarStructureEntity.class), slice, Entity::isAlive);
+            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
+            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, radarStructures, measurePerf);
         }
         return queryCount;
     }
@@ -464,10 +478,10 @@ public final class RadarScanner {
             return;
         }
 
-        boolean existingTrack = targetCache.contains(key);
-        updateTrack(context, targetCache, key, entity, category);
+        RadarTargetTrack existingTrack = targetCache.get(key);
+        updateTrack(context, targetCache, key, entity, category, existingTrack);
         stats.acceptedCount++;
-        if (existingTrack) {
+        if (existingTrack != null) {
             stats.updatedTrackCount++;
         } else {
             stats.addedTrackCount++;
@@ -597,14 +611,14 @@ public final class RadarScanner {
             RadarTargetCache targetCache,
             TargetKey key,
             Entity entity,
-            RadarTargetCategory category
+            RadarTargetCategory category,
+            @Nullable RadarTargetTrack track
     ) {
         Vec3 pos = entity.position();
         Vec3 velocity = displayVelocity(entity, category);
         double width = entity.getBbWidth();
         double height = entity.getBbHeight();
         String displayName = displayName(entity);
-        RadarTargetTrack track = targetCache.get(key);
         if (isStationaryProjectile(category, track, pos)) {
             velocity = Vec3.ZERO;
         }

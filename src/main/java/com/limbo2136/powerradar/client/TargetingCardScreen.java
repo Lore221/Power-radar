@@ -21,9 +21,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 public class TargetingCardScreen extends Screen {
     private static final ResourceLocation CARDS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/cards/cards.png");
+            PowerRadar.MOD_ID, "textures/gui/radar_ui/cards.png");
     private static final ResourceLocation ICONS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/cards/icons.png");
+            PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
     private static final int TEXTURE_SIZE = 256;
     private static final int GUI_WIDTH = 213;
     private static final int GUI_HEIGHT = 98;
