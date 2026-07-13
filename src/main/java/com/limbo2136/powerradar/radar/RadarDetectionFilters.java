@@ -6,6 +6,8 @@ public final class RadarDetectionFilters {
     public static final int PLAYERS = 1 << 2;
     public static final int SABLE_STRUCTURES = 1 << 3;
     public static final int PROJECTILES = 1 << 4;
+    /** The targeting card reuses its fourth stored bit for phantoms; display cards use it for projectiles. */
+    public static final int TARGETING_PHANTOMS = PROJECTILES;
     public static final int DEFAULT_MASK = HOSTILE_MOBS | PASSIVE_MOBS | PLAYERS | SABLE_STRUCTURES | PROJECTILES;
 
     private RadarDetectionFilters() {
@@ -22,7 +24,7 @@ public final class RadarDetectionFilters {
             case PLAYER -> (mask & PLAYERS) != 0;
             case SABLE_STRUCTURE -> (mask & SABLE_STRUCTURES) != 0;
             case PROJECTILE -> (mask & PROJECTILES) != 0;
-            case UNKNOWN -> false;
+            case UNKNOWN -> true;
         };
     }
 

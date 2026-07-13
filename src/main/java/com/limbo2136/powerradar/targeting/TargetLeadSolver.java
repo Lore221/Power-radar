@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.targeting;
 import com.limbo2136.powerradar.api.target.TargetClassification;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.api.weapon.WeaponBallistics;
+import com.limbo2136.powerradar.api.weapon.WeaponKind;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import net.minecraft.world.phys.Vec3;
 
@@ -25,6 +26,7 @@ public final class TargetLeadSolver {
             TrackedTargetView track,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             int lockTicks,
             int accelerationLeadWarmupTicks,
@@ -35,6 +37,7 @@ public final class TargetLeadSolver {
                 && track.hasAcceleration()
                 && usesAccelerationLead(track.classification());
         Vec3 acceleration = useAcceleration ? track.acceleration() : Vec3.ZERO;
+        boolean autocannon = weaponKind == WeaponKind.AUTOCANNON;
         double trackAgeTicks = clamp(currentGameTime - track.lastSeenGameTime(), 0.0, MAX_TRACK_PREDICTION_AGE_TICKS);
         Vec3 base = currentTargetPoint(track)
                 .add(velocity.scale(trackAgeTicks))
@@ -45,6 +48,7 @@ public final class TargetLeadSolver {
                 base.subtract(origin),
                 TargetingMath.horizontalDistance(base.subtract(origin)),
                 ballistics,
+                autocannon,
                 preferHighArc,
                 pitchHint);
         if (aim.reachable()) {
@@ -61,7 +65,7 @@ public final class TargetLeadSolver {
                     .add(currentVelocity.scale(flightTicks))
                     .add(acceleration.scale(0.5 * flightTicks * flightTicks));
             Vec3 delta = predicted.subtract(origin);
-            aim = aim(delta, TargetingMath.horizontalDistance(delta), ballistics, preferHighArc, pitchHint);
+            aim = aim(delta, TargetingMath.horizontalDistance(delta), ballistics, autocannon, preferHighArc, pitchHint);
             if (aim.reachable()) {
                 pitchHint = aim.pitchDegrees();
             }
@@ -97,15 +101,7 @@ public final class TargetLeadSolver {
             Vec3 delta,
             double horizontalDistance,
             WeaponBallistics ballistics,
-            boolean preferHighArc
-    ) {
-        return aim(delta, horizontalDistance, ballistics, preferHighArc, Double.NaN);
-    }
-
-    private static BallisticAim aim(
-            Vec3 delta,
-            double horizontalDistance,
-            WeaponBallistics ballistics,
+            boolean autocannon,
             boolean preferHighArc,
             double pitchHint
     ) {
@@ -123,6 +119,7 @@ public final class TargetLeadSolver {
                     delta,
                     horizontalDistance,
                     ballistics,
+                    autocannon,
                     directPitch,
                     preferHighArc,
                     pitchHint);
@@ -159,6 +156,7 @@ public final class TargetLeadSolver {
             Vec3 delta,
             double horizontalDistance,
             WeaponBallistics ballistics,
+            boolean autocannon,
             float fallbackPitch,
             boolean preferHighArc,
             double pitchHint
@@ -166,12 +164,22 @@ public final class TargetLeadSolver {
         double minElevation = minimumElevationDegrees(ballistics);
         double maxElevation = maximumElevationDegrees(ballistics);
         if (!ballistics.quadraticDrag()) {
-            LinearDragAimSolver.Roots analyticRoots = LinearDragAimSolver.solve(
-                    minElevation,
-                    maxElevation,
-                    horizontalDistance,
-                    delta.y,
-                    ballistics);
+            LinearDragAimSolver.Roots analyticRoots = autocannon
+                    ? LinearDragAimSolver.solveAutocannonLowArc(
+                            minElevation,
+                            maxElevation,
+                            horizontalDistance,
+                            delta.y,
+                            ballistics)
+                    : null;
+            if (analyticRoots == null) {
+                analyticRoots = LinearDragAimSolver.solve(
+                        minElevation,
+                        maxElevation,
+                        horizontalDistance,
+                        delta.y,
+                        ballistics);
+            }
             if (analyticRoots != null) {
                 LinearDragAimSolver.Root lowRoot = analyticRoots.low();
                 LinearDragAimSolver.Root highRoot = analyticRoots.high();

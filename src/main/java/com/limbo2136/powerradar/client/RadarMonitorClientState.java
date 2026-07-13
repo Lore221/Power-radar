@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -15,17 +16,21 @@ import net.neoforged.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public final class RadarMonitorClientState {
     private static final Map<BlockPos, Entry> STATES = new HashMap<>();
+    @Nullable
+    private static ClientLevel levelSession;
 
     private RadarMonitorClientState() {
     }
 
     public static Entry applySnapshot(RadarMonitorSnapshotPayload snapshot) {
+        ensureLevelSession();
         Entry entry = entry(snapshot.monitorPos());
         entry.apply(snapshot.displayData(), snapshot.revision());
         return entry;
     }
 
     public static Entry applyTargets(RadarMonitorBlockTargetsPayload payload) {
+        ensureLevelSession();
         Entry entry = entry(payload.monitorPos());
         entry.applyTargets(payload);
         return entry;
@@ -33,6 +38,7 @@ public final class RadarMonitorClientState {
 
     @Nullable
     public static Entry get(BlockPos monitorPos) {
+        ensureLevelSession();
         return STATES.get(monitorPos);
     }
 
@@ -44,6 +50,14 @@ public final class RadarMonitorClientState {
 
     private static Entry entry(BlockPos monitorPos) {
         return STATES.computeIfAbsent(monitorPos.immutable(), ignored -> new Entry());
+    }
+
+    private static void ensureLevelSession() {
+        ClientLevel currentLevel = Minecraft.getInstance().level;
+        if (currentLevel != levelSession) {
+            STATES.clear();
+            levelSession = currentLevel;
+        }
     }
 
     private static long clientGameTime(long fallbackGameTime) {

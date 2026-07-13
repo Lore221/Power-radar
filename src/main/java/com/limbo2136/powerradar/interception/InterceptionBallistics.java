@@ -13,10 +13,20 @@ public final class InterceptionBallistics {
     }
 
     public static Aim solveLowArc(Vec3 delta, WeaponBallistics ballistics) {
-        return solveLowArc(delta, ballistics, Double.NaN, 0.0);
+        return solveAutocannonLowArc(delta, ballistics, Double.NaN, 0.0);
     }
 
     public static Aim solveLowArc(
+            Vec3 delta,
+            WeaponBallistics ballistics,
+            double preferredPitchDegrees,
+            double searchHalfRangeDegrees
+    ) {
+        return solveAutocannonLowArc(
+                delta, ballistics, preferredPitchDegrees, searchHalfRangeDegrees);
+    }
+
+    public static Aim solveAutocannonLowArc(
             Vec3 delta,
             WeaponBallistics ballistics,
             double preferredPitchDegrees,
@@ -42,12 +52,12 @@ public final class InterceptionBallistics {
                 double maxDegrees = Math.min(
                         MAX_AIM_ELEVATION_DEGREES,
                         preferredPitchDegrees + searchHalfRangeDegrees);
-                roots = LinearDragAimSolver.solve(
+                roots = autocannonRoots(
                         minDegrees, maxDegrees, horizontal, delta.y, ballistics);
             }
             LinearDragAimSolver.Root root = lowestRoot(roots);
             if (root == null) {
-                roots = LinearDragAimSolver.solve(
+                roots = autocannonRoots(
                         MIN_AIM_ELEVATION_DEGREES,
                         MAX_AIM_ELEVATION_DEGREES,
                         horizontal,
@@ -55,7 +65,7 @@ public final class InterceptionBallistics {
                         ballistics);
                 root = lowestRoot(roots);
             }
-            return root == null
+        return root == null
                     ? Aim.UNREACHABLE
                     : new Aim(true, (float) Math.toDegrees(root.pitchRadians()), root.flightTicks());
         }
@@ -71,6 +81,29 @@ public final class InterceptionBallistics {
             return Aim.UNREACHABLE;
         }
         return new Aim(true, (float) Math.toDegrees(angle), horizontal / horizontalSpeed);
+    }
+
+    private static LinearDragAimSolver.Roots autocannonRoots(
+            double minimumPitchDegrees,
+            double maximumPitchDegrees,
+            double horizontalDistance,
+            double targetHeight,
+            WeaponBallistics ballistics
+    ) {
+        LinearDragAimSolver.Roots roots = LinearDragAimSolver.solveAutocannonLowArc(
+                minimumPitchDegrees,
+                maximumPitchDegrees,
+                horizontalDistance,
+                targetHeight,
+                ballistics);
+        return roots != null
+                ? roots
+                : LinearDragAimSolver.solve(
+                        minimumPitchDegrees,
+                        maximumPitchDegrees,
+                        horizontalDistance,
+                        targetHeight,
+                        ballistics);
     }
 
     public static Vec3 applyBallistics(Vec3 velocity, double gravity, double drag, boolean quadraticDrag) {

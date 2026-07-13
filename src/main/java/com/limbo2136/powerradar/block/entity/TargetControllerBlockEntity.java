@@ -18,14 +18,24 @@ import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
 import com.limbo2136.powerradar.targeting.TargetLeadSolver;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
+import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
+import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBoxTransform;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBoard;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsFormatter;
+import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollValueBehaviour;
+import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -39,16 +49,17 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
-public class TargetControllerBlockEntity extends BlockEntity implements IHaveGoggleInformation {
+public class TargetControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
     private static final double CBC_CANNON_AIM_ORIGIN_Y_OFFSET = 2.0;
     private static final int TARGET_LOCK_WARMUP_TICKS = 3;
     private static final int BIG_CANNON_FIRE_RETRY_INTERVAL_TICKS = 5;
@@ -57,6 +68,8 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     private static final long TARGET_LEAD_CACHE_TICKS = 3L;
     private static final double TARGET_LEAD_CACHE_AIM_SHIFT_SQR = 0.25;
     private static final double TARGET_LEAD_CACHE_ORIGIN_SHIFT_SQR = 0.01;
+    private static final long AUTOTARGET_READINESS_CACHE_TICKS = 20L;
+    private static final double[] LINE_OF_SIGHT_HEIGHT_FACTORS = {0.2, 0.5, 0.9};
 
     private boolean readyToFire;
     private double powerVoltageVolts;
@@ -81,6 +94,10 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     private BlockPos lastMissingWeaponMountPos;
     private long lastMissingWeaponMountGameTime = Long.MIN_VALUE;
     private UUID cachedAutotargetUuid;
+    private boolean cachedAutotargetAvailable;
+    private long lastAutotargetSnapshotGameTime = Long.MIN_VALUE;
+    private long lastAutotargetCacheResetGameTime = Long.MIN_VALUE;
+    private final Map<UUID, AutotargetReadiness> autotargetReadinessCache = new HashMap<>();
     private BlockPos estimatedAimMountPos;
     private boolean hasEstimatedAimAngles;
     private float estimatedYawDegrees;
@@ -95,6 +112,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     private UUID cachedLeadTargetUuid;
     private BlockPos cachedLeadMountPos;
     private WeaponBallistics cachedLeadBallistics;
+    private WeaponKind cachedLeadWeaponKind;
     private boolean cachedLeadPreferHighArc;
     private boolean cachedLeadAccelerationReady;
     private long cachedLeadGameTime = Long.MIN_VALUE;
@@ -104,13 +122,45 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     private TargetLeadSolver.BallisticAim cachedLeadBallisticAim;
     private double cachedLeadFlightTicks;
     private boolean cachedLeadUsesAcceleration;
+    private TrajectoryModeBehaviour trajectoryMode;
+    private boolean cachedHighArcMode;
 
     public TargetControllerBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.TARGET_CONTROLLER.get(), pos, blockState);
     }
 
+    @Override
+    public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
+        CenteredSideValueBoxTransform transform = new CenteredSideValueBoxTransform(
+                TargetControllerBlockEntity::isTrajectoryPanelFace) {
+            @Override
+            public float getScale() {
+                return 0.75F;
+            }
+        };
+        this.trajectoryMode = new TrajectoryModeBehaviour(
+                Component.translatable("message.power_radar.target_controller.trajectory"), this, transform);
+        this.trajectoryMode.between(0, 1);
+        this.trajectoryMode.value = 0;
+        this.trajectoryMode.withCallback(value -> {
+            this.cachedHighArcMode = value == 1;
+            invalidateTargetLeadCache();
+            setChanged();
+        });
+        behaviours.add(this.trajectoryMode);
+    }
+
+    private static boolean isTrajectoryPanelFace(BlockState state, Direction direction) {
+        Direction facing = state.getValue(TargetControllerBlock.FACING);
+        if (facing.getAxis().isVertical()) {
+            return direction == Direction.EAST || direction == Direction.WEST;
+        }
+        return direction == facing.getClockWise() || direction == facing.getCounterClockWise();
+    }
+
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, TargetControllerBlockEntity controller) {
         if (level instanceof ServerLevel serverLevel) {
+            controller.tick();
             controller.tickServer(serverLevel, state);
         }
     }
@@ -126,8 +176,9 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
+    protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.read(tag, registries, clientPacket);
+        this.cachedHighArcMode = this.trajectoryMode != null && this.trajectoryMode.getValue() == 1;
         // The firing output is transient. Restoring a saved high level would not create
         // the rising redstone edge that CBC big cannons require after a chunk reload.
         this.readyToFire = false;
@@ -150,8 +201,8 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.write(tag, registries, clientPacket);
         tag.putBoolean("ReadyToFire", false);
         tag.putDouble("PowerVoltage", this.powerVoltageVolts);
         tag.putDouble("CurrentAmps", this.currentAmps);
@@ -227,13 +278,12 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         UUID selectedTarget = networkManager.selectedTargetUuid(networkId).orElse(null);
         boolean manualTarget = selectedTarget != null;
         int autotargetFilterMask = networkManager.autotargetFilterMask(networkId);
-        if (!manualTarget && autotargetFilterMask == 0) {
+        if (!manualTarget && autotargetFilterMask == 0 && !networkManager.hasForcedAutotargetEntries(networkId)) {
             this.cachedAutotargetUuid = null;
             invalidateTargetLeadCache();
             return TargetSolution.invalid("no-target");
         }
-        RadarNetworkManager.ControllersResolution controllerResolution = RadarNetworkManager.get(level.getServer())
-                .resolveControllersForConsumer(
+        RadarNetworkManager.ControllersResolution controllerResolution = networkManager.resolveControllersForConsumer(
                         networkId,
                         GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
         RadarTargetingDataSource radarController = new CombinedRadarDataSource(controllerResolution.controllers());
@@ -258,14 +308,23 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             }
         }
         if (!manualTarget || selectedTarget == null) {
-            track = cachedAutotargetCandidate(level, radarController, networkManager, networkId, autotargetFilterMask);
-            if (track == null) {
-                track = findAutotargetCandidate(level, radarController, networkManager, networkId, autotargetFilterMask);
+            UUID previousAutotargetUuid = this.cachedAutotargetUuid;
+            if (this.cachedAutotargetAvailable && previousAutotargetUuid != null) {
+                track = radarController.findTrackedTarget(previousAutotargetUuid);
+                if (track == null || !isSelectedTargetAlive(level, track)) track = null;
+            } else {
+                track = cachedAutotargetCandidate(
+                        level, radarController, networkManager, networkId, autotargetFilterMask);
+            }
+            if (previousAutotargetUuid != null && track == null) {
+                this.autotargetReadinessCache.clear();
+                this.lastAutotargetCacheResetGameTime = level.getGameTime();
+                this.cachedAutotargetAvailable = false;
             }
             selectedTarget = track == null ? null : track.targetUuid();
             this.cachedAutotargetUuid = selectedTarget;
         }
-        if (track == null || selectedTarget == null) {
+        if (manualTarget && (track == null || selectedTarget == null)) {
             this.cachedAutotargetUuid = null;
             invalidateTargetLeadCache();
             return TargetSolution.invalid("target-not-in-tracks");
@@ -286,19 +345,19 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
                 || cannonState.ballistics().available();
         WeaponBallistics aimBallistics = aimBallistics(cannonState);
         boolean preferHighArc = cannonState.kind() == WeaponKind.DROP_MORTAR
-                || radarController.targetTrajectoryMode() == TargetTrajectoryMode.HIGH_ARC;
-        if (!manualTarget && !autotargetReady(
-                level,
-                liveTargetView(level, track, level.getGameTime()),
-                origin,
-                aimBallistics,
-                preferHighArc,
-                cannonState.kind())) {
-            track = findAutotarget(level, radarController, networkManager, networkId, autotargetFilterMask, origin, aimBallistics,
-                    preferHighArc, cannonState.kind());
-            selectedTarget = track == null ? null : track.targetUuid();
-            this.cachedAutotargetUuid = selectedTarget;
+                || cannonState.kind() == WeaponKind.BIG_CANNON && this.cachedHighArcMode;
+        if (!manualTarget) {
+            long snapshotGameTime = Math.floorDiv(radarController.lastScanGameTime(), 5L);
+            if (!this.cachedAutotargetAvailable
+                    && snapshotGameTime != this.lastAutotargetSnapshotGameTime) {
+                this.lastAutotargetSnapshotGameTime = snapshotGameTime;
+                track = selectAutotargetForSnapshot(level, radarController, networkManager, networkId,
+                        autotargetFilterMask, origin, aimBallistics, preferHighArc, cannonState.kind());
+                selectedTarget = track == null ? null : track.targetUuid();
+                this.cachedAutotargetUuid = selectedTarget;
+            }
             if (track == null || selectedTarget == null) {
+                this.cachedAutotargetUuid = null;
                 invalidateTargetLeadCache();
                 return TargetSolution.invalid("target-not-in-tracks");
             }
@@ -307,6 +366,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         long gameTime = level.getGameTime();
         TrackedTargetView aimTrack = liveTargetView(level, track, gameTime);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
+                cannonState.kind(),
                 preferHighArc,
                 lockTicks,
                 gameTime);
@@ -326,6 +386,14 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         double targetDistance = TargetLeadSolver.currentTargetPoint(aimTrack).distanceTo(origin);
         double minimumFiringDistance = minimumFiringDistance(cannonState.kind());
         boolean targetOutsideMinimumDistance = targetDistance >= minimumFiringDistance;
+        if (!manualTarget) {
+            boolean available = targetVisible && targetReachable && targetOutsideMinimumDistance;
+            if (this.cachedAutotargetAvailable && !available) {
+                this.autotargetReadinessCache.clear();
+                this.lastAutotargetCacheResetGameTime = gameTime;
+            }
+            this.cachedAutotargetAvailable = available;
+        }
         AimAngles currentAngles = currentAimAngles(cannonState, level.getGameTime());
         float currentYaw = currentAngles.yawDegrees();
         float currentPitch = currentAngles.pitchDegrees();
@@ -406,13 +474,8 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         }
         TrackedTargetView track = radarController.findTrackedTarget(this.cachedAutotargetUuid);
         if (track == null
-                    || !autotargetEnabled(autotargetFilterMask, track.classification())
+                    || !autotargetPermitted(networkManager, networkId, autotargetFilterMask, track)
                     || !isSelectedTargetAlive(level, track)) {
-            this.cachedAutotargetUuid = null;
-            return null;
-        }
-        if (track.classification() == TargetClassification.PLAYER
-                && networkManager.isPlayerWhitelisted(networkId, targetDisplayName(track))) {
             this.cachedAutotargetUuid = null;
             return null;
         }
@@ -420,28 +483,44 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     }
 
     @javax.annotation.Nullable
-    private TrackedTargetView findAutotargetCandidate(
+    private TrackedTargetView selectAutotargetForSnapshot(
             ServerLevel level,
             RadarTargetingDataSource radarController,
             RadarNetworkManager networkManager,
             UUID networkId,
-            int autotargetFilterMask
+            int autotargetFilterMask,
+            Vec3 origin,
+            WeaponBallistics aimBallistics,
+            boolean preferHighArc,
+            WeaponKind cannonKind
     ) {
-        final TrackedTargetView[] match = new TrackedTargetView[1];
+        long gameTime = level.getGameTime();
+        if (this.lastAutotargetCacheResetGameTime == Long.MIN_VALUE
+                || gameTime - this.lastAutotargetCacheResetGameTime >= AUTOTARGET_READINESS_CACHE_TICKS) {
+            this.autotargetReadinessCache.clear();
+            this.lastAutotargetCacheResetGameTime = gameTime;
+        }
+        final TrackedTargetView[] readyMatch = new TrackedTargetView[1];
+        Set<UUID> present = new HashSet<>();
         radarController.forEachTrackedTarget(track -> {
-            if (match[0] != null
-                    || !autotargetEnabled(autotargetFilterMask, track.classification())
-                    || track.targetUuid() == null
-                    || !isSelectedTargetAlive(level, track)) {
-                return;
+            UUID uuid = track.targetUuid();
+            if (uuid == null || !autotargetPermitted(networkManager, networkId, autotargetFilterMask, track)
+                    || !isSelectedTargetAlive(level, track)) return;
+            present.add(uuid);
+            if (readyMatch[0] != null) return;
+            AutotargetReadiness cached = this.autotargetReadinessCache.get(uuid);
+            boolean ready;
+            if (cached != null && gameTime - cached.checkedGameTime() < AUTOTARGET_READINESS_CACHE_TICKS) {
+                ready = cached.ready();
+            } else {
+                ready = autotargetReady(level, track, origin, aimBallistics, preferHighArc, cannonKind);
+                this.autotargetReadinessCache.put(uuid, new AutotargetReadiness(gameTime, ready));
             }
-            if (track.classification() == TargetClassification.PLAYER
-                    && networkManager.isPlayerWhitelisted(networkId, targetDisplayName(track))) {
-                return;
-            }
-            match[0] = track;
+            if (ready) readyMatch[0] = track;
         });
-        return match[0];
+        this.autotargetReadinessCache.keySet().retainAll(present);
+        this.cachedAutotargetAvailable = readyMatch[0] != null;
+        return readyMatch[0];
     }
 
     private boolean autotargetReady(
@@ -460,54 +539,12 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             return false;
         }
         TargetLeadSolver.LeadSolution leadSolution = solveLead(
-                aimTrack, origin, aimBallistics, preferHighArc, TARGET_LOCK_WARMUP_TICKS, level.getGameTime());
+                aimTrack, origin, aimBallistics, cannonKind, preferHighArc,
+                TARGET_LOCK_WARMUP_TICKS, level.getGameTime());
         Vec3 delta = leadSolution.aimPoint().subtract(origin);
         TargetLeadSolver.BallisticAim aim = leadSolution.ballisticAim();
         return aim.reachable()
                 && TargetLeadSolver.withinLifetimeLimit(TargetingMath.horizontalDistance(delta), delta.length(), aimBallistics);
-    }
-
-    @javax.annotation.Nullable
-    private TrackedTargetView findAutotarget(
-            ServerLevel level,
-            RadarTargetingDataSource radarController,
-            RadarNetworkManager networkManager,
-            UUID networkId,
-            int autotargetFilterMask,
-            Vec3 origin,
-            WeaponBallistics aimBallistics,
-            boolean preferHighArc,
-            WeaponKind cannonKind
-    ) {
-        final TrackedTargetView[] match = new TrackedTargetView[1];
-        radarController.forEachTrackedTarget(track -> {
-            if (match[0] != null
-                    || !autotargetEnabled(autotargetFilterMask, track.classification())
-                    || track.targetUuid() == null
-                    || !isSelectedTargetAlive(level, track)) {
-                return;
-            }
-            if (track.classification() == TargetClassification.PLAYER
-                    && networkManager.isPlayerWhitelisted(networkId, targetDisplayName(track))) {
-                return;
-            }
-            TrackedTargetView aimTrack = liveTargetView(level, track, level.getGameTime());
-            if (!preferHighArc && !hasLineOfSightToTrack(level, origin, aimTrack)) {
-                return;
-            }
-            if (TargetLeadSolver.currentTargetPoint(aimTrack).distanceTo(origin) < minimumFiringDistance(cannonKind)) {
-                return;
-            }
-            TargetLeadSolver.LeadSolution leadSolution = solveLead(
-                    aimTrack, origin, aimBallistics, preferHighArc, TARGET_LOCK_WARMUP_TICKS, level.getGameTime());
-            Vec3 delta = leadSolution.aimPoint().subtract(origin);
-            TargetLeadSolver.BallisticAim aim = leadSolution.ballisticAim();
-            if (!aim.reachable() || !TargetLeadSolver.withinLifetimeLimit(TargetingMath.horizontalDistance(delta), delta.length(), aimBallistics)) {
-                return;
-            }
-            match[0] = track;
-        });
-        return match[0];
     }
 
     private static String targetDisplayName(TrackedTargetView track) {
@@ -547,6 +584,13 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         boolean settled = Math.abs(this.yawVelocityDegreesPerTick) <= PowerRadarCeeConstants.TARGET_CONTROLLER_READY_MAX_SPEED_DEGREES_PER_TICK
                 && Math.abs(this.pitchVelocityDegreesPerTick) <= PowerRadarCeeConstants.TARGET_CONTROLLER_READY_MAX_SPEED_DEGREES_PER_TICK;
         return new AimStep(applied, yawStep, pitchStep, nextYaw, nextPitch, remainingYawError, remainingPitchError, settled);
+    }
+
+    private static boolean autotargetPermitted(RadarNetworkManager manager, UUID networkId, int mask, TrackedTargetView track) {
+        String name = targetDisplayName(track);
+        boolean sable = track.classification() == TargetClassification.STRUCTURE;
+        if (manager.isAutotargetExcluded(networkId, name, sable)) return false;
+        return manager.isAutotargetForced(networkId, name, sable) || autotargetEnabled(mask, track);
     }
 
     private AimAngles currentAimAngles(WeaponMount cannonState, long gameTime) {
@@ -688,11 +732,13 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             TrackedTargetView track,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             int lockTicks,
             long gameTime
     ) {
-        return TargetLeadSolver.solve(track, origin, ballistics, preferHighArc, lockTicks, TARGET_LOCK_WARMUP_TICKS, gameTime);
+        return TargetLeadSolver.solve(track, origin, ballistics, weaponKind, preferHighArc,
+                lockTicks, TARGET_LOCK_WARMUP_TICKS, gameTime);
     }
 
     private TargetLeadSolver.LeadSolution cachedLeadSolution(
@@ -701,6 +747,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             BlockPos mountPos,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             int lockTicks,
             long gameTime
@@ -710,6 +757,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         boolean reusable = targetUuid.equals(this.cachedLeadTargetUuid)
                 && mountPos.equals(this.cachedLeadMountPos)
                 && sameBallistics(ballistics, this.cachedLeadBallistics)
+                && weaponKind == this.cachedLeadWeaponKind
                 && preferHighArc == this.cachedLeadPreferHighArc
                 && accelerationReady == this.cachedLeadAccelerationReady
                 && this.cachedLeadBaseTargetPoint != null
@@ -730,8 +778,8 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             }
         }
         TargetLeadSolver.LeadSolution solution = solveLead(
-                track, origin, ballistics, preferHighArc, lockTicks, gameTime);
-        rememberTargetLeadSolution(targetUuid, mountPos, origin, ballistics, preferHighArc,
+                track, origin, ballistics, weaponKind, preferHighArc, lockTicks, gameTime);
+        rememberTargetLeadSolution(targetUuid, mountPos, origin, ballistics, weaponKind, preferHighArc,
                 accelerationReady, gameTime, baseTargetPoint, solution);
         return solution;
     }
@@ -741,6 +789,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
             BlockPos mountPos,
             Vec3 origin,
             WeaponBallistics ballistics,
+            WeaponKind weaponKind,
             boolean preferHighArc,
             boolean accelerationReady,
             long gameTime,
@@ -750,6 +799,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         this.cachedLeadTargetUuid = targetUuid;
         this.cachedLeadMountPos = mountPos.immutable();
         this.cachedLeadBallistics = ballistics;
+        this.cachedLeadWeaponKind = weaponKind;
         this.cachedLeadPreferHighArc = preferHighArc;
         this.cachedLeadAccelerationReady = accelerationReady;
         this.cachedLeadGameTime = gameTime;
@@ -765,6 +815,7 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         this.cachedLeadTargetUuid = null;
         this.cachedLeadMountPos = null;
         this.cachedLeadBallistics = null;
+        this.cachedLeadWeaponKind = null;
         this.cachedLeadGameTime = Long.MIN_VALUE;
         this.cachedLeadOrigin = null;
         this.cachedLeadBaseTargetPoint = null;
@@ -779,15 +830,22 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
         return left == right || (left != null && left.equals(right));
     }
 
-    private static boolean autotargetEnabled(int mask, TargetClassification classification) {
-        return switch (classification) {
-            case HOSTILE_MOB -> (mask & RadarDetectionFilters.HOSTILE_MOBS) != 0;
+    private static boolean autotargetEnabled(int mask, TrackedTargetView track) {
+        return switch (track.classification()) {
+            case HOSTILE_MOB -> isPhantom(track)
+                    ? (mask & RadarDetectionFilters.TARGETING_PHANTOMS) != 0
+                    : (mask & RadarDetectionFilters.HOSTILE_MOBS) != 0;
             case PASSIVE_MOB -> (mask & RadarDetectionFilters.PASSIVE_MOBS) != 0;
             case PLAYER -> (mask & RadarDetectionFilters.PLAYERS) != 0;
             case STRUCTURE -> (mask & RadarDetectionFilters.SABLE_STRUCTURES) != 0;
             case PROJECTILE -> false;
             case UNKNOWN -> false;
         };
+    }
+
+    private static boolean isPhantom(TrackedTargetView track) {
+        return "minecraft".equals(track.entityTypeId().getNamespace())
+                && "phantom".equals(track.entityTypeId().getPath());
     }
 
     private static String ballisticMode(
@@ -854,9 +912,8 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
 
     private static boolean hasLineOfSightToTrack(ServerLevel level, Vec3 origin, TrackedTargetView track) {
         double height = Math.max(0.1, track.boundingHeight());
-        double[] heightFactors = { 0.2, 0.5, 0.9 };
         Vec3 position = track.position();
-        for (double factor : heightFactors) {
+        for (double factor : LINE_OF_SIGHT_HEIGHT_FACTORS) {
             Vec3 targetPoint = new Vec3(position.x, position.y + height * factor, position.z);
             if (hasClearLine(level, origin, targetPoint)) {
                 return true;
@@ -1193,6 +1250,31 @@ public class TargetControllerBlockEntity extends BlockEntity implements IHaveGog
     }
 
     private record AimAngles(float yawDegrees, float pitchDegrees) {
+    }
+
+    private record AutotargetReadiness(long checkedGameTime, boolean ready) {
+    }
+
+    private static class TrajectoryModeBehaviour extends ScrollValueBehaviour {
+        private TrajectoryModeBehaviour(Component label, SmartBlockEntity blockEntity,
+                                        CenteredSideValueBoxTransform transform) {
+            super(label, blockEntity, transform);
+            withFormatter(value -> Component.translatable(value == 1
+                    ? "message.power_radar.target_controller.trajectory.high"
+                    : "message.power_radar.target_controller.trajectory.flat").getString());
+        }
+
+        @Override
+        public ValueSettingsBoard createBoard(Player player, BlockHitResult hitResult) {
+            return new ValueSettingsBoard(
+                    this.label,
+                    1,
+                    1,
+                    ImmutableList.of(Component.empty()),
+                    new ValueSettingsFormatter(settings -> Component.translatable(settings.value() == 1
+                            ? "message.power_radar.target_controller.trajectory.high"
+                            : "message.power_radar.target_controller.trajectory.flat")));
+        }
     }
 
     private record LiveTrackedTargetView(

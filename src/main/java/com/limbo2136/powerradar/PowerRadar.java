@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.registry.ModBlocks;
 import com.limbo2136.powerradar.registry.ModCreativeTabs;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.limbo2136.powerradar.registry.ModItems;
+import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.registry.ModSounds;
 import com.limbo2136.powerradar.client.PowerRadarClientConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
@@ -32,6 +33,7 @@ public final class PowerRadar {
         PowerRadarCeeDeviceTypes.register(modEventBus);
         ModDataComponents.register(modEventBus);
         ModItems.register(modEventBus);
+        ModEntities.register(modEventBus);
         ModBlockEntities.register(modEventBus);
         PowerRadarDisplaySources.register(modEventBus);
         ModCreativeTabs.register(modEventBus);

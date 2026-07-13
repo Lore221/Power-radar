@@ -58,7 +58,7 @@ public record RadarScanProfile(
                 mode == RadarScanMode.GROUND,
                 mode == RadarScanMode.SKY || mode == RadarScanMode.GROUND,
                 mode == RadarScanMode.SKY || mode == RadarScanMode.SURFACE_SCANNER,
-                false
+                true
         );
     }
 

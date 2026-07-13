@@ -1,7 +1,5 @@
 package com.limbo2136.powerradar.block.entity;
 
-import com.limbo2136.powerradar.PowerRadar;
-import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarDisplayStructure;
 import com.limbo2136.powerradar.block.RadarDisplayStructureResolver;
@@ -16,8 +14,6 @@ import com.limbo2136.powerradar.network.RadarMonitorBlockTargetsPayload;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
-import com.limbo2136.powerradar.radar.RadarScanMode;
-import com.limbo2136.powerradar.radar.TargetTrajectoryMode;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
@@ -34,6 +30,7 @@ import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -86,7 +83,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     @Nullable
     private GlobalPos cachedSnapshotLinkPos;
     @Nullable
-    private RadarControllerBlockEntity cachedSnapshotController;
     private List<RadarControllerBlockEntity> cachedSnapshotControllers = List.of();
     private RadarNetworkConnectionStatus cachedSnapshotConnectionStatus = RadarNetworkConnectionStatus.NO_LINK;
     private long cachedSnapshotResolutionGameTime = Long.MIN_VALUE;
@@ -308,9 +304,12 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
         RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
         UUID networkId = monitorController.cachedSnapshotNetworkId;
-        List<RadarControllerBlockEntity> controllers = monitorController.cachedSnapshotControllers.stream()
-                .filter(controller -> controller != null && !controller.isRemoved())
-                .toList();
+        List<RadarControllerBlockEntity> controllers = monitorController.cachedSnapshotControllers;
+        if (monitorController.hasRemovedCachedSnapshotController()) {
+            controllers = controllers.stream()
+                    .filter(controller -> controller != null && !controller.isRemoved())
+                    .toList();
+        }
         if (controllers.isEmpty()
                 || monitorController.cachedSnapshotConnectionStatus != RadarNetworkConnectionStatus.CONNECTED) {
             return RadarMonitorSnapshotPayload.fromDisplayData(
@@ -428,7 +427,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         long gameTime = level.getGameTime();
         if (this.cachedSnapshotResolutionGameTime != Long.MIN_VALUE
                 && gameTime - this.cachedSnapshotResolutionGameTime < 20L
-                && this.cachedSnapshotControllers.stream().noneMatch(RadarControllerBlockEntity::isRemoved)) {
+                && !hasRemovedCachedSnapshotController()) {
             return;
         }
         RadarLinkConnectionResolver.Resolution linkResolution =
@@ -436,7 +435,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         UUID networkId = linkResolution.link() == null ? null : linkResolution.link().networkId();
         this.cachedSnapshotNetworkId = null;
         this.cachedSnapshotLinkPos = null;
-        this.cachedSnapshotController = null;
         this.cachedSnapshotControllers = List.of();
         this.cachedSnapshotConnectionStatus = RadarNetworkConnectionStatus.NO_LINK;
         this.cachedSnapshotResolutionGameTime = gameTime;
@@ -452,9 +450,17 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.cachedSnapshotNetworkId = networkId;
             this.cachedSnapshotLinkPos = consumerLinkPos;
             this.cachedSnapshotControllers = controllerResolution.controllers();
-            this.cachedSnapshotController = this.cachedSnapshotControllers.isEmpty() ? null : this.cachedSnapshotControllers.get(0);
             this.cachedSnapshotConnectionStatus = controllerResolution.status();
         }
+    }
+
+    private boolean hasRemovedCachedSnapshotController() {
+        for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
+            if (controller == null || controller.isRemoved()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static long snapshotRevision(
@@ -468,20 +474,17 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             @Nullable BlockPos controllerPos,
             RadarNetworkConnectionStatus connectionStatus
     ) {
-        return Objects.hash(
-                localRevision,
-                structureRevision,
-                networkRevision,
-                controllerScanTime,
-                controllerDisplayRevision,
-                onlinePlayersHash,
-                networkId,
-                controllerPos,
-                connectionStatus);
-    }
-
-    private static int onlinePlayersHash(ServerLevel level) {
-        return onlinePlayersSnapshot(level).hash();
+        int revision = 1;
+        revision = 31 * revision + Long.hashCode(localRevision);
+        revision = 31 * revision + Integer.hashCode(structureRevision);
+        revision = 31 * revision + Long.hashCode(networkRevision);
+        revision = 31 * revision + Long.hashCode(controllerScanTime);
+        revision = 31 * revision + Long.hashCode(controllerDisplayRevision);
+        revision = 31 * revision + Integer.hashCode(onlinePlayersHash);
+        revision = 31 * revision + Objects.hashCode(networkId);
+        revision = 31 * revision + Objects.hashCode(controllerPos);
+        revision = 31 * revision + Objects.hashCode(connectionStatus);
+        return revision;
     }
 
     private static OnlinePlayersSnapshot onlinePlayersSnapshot(ServerLevel level) {
@@ -527,6 +530,29 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             return List.of();
         }
         return RadarDisplayStructureResolver.squarePositions(this.activeOrigin, this.activeFacing, this.activeSize);
+    }
+
+    @Override
+    public AABB getRenderBoundingBox() {
+        List<BlockPos> positions = activePanelPositions();
+        if (positions.isEmpty()) {
+            return super.getRenderBoundingBox();
+        }
+        int minX = this.worldPosition.getX();
+        int minY = this.worldPosition.getY();
+        int minZ = this.worldPosition.getZ();
+        int maxX = minX;
+        int maxY = minY;
+        int maxZ = minZ;
+        for (BlockPos pos : positions) {
+            minX = Math.min(minX, pos.getX());
+            minY = Math.min(minY, pos.getY());
+            minZ = Math.min(minZ, pos.getZ());
+            maxX = Math.max(maxX, pos.getX());
+            maxY = Math.max(maxY, pos.getY());
+            maxZ = Math.max(maxZ, pos.getZ());
+        }
+        return new AABB(minX, minY, minZ, maxX + 1.0D, maxY + 1.0D, maxZ + 1.0D).inflate(1.0D);
     }
 
     public boolean activeContains(BlockPos pos) {

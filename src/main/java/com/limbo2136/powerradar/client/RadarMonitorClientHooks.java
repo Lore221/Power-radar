@@ -14,7 +14,6 @@ public final class RadarMonitorClientHooks {
     }
 
     public static void handleSnapshot(RadarMonitorSnapshotPayload payload) {
-        RadarMonitorClientState.applySnapshot(payload);
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof RadarMonitorScreen screen && screen.isFor(payload.monitorPos())) {
             screen.updateSnapshot(payload);

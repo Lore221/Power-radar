@@ -5,8 +5,10 @@ import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
-import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -22,10 +24,32 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInformation {
     private final ItemStack[] cards = { ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY };
+    private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
 
     public ComputingBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COMPUTING_BLOCK.get(), pos, state);
     }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (this.level instanceof ServerLevel serverLevel) {
+            serverLevel.scheduleTick(this.worldPosition, this.getBlockState().getBlock(), 1);
+        }
+    }
+
+    public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, ComputingBlockEntity computer) {
+        if (level instanceof ServerLevel serverLevel) PowerRadarCeeIntegration.configureComputingLoad(serverLevel, pos);
+    }
+
+    public void applyElectricalSnapshot(PowerRadarCeeSnapshot snapshot) {
+        if (this.electricalState != snapshot.electricalState()) {
+            this.electricalState = snapshot.electricalState();
+            invalidateNetworkPolicyCache();
+        }
+    }
+
+    public boolean isElectricallyOperational() { return this.electricalState == PowerRadarCeeState.POWERED; }
 
     public boolean insertCard(RadarFilterCardItem.Kind kind, ItemStack held, Player player) {
         int slot = kind.ordinal();
@@ -77,17 +101,15 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
     }
 
     public List<String> allowlistedPlayers() {
-        if (cards[2].isEmpty()) {
+        if (cards[2].isEmpty() || !allowlistIsWhitelist() || allowlistTargetsSable()) {
             return List.of();
         }
-        List<String> result = new ArrayList<>();
-        for (String name : RadarFilterCardItem.allowlist(cards[2]).split("\\n")) {
-            if (!name.isBlank()) {
-                result.add(name.trim());
-            }
-        }
-        return List.copyOf(result);
+        return allowlistNames();
     }
+
+    public boolean allowlistIsWhitelist() { return cards[2].isEmpty() || RadarFilterCardItem.cardOption(cards[2], 1) == 1; }
+    public boolean allowlistTargetsSable() { return !cards[2].isEmpty() && RadarFilterCardItem.allowlistSableMode(cards[2]); }
+    public List<String> allowlistNames() { return cards[2].isEmpty() ? List.of() : RadarFilterCardItem.allowlistNames(cards[2]); }
 
     public void dropCards() {
         if (level == null || level.isClientSide()) {
@@ -156,7 +178,18 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
     private void changed() {
         setChanged();
         if (level instanceof ServerLevel serverLevel) {
+            invalidateNetworkPolicyCache();
             serverLevel.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    private void invalidateNetworkPolicyCache() {
+        if (!(this.level instanceof ServerLevel serverLevel)) return;
+        RadarLinkConnectionResolver.Resolution resolution =
+                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, this.worldPosition);
+        if (resolution.status() == RadarLinkConnectionResolver.Status.SINGLE
+                && resolution.link().networkId() != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).invalidateComputingCache(resolution.link().networkId());
         }
     }
 }

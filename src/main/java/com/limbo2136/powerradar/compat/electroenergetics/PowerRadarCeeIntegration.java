@@ -30,4 +30,9 @@ public final class PowerRadarCeeIntegration {
             monitorDevice.configureLoad(validStructure, activeDisplayCount);
         }
     }
+
+    public static void configureComputingLoad(ServerLevel level, BlockPos pos) {
+        SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
+        if (device instanceof ComputingBlockCeeDevice computingDevice) computingDevice.configureLoad();
+    }
 }

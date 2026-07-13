@@ -39,20 +39,15 @@ public class RadarNetworkManager {
     private final MinecraftServer server;
     private final RadarNetworkSavedData savedData;
     private final Map<UUID, RadarNetworkRuntime> runtimeNetworks = new HashMap<>();
+    private final Map<UUID, ComputingResolution> computingResolutionCache = new HashMap<>();
+    private final Map<UUID, ComputingPolicy> computingPolicyCache = new HashMap<>();
 
     private RadarNetworkManager(MinecraftServer server) {
         this.server = server;
         this.savedData = RadarNetworkSavedData.get(server);
         for (RadarNetworkRecord record : this.savedData.records()) {
             RadarNetworkRuntime runtime = new RadarNetworkRuntime();
-            runtime.loadWhitelists(
-                    List.copyOf(record.whitelistedPlayerNames()),
-                    List.copyOf(record.whitelistedSableNames())
-            );
-            runtime.loadPersistentSettings(
-                    record.selectedTargetUuid(),
-                    RadarDetectionFilters.sanitize(record.autotargetFilterMask())
-            );
+            runtime.loadPersistentSettings(record.selectedTargetUuid());
             this.runtimeNetworks.put(record.id(), runtime);
         }
     }
@@ -98,19 +93,21 @@ public class RadarNetworkManager {
     public void loadLink(UUID id, GlobalPos linkPos) {
         this.addPersistentLink(id, linkPos);
         this.runtime(id).loadedLinks().add(linkPos);
+        invalidateComputingCache(id);
         this.reconcileConsumerLeases(id);
     }
 
     public void unloadLink(UUID id, GlobalPos linkPos) {
         RadarNetworkRuntime runtime = this.runtime(id);
         runtime.loadedLinks().remove(linkPos);
+        invalidateComputingCache(id);
         this.detachMonitorFromLink(id, linkPos);
         this.reconcileConsumerLeases(id);
     }
 
     public RadarLinkReconcileResult attachControllerFromLink(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         this.addPersistentLink(id, linkPos);
-        boolean changed = this.upsertControllerBinding(id, linkPos, controllerPos);
+        this.upsertControllerBinding(id, linkPos, controllerPos);
         this.reconcileConsumerLeases(id);
         return RadarLinkReconcileResult.CONTROLLER_ATTACHED;
     }
@@ -121,7 +118,7 @@ public class RadarNetworkManager {
     }
 
     public void attachMonitorFromLink(UUID id, GlobalPos linkPos, GlobalPos monitorPos) {
-        GlobalPos previous = this.runtime(id).monitorLinkToMonitorPos().put(linkPos, monitorPos);
+        this.runtime(id).monitorLinkToMonitorPos().put(linkPos, monitorPos);
         this.reconcileConsumerLease(id, linkPos);
     }
 
@@ -241,8 +238,25 @@ public class RadarNetworkManager {
     }
 
     public int autotargetFilterMask(UUID id) {
-        ComputingResolution computing = resolveComputingBlock(id);
-        return computing.active() == null ? 0 : computing.active().targetingMask();
+        return cachedComputingPolicy(id).targetingMask();
+    }
+
+    public int displayFilterMask(UUID id) {
+        return cachedComputingPolicy(id).displayMask();
+    }
+
+    public int displayFilterMaskForController(GlobalPos controllerPos) {
+        int mask = RadarDetectionFilters.DEFAULT_MASK;
+        boolean bound = false;
+        for (RadarNetworkRecord record : this.savedData.records()) {
+            boolean matches = record.controllerBindings().stream()
+                    .anyMatch(binding -> binding.controllerPos().equals(controllerPos));
+            if (matches) {
+                bound = true;
+                mask &= displayFilterMask(record.id());
+            }
+        }
+        return bound ? mask : RadarDetectionFilters.DEFAULT_MASK;
     }
 
     public long settingsRevision(UUID id) {
@@ -266,18 +280,14 @@ public class RadarNetworkManager {
             List<String> onlinePlayerNames
     ) {
         RadarNetworkRuntime runtime = this.runtime(id);
-        ComputingResolution computing = resolveComputingBlock(id);
-        int displayMask = computing.active() == null
-                ? RadarDetectionFilters.DEFAULT_MASK
-                : computing.active().displayMask();
-        int targetingMask = computing.active() == null ? 0 : computing.active().targetingMask();
-        List<String> allowlistedPlayers = computing.active() == null
-                ? List.of()
-                : computing.active().allowlistedPlayers();
+        ComputingPolicy policy = cachedComputingPolicy(id);
+        int displayMask = policy.displayMask();
+        int targetingMask = policy.targetingMask();
+        List<String> allowlistedPlayers = policy.allowlistedPlayers();
         long revision = displaySnapshotRevision(runtime, controllers, onlinePlayersHash);
         RadarNetworkRuntime.DisplaySnapshotCacheEntry cached = runtime.displaySnapshot();
         RadarMonitorDisplayData baseData;
-        if (computing.active() == null && cached != null && cached.revision() == revision) {
+        if (!policy.present() && cached != null && cached.revision() == revision) {
             baseData = cached.data();
         } else {
             baseData = RadarMonitorDisplayBuilder.fromControllers(
@@ -295,11 +305,11 @@ public class RadarNetworkManager {
                     runtime.selectedTargetUuid().orElse(null),
                     onlinePlayerNames,
                     allowlistedPlayers,
-                    runtime.whitelistedSableNames());
+                    List.of());
             baseData = baseData.withTargets(baseData.targets().stream()
                     .filter(target -> RadarDetectionFilters.enabled(displayMask, target.category()))
                     .toList());
-            if (computing.active() == null) {
+            if (!policy.present()) {
                 runtime.putDisplaySnapshot(revision, baseData);
             }
         }
@@ -333,27 +343,47 @@ public class RadarNetworkManager {
         return revision;
     }
 
-    public void setAutotargetFilterMask(UUID id, int mask) {
-        int sanitizedMask = RadarDetectionFilters.sanitize(mask);
-        RadarNetworkRecord record = this.ensureNetwork(id);
-        if (record.autotargetFilterMask() != sanitizedMask) {
-            record.setAutotargetFilterMask(sanitizedMask);
-            this.savedData.setDirty();
-        }
-        this.runtime(id).setAutotargetFilterMask(sanitizedMask);
-    }
-
     public List<String> whitelistedPlayerNames(UUID id) {
-        ComputingResolution computing = resolveComputingBlock(id);
-        return computing.active() == null ? List.of() : computing.active().allowlistedPlayers();
+        return cachedComputingPolicy(id).allowlistedPlayers();
     }
 
-    public List<String> whitelistedSableNames(UUID id) {
-        return this.runtime(id).whitelistedSableNames();
+    public boolean hasForcedAutotargetEntries(UUID id) {
+        ComputingPolicy policy = cachedComputingPolicy(id);
+        return policy.powered() && !policy.allowlistIsWhitelist() && !policy.allowlistNames().isEmpty();
     }
 
-    public boolean isPlayerWhitelisted(UUID id, String playerName) {
-        return playerName != null && whitelistedPlayerNames(id).stream().anyMatch(playerName::equalsIgnoreCase);
+    public boolean isAutotargetExcluded(UUID id, String name, boolean sable) {
+        ComputingPolicy policy = cachedComputingPolicy(id);
+        if (!policy.powered() || !policy.allowlistIsWhitelist() || policy.allowlistTargetsSable() != sable) return false;
+        return policy.allowlistNames().stream().anyMatch(name::equalsIgnoreCase);
+    }
+
+    public boolean isAutotargetForced(UUID id, String name, boolean sable) {
+        ComputingPolicy policy = cachedComputingPolicy(id);
+        if (!policy.powered() || policy.allowlistIsWhitelist() || policy.allowlistTargetsSable() != sable) return false;
+        return policy.allowlistNames().stream().anyMatch(name::equalsIgnoreCase);
+    }
+
+    private ComputingResolution cachedComputingResolution(UUID id) {
+        return this.computingResolutionCache.computeIfAbsent(id, this::resolveComputingBlock);
+    }
+
+    private ComputingPolicy cachedComputingPolicy(UUID id) {
+        return this.computingPolicyCache.computeIfAbsent(id, ignored -> {
+            ComputingResolution resolution = cachedComputingResolution(id);
+            ComputingBlockEntity computer = resolution.active();
+            if (computer == null || !computer.isElectricallyOperational()) return ComputingPolicy.EMPTY;
+            return new ComputingPolicy(true, true, computer.targetingMask(), computer.displayMask(),
+                    computer.allowlistIsWhitelist(), computer.allowlistTargetsSable(),
+                    computer.allowlistNames(), computer.allowlistedPlayers());
+        });
+    }
+
+    public void invalidateComputingCache(UUID id) {
+        if (id == null) return;
+        this.computingResolutionCache.remove(id);
+        this.computingPolicyCache.remove(id);
+        this.runtime(id).invalidateDisplaySnapshots();
     }
 
     public ComputingResolution resolveComputingBlock(UUID id) {
@@ -382,30 +412,16 @@ public class RadarNetworkManager {
     public record ComputingResolution(ComputingBlockEntity active, boolean conflict) {
     }
 
-    public void addWhitelistedPlayerName(UUID id, String playerName) {
-        if (playerName == null || playerName.isBlank()) {
-            return;
-        }
-        String normalizedName = playerName.trim();
-        RadarNetworkRecord record = this.ensureNetwork(id);
-        boolean exists = record.whitelistedPlayerNames().stream().anyMatch(normalizedName::equalsIgnoreCase);
-        if (!exists) {
-            record.whitelistedPlayerNames().add(normalizedName);
-            this.savedData.setDirty();
-        }
-        this.runtime(id).addWhitelistedPlayerName(normalizedName);
-    }
+    private record ComputingPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
+                                   boolean allowlistIsWhitelist, boolean allowlistTargetsSable,
+                                   List<String> allowlistNames, List<String> allowlistedPlayers) {
+        private static final ComputingPolicy EMPTY = new ComputingPolicy(false, false, 0,
+                RadarDetectionFilters.DEFAULT_MASK, true, false, List.of(), List.of());
 
-    public void removeWhitelistedPlayerName(UUID id, String playerName) {
-        if (playerName == null) {
-            return;
+        private ComputingPolicy {
+            allowlistNames = List.copyOf(allowlistNames);
+            allowlistedPlayers = List.copyOf(allowlistedPlayers);
         }
-        this.savedData.get(id).ifPresent(record -> {
-            if (record.whitelistedPlayerNames().removeIf(playerName::equalsIgnoreCase)) {
-                this.savedData.setDirty();
-            }
-        });
-        this.runtime(id).removeWhitelistedPlayerName(playerName);
     }
 
     public void cleanupEmptyNetwork(UUID id) {
@@ -414,12 +430,20 @@ public class RadarNetworkManager {
                 this.removeAllTickets(id);
                 this.savedData.remove(id);
                 this.runtimeNetworks.remove(id);
+                this.computingResolutionCache.remove(id);
+                this.computingPolicyCache.remove(id);
             }
         });
     }
 
     private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         RadarNetworkRecord record = this.ensureNetwork(id);
+        for (RadarNetworkRecord other : this.savedData.records()) {
+            if (!other.id().equals(id) && other.controllerBindings().removeIf(binding -> binding.controllerPos().equals(controllerPos))) {
+                invalidateComputingCache(other.id());
+                this.savedData.setDirty();
+            }
+        }
         RadarControllerEndpointBinding newBinding = new RadarControllerEndpointBinding(linkPos, controllerPos);
         Optional<RadarControllerEndpointBinding> previous = record.controllerBindings().stream()
                 .filter(binding -> binding.radarLinkPos().equals(linkPos))
@@ -614,14 +638,7 @@ public class RadarNetworkManager {
     private RadarNetworkRuntime runtime(UUID id) {
         return this.runtimeNetworks.computeIfAbsent(id, ignored -> {
             RadarNetworkRuntime runtime = new RadarNetworkRuntime();
-            this.savedData.get(id).ifPresent(record -> runtime.loadWhitelists(
-                    List.copyOf(record.whitelistedPlayerNames()),
-                    List.copyOf(record.whitelistedSableNames())
-            ));
-            this.savedData.get(id).ifPresent(record -> runtime.loadPersistentSettings(
-                    record.selectedTargetUuid(),
-                    RadarDetectionFilters.sanitize(record.autotargetFilterMask())
-            ));
+            this.savedData.get(id).ifPresent(record -> runtime.loadPersistentSettings(record.selectedTargetUuid()));
             return runtime;
         });
     }

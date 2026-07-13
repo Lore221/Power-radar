@@ -624,15 +624,6 @@ public final class InterceptionCoordinator {
                 network.incomingDirectionZ * INCOMING_DIRECTION_HISTORY_WEIGHT + Math.sin(radians);
     }
 
-    private static int compareBlockPos(BlockPos first, BlockPos second) {
-        int x = Integer.compare(first.getX(), second.getX());
-        if (x != 0) {
-            return x;
-        }
-        int y = Integer.compare(first.getY(), second.getY());
-        return y != 0 ? y : Integer.compare(first.getZ(), second.getZ());
-    }
-
     private static void cleanupAssignments(ServerState server, long gameTime) {
         server.interceptorTargets.entrySet().removeIf(entry -> entry.getValue().expiresAt < gameTime);
     }

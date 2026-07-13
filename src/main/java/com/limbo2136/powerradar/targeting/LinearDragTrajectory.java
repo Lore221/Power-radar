@@ -63,6 +63,63 @@ public final class LinearDragTrajectory {
                 initialVelocity.z * retentionPower);
     }
 
+    public static TrajectoryState stateAfterTicks(
+            Vec3 initialPosition,
+            Vec3 initialVelocity,
+            double gravity,
+            double drag,
+            double ticks
+    ) {
+        double retentionPower = Math.pow(retention(drag), ticks);
+        double sum = (1.0 - retentionPower) / drag;
+        double scale = stepScale(drag);
+        double gravityVelocitySum = gravity / drag * (ticks - sum);
+        Vec3 position = new Vec3(
+                initialPosition.x + initialVelocity.x * scale * sum,
+                initialPosition.y + scale * (initialVelocity.y * sum - gravityVelocitySum)
+                        - gravity * ticks * 0.5,
+                initialPosition.z + initialVelocity.z * scale * sum);
+        double gravityVelocity = gravity / drag * (1.0 - retentionPower);
+        Vec3 velocity = new Vec3(
+                initialVelocity.x * retentionPower,
+                initialVelocity.y * retentionPower - gravityVelocity,
+                initialVelocity.z * retentionPower);
+        return new TrajectoryState(position, velocity);
+    }
+
+    public static DescendingPlaneCrossings descendingPlaneCrossings(
+            Vec3 initialPosition,
+            Vec3 initialVelocity,
+            double gravity,
+            double drag,
+            double upperPlaneHeight,
+            double lowerPlaneHeight,
+            double maximumTicks
+    ) {
+        if (!supported(drag) || maximumTicks <= 0.0 || lowerPlaneHeight > upperPlaneHeight) {
+            return null;
+        }
+        VerticalContext context = verticalContext(
+                initialPosition.y, initialVelocity.y, gravity, drag);
+        Double peakTicks = descendingPeakTicks(context, maximumTicks);
+        if (peakTicks == null) {
+            return null;
+        }
+        VerticalEvaluation upper = solveDescendingPlane(
+                context, upperPlaneHeight, peakTicks, maximumTicks);
+        if (upper == null) {
+            return null;
+        }
+        VerticalEvaluation lower = solveDescendingPlane(
+                context, lowerPlaneHeight, upper.ticks(), maximumTicks);
+        if (lower == null) {
+            return null;
+        }
+        return new DescendingPlaneCrossings(
+                planeCrossing(initialPosition, initialVelocity, context, upper),
+                planeCrossing(initialPosition, initialVelocity, context, lower));
+    }
+
     public static Double descendingPlaneCrossingTicks(
             double initialHeight,
             double initialVerticalVelocity,
@@ -74,48 +131,57 @@ public final class LinearDragTrajectory {
         if (!supported(drag) || maximumTicks <= 0.0) {
             return null;
         }
-        VerticalEvaluation start = evaluateVertical(
-                0.0, initialHeight, initialVerticalVelocity, gravity, drag, planeHeight);
-        VerticalEvaluation end = evaluateVertical(
-                maximumTicks, initialHeight, initialVerticalVelocity, gravity, drag, planeHeight);
-        double peakTicks;
+        VerticalContext context = verticalContext(initialHeight, initialVerticalVelocity, gravity, drag);
+        Double peakTicks = descendingPeakTicks(context, maximumTicks);
+        if (peakTicks == null) {
+            return null;
+        }
+        VerticalEvaluation crossing = solveDescendingPlane(
+                context, planeHeight, peakTicks, maximumTicks);
+        return crossing == null ? null : crossing.ticks();
+    }
+
+    private static Double descendingPeakTicks(VerticalContext context, double maximumTicks) {
+        VerticalEvaluation start = evaluateVertical(0.0, context, 0.0);
+        VerticalEvaluation end = evaluateVertical(maximumTicks, context, 0.0);
         if (start.firstDerivative() <= 0.0) {
-            peakTicks = 0.0;
-        } else if (end.firstDerivative() >= 0.0) {
-            return null;
-        } else {
-            double scale = stepScale(drag);
-            double logarithm = Math.log(retention(drag));
-            double velocityTerm = initialVerticalVelocity + gravity / drag;
-            double numerator = gravity + gravity * drag / (2.0 * scale);
-            double ratio = numerator / (velocityTerm * -logarithm);
-            if (!(ratio > 0.0 && ratio < 1.0)) {
-                return null;
-            }
-            peakTicks = clamp(Math.log(ratio) / logarithm, 0.0, maximumTicks);
+            return 0.0;
         }
-
-        VerticalEvaluation peak = evaluateVertical(
-                peakTicks, initialHeight, initialVerticalVelocity, gravity, drag, planeHeight);
-        if (Math.abs(peak.error()) <= HEIGHT_TOLERANCE_BLOCKS) {
-            return peak.ticks();
-        }
-        if (peak.error() < 0.0 || end.error() > 0.0) {
+        if (end.firstDerivative() >= 0.0) {
             return null;
         }
-        if (Math.abs(end.error()) <= HEIGHT_TOLERANCE_BLOCKS) {
-            return end.ticks();
+        double numerator = context.gravity()
+                + context.gravity() * context.drag() / (2.0 * context.scale());
+        double ratio = numerator / (context.velocityTerm() * -context.logarithm());
+        if (!(ratio > 0.0 && ratio < 1.0)) {
+            return null;
+        }
+        return clamp(Math.log(ratio) / context.logarithm(), 0.0, maximumTicks);
+    }
+
+    private static VerticalEvaluation solveDescendingPlane(
+            VerticalContext context,
+            double planeHeight,
+            double minimumTicks,
+            double maximumTicks
+    ) {
+        VerticalEvaluation low = evaluateVertical(minimumTicks, context, planeHeight);
+        VerticalEvaluation high = evaluateVertical(maximumTicks, context, planeHeight);
+        if (Math.abs(low.error()) <= HEIGHT_TOLERANCE_BLOCKS) {
+            return low;
+        }
+        if (low.error() < 0.0 || high.error() > 0.0) {
+            return null;
+        }
+        if (Math.abs(high.error()) <= HEIGHT_TOLERANCE_BLOCKS) {
+            return high;
         }
 
-        VerticalEvaluation low = peak;
-        VerticalEvaluation high = end;
-        VerticalEvaluation current = evaluateVertical(
-                falsePosition(low, high),
-                initialHeight, initialVerticalVelocity, gravity, drag, planeHeight);
+        VerticalEvaluation current = evaluateVertical(falsePosition(low, high), context, planeHeight);
         for (int iteration = 0; iteration < ROOT_FALLBACK_ITERATIONS; iteration++) {
             if (Math.abs(current.error()) <= HEIGHT_TOLERANCE_BLOCKS
                     || high.ticks() - low.ticks() <= TIME_TOLERANCE_TICKS) {
-                return current.ticks();
+                return current;
             }
             if (current.error() > 0.0) {
                 low = current;
@@ -130,34 +196,68 @@ public final class LinearDragTrajectory {
             if (!Double.isFinite(candidate) || candidate <= low.ticks() || candidate >= high.ticks()) {
                 candidate = (low.ticks() + high.ticks()) * 0.5;
             }
-            current = evaluateVertical(
-                    candidate, initialHeight, initialVerticalVelocity, gravity, drag, planeHeight);
+            current = evaluateVertical(candidate, context, planeHeight);
         }
-        return current.ticks();
+        return current;
     }
 
     private static VerticalEvaluation evaluateVertical(
             double ticks,
+            VerticalContext context,
+            double planeHeight
+    ) {
+        double retentionPower = Math.pow(context.retention(), ticks);
+        double sum = (1.0 - retentionPower) / context.drag();
+        double sumFirst = -context.logarithm() * retentionPower / context.drag();
+        double sumSecond = -context.logarithm() * context.logarithm()
+                * retentionPower / context.drag();
+        double height = context.initialHeight()
+                + context.scale() * (context.velocityTerm() * sum
+                        - context.gravity() * ticks / context.drag())
+                - context.gravity() * ticks * 0.5;
+        double first = context.scale() * (context.velocityTerm() * sumFirst
+                - context.gravity() / context.drag()) - context.gravity() * 0.5;
+        double second = context.scale() * context.velocityTerm() * sumSecond;
+        return new VerticalEvaluation(
+                ticks, height, height - planeHeight, first, second, retentionPower, sum);
+    }
+
+    private static VerticalContext verticalContext(
             double initialHeight,
             double initialVerticalVelocity,
             double gravity,
-            double drag,
-            double planeHeight
+            double drag
     ) {
         double retention = retention(drag);
-        double retentionPower = Math.pow(retention, ticks);
-        double logarithm = Math.log(retention);
-        double scale = stepScale(drag);
-        double sum = (1.0 - retentionPower) / drag;
-        double sumFirst = -logarithm * retentionPower / drag;
-        double sumSecond = -logarithm * logarithm * retentionPower / drag;
-        double velocityTerm = initialVerticalVelocity + gravity / drag;
-        double height = initialHeight
-                + scale * (velocityTerm * sum - gravity * ticks / drag)
-                - gravity * ticks * 0.5;
-        double first = scale * (velocityTerm * sumFirst - gravity / drag) - gravity * 0.5;
-        double second = scale * velocityTerm * sumSecond;
-        return new VerticalEvaluation(ticks, height - planeHeight, first, second);
+        return new VerticalContext(
+                initialHeight,
+                initialVerticalVelocity,
+                gravity,
+                drag,
+                retention,
+                Math.log(retention),
+                stepScale(drag),
+                initialVerticalVelocity + gravity / drag);
+    }
+
+    private static PlaneCrossing planeCrossing(
+            Vec3 initialPosition,
+            Vec3 initialVelocity,
+            VerticalContext context,
+            VerticalEvaluation evaluation
+    ) {
+        double horizontalScale = context.scale() * evaluation.geometricSum();
+        Vec3 position = new Vec3(
+                initialPosition.x + initialVelocity.x * horizontalScale,
+                evaluation.height(),
+                initialPosition.z + initialVelocity.z * horizontalScale);
+        double gravityVelocity = context.gravity() / context.drag()
+                * (1.0 - evaluation.retentionPower());
+        Vec3 velocity = new Vec3(
+                initialVelocity.x * evaluation.retentionPower(),
+                initialVelocity.y * evaluation.retentionPower() - gravityVelocity,
+                initialVelocity.z * evaluation.retentionPower());
+        return new PlaneCrossing(evaluation.ticks(), position, velocity);
     }
 
     private static double falsePosition(VerticalEvaluation low, VerticalEvaluation high) {
@@ -175,11 +275,35 @@ public final class LinearDragTrajectory {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
+    public record PlaneCrossing(double ticks, Vec3 position, Vec3 velocity) {
+    }
+
+    public record TrajectoryState(Vec3 position, Vec3 velocity) {
+    }
+
+    public record DescendingPlaneCrossings(PlaneCrossing upper, PlaneCrossing lower) {
+    }
+
+    private record VerticalContext(
+            double initialHeight,
+            double initialVerticalVelocity,
+            double gravity,
+            double drag,
+            double retention,
+            double logarithm,
+            double scale,
+            double velocityTerm
+    ) {
+    }
+
     private record VerticalEvaluation(
             double ticks,
+            double height,
             double error,
             double firstDerivative,
-            double secondDerivative
+            double secondDerivative,
+            double retentionPower,
+            double geometricSum
     ) {
     }
 }
