@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
-import com.limbo2136.powerradar.client.bridge.RadarLinkClientCacheBridge;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.radar.network.RadarLinkEndpointRole;
 import com.limbo2136.powerradar.radar.network.RadarLinkReconcileResult;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
@@ -89,7 +89,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             this.reconcileFacingEndpoint(player);
         }
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
+            RadarNetworkNodeClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
         }
         syncChanged();
     }
@@ -154,9 +154,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             return RadarLinkReconcileResult.NONE;
         }
 
-        if (frontState.is(ModBlocks.TARGET_CONTROLLER.get())
-                || frontState.is(ModBlocks.SHELL_ALARM.get())
-                || frontState.is(ModBlocks.INTERCEPTION_CONTROLLER.get())) {
+        if (frontState.is(ModBlocks.TARGET_CONTROLLER.get())) {
             detachCurrentEndpoint(manager, linkGlobalPos);
             this.endpointRole = RadarLinkEndpointRole.FUTURE_CONSUMER;
             this.endpointPos = newEndpointPos;
@@ -194,7 +192,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             this.startupSafetyTicks = 2;
         }
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+            RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
         }
     }
 
@@ -202,14 +200,14 @@ public class RadarLinkBlockEntity extends BlockEntity {
     public void onLoad() {
         super.onLoad();
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+            RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
         }
     }
 
     @Override
     public void setRemoved() {
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onRemoved(this.level, this.worldPosition);
+            RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         }
         if (this.level instanceof ServerLevel serverLevel && this.networkId != null && this.runtimeRegisteredLoaded) {
             RadarNetworkManager.get(serverLevel.getServer()).unloadLink(this.networkId, this.globalPos());
@@ -225,7 +223,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             this.runtimeRegisteredLoaded = false;
         }
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onRemoved(this.level, this.worldPosition);
+            RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         }
         super.onChunkUnloaded();
     }
@@ -257,7 +255,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
         }
         this.endpointPos = null;
         if (this.level != null && this.level.isClientSide()) {
-            RadarLinkClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
+            RadarNetworkNodeClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
         }
     }
 

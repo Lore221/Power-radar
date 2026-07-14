@@ -13,6 +13,7 @@ import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.RadarTargetSourceKind;
+import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import io.netty.buffer.Unpooled;
 import java.security.MessageDigest;
@@ -30,8 +31,8 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 class RadarMonitorPayloadCodecTest {
-    private static final String V2_FIXTURE_SHA_256 =
-            "d90beba8c8fdafa2f6011da78e72c3e017751b651772d6ff12a1fce7c6c1ca14";
+    private static final String V3_FIXTURE_SHA_256 =
+            "2349cefd2b0aa4a9bea8e25d79172e3a8c2cf3400a61838307062b945783adf6";
 
     @Test
     void fullSnapshotRoundTripsWithoutUnreadBytes() {
@@ -87,6 +88,7 @@ class RadarMonitorPayloadCodecTest {
                 0L,
                 0L,
                 List.of(),
+                List.of(),
                 List.of());
 
         RadarMonitorSnapshotPayload actual = roundTrip(RadarMonitorSnapshotPayload.STREAM_CODEC, expected);
@@ -121,9 +123,9 @@ class RadarMonitorPayloadCodecTest {
     }
 
     @Test
-    void v2WireBytesRemainStable() throws NoSuchAlgorithmException {
-        assertEquals("2", ModNetwork.PROTOCOL_VERSION);
-        assertEquals(2, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
+    void v3WireBytesRemainStable() throws NoSuchAlgorithmException {
+        assertEquals("3", ModNetwork.PROTOCOL_VERSION);
+        assertEquals(3, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
 
         RegistryFriendlyByteBuf buffer = newBuffer();
         try {
@@ -132,7 +134,7 @@ class RadarMonitorPayloadCodecTest {
             buffer.getBytes(buffer.readerIndex(), encoded);
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
 
-            assertEquals(V2_FIXTURE_SHA_256, digest);
+            assertEquals(V3_FIXTURE_SHA_256, digest);
         } finally {
             buffer.release();
         }
@@ -242,6 +244,7 @@ class RadarMonitorPayloadCodecTest {
                 123_456_789L,
                 123_456_799L,
                 coverages,
+                List.of(new ShellAlarmDisplayZone(testDimension, 17.5D, 71.5D, -22.5D, 128)),
                 targets);
     }
 

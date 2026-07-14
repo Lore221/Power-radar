@@ -1,25 +1,26 @@
-package com.limbo2136.powerradar.client.bridge;
+package com.limbo2136.powerradar.bridge;
 
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 
-public final class RadarLinkClientCacheBridge {
+public final class RadarNetworkNodeClientCacheBridge {
     private static Handler handler = Handler.NO_OP;
 
-    private RadarLinkClientCacheBridge() {
+    private RadarNetworkNodeClientCacheBridge() {
     }
 
     public static void setHandler(Handler handler) {
-        RadarLinkClientCacheBridge.handler = handler;
+        RadarNetworkNodeClientCacheBridge.handler = handler;
     }
 
     public static void onLoaded(@Nullable Level level, BlockPos pos, @Nullable UUID networkId) {
         handler.onLoaded(level, pos, networkId);
     }
 
-    public static void onNetworkChanged(@Nullable Level level, BlockPos pos, @Nullable UUID oldId, @Nullable UUID newId) {
+    public static void onNetworkChanged(@Nullable Level level, BlockPos pos,
+                                        @Nullable UUID oldId, @Nullable UUID newId) {
         handler.onNetworkChanged(level, pos, oldId, newId);
     }
 
@@ -34,7 +35,8 @@ public final class RadarLinkClientCacheBridge {
         default void onLoaded(@Nullable Level level, BlockPos pos, @Nullable UUID networkId) {
         }
 
-        default void onNetworkChanged(@Nullable Level level, BlockPos pos, @Nullable UUID oldId, @Nullable UUID newId) {
+        default void onNetworkChanged(@Nullable Level level, BlockPos pos,
+                                      @Nullable UUID oldId, @Nullable UUID newId) {
         }
 
         default void onRemoved(@Nullable Level level, BlockPos pos) {

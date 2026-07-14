@@ -8,6 +8,7 @@ public final class PowerRadarClientConfig {
 
     private static final ModConfigSpec.BooleanValue MONITOR_BLOCK_ALIGNED_VIEW;
     private static final ModConfigSpec.ConfigValue<String> RADAR_CONE_COLOR;
+    private static final ModConfigSpec.ConfigValue<String> SHELL_ALARM_ZONE_COLOR;
     private static final ModConfigSpec.ConfigValue<String> PROJECTILE_BLIP_COLOR;
     private static final ModConfigSpec.ConfigValue<String> PLAYER_BLIP_COLOR;
     private static final ModConfigSpec.ConfigValue<String> PASSIVE_BLIP_COLOR;
@@ -17,6 +18,7 @@ public final class PowerRadarClientConfig {
     private static final ModConfigSpec.ConfigValue<String> SELECTED_TARGET_FRAME_COLOR;
 
     private static String cachedConeColor;
+    private static String cachedShellAlarmZoneColor;
     private static String cachedProjectileColor;
     private static String cachedPlayerColor;
     private static String cachedPassiveColor;
@@ -36,6 +38,8 @@ public final class PowerRadarClientConfig {
                 .define("block_aligned_view", false);
         RADAR_CONE_COLOR = defineColor(builder, "cone_color", "#B8FFD2",
                 "Color applied to the white radar coverage cone texture.");
+        SHELL_ALARM_ZONE_COLOR = defineColor(builder, "shell_alarm_zone_color", "#90EE90",
+                "Color of active Shell Alarm protection zones.");
         builder.push("blips");
         PROJECTILE_BLIP_COLOR = defineColor(builder, "projectile_color", "#FFAA00",
                 "Color of projectile blips.");
@@ -65,6 +69,7 @@ public final class PowerRadarClientConfig {
 
     public static RadarRenderPalette radarRenderPalette() {
         String cone = colorValue(RADAR_CONE_COLOR);
+        String shellAlarmZone = colorValue(SHELL_ALARM_ZONE_COLOR);
         String projectile = colorValue(PROJECTILE_BLIP_COLOR);
         String player = colorValue(PLAYER_BLIP_COLOR);
         String passive = colorValue(PASSIVE_BLIP_COLOR);
@@ -75,6 +80,7 @@ public final class PowerRadarClientConfig {
         RadarRenderPalette palette = cachedPalette;
         if (palette == null
                 || !cone.equals(cachedConeColor)
+                || !shellAlarmZone.equals(cachedShellAlarmZoneColor)
                 || !projectile.equals(cachedProjectileColor)
                 || !player.equals(cachedPlayerColor)
                 || !passive.equals(cachedPassiveColor)
@@ -84,6 +90,7 @@ public final class PowerRadarClientConfig {
                 || !selected.equals(cachedSelectedFrameColor)) {
             palette = new RadarRenderPalette(
                     parseRgb(cone),
+                    parseRgb(shellAlarmZone),
                     parseRgb(projectile),
                     parseRgb(player),
                     parseRgb(passive),
@@ -92,6 +99,7 @@ public final class PowerRadarClientConfig {
                     parseRgb(hovered),
                     parseRgb(selected));
             cachedConeColor = cone;
+            cachedShellAlarmZoneColor = shellAlarmZone;
             cachedProjectileColor = projectile;
             cachedPlayerColor = player;
             cachedPassiveColor = passive;
@@ -133,6 +141,7 @@ public final class PowerRadarClientConfig {
 
     public record RadarRenderPalette(
             int cone,
+            int shellAlarmZone,
             int projectile,
             int player,
             int passive,

@@ -2,14 +2,14 @@ package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
-import com.limbo2136.powerradar.api.radar.RadarDataSource;
-import com.limbo2136.powerradar.api.target.TargetSourceType;
-import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.api.weapon.WeaponBallistics;
 import com.limbo2136.powerradar.api.weapon.WeaponKind;
 import com.limbo2136.powerradar.api.weapon.WeaponMount;
 import com.limbo2136.powerradar.block.InterceptionControllerBlock;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
+import com.limbo2136.powerradar.compat.create.InterceptionFrequencyKey;
+import com.limbo2136.powerradar.compat.create.CachedFrequencyLinkBehaviour;
+import com.limbo2136.powerradar.compat.create.PowerRadarFrequencySlot;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
@@ -17,21 +17,22 @@ import com.limbo2136.powerradar.interception.InterceptionBallistics;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
-import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
-import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
-import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.content.redstone.link.LinkBehaviour;
+import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
+import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueBoxTransform;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.commons.lang3.tuple.Pair;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -41,14 +42,13 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.neoforged.fml.ModList;
 
-public class InterceptionControllerBlockEntity extends BlockEntity implements IHaveGoggleInformation {
+public class InterceptionControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
     private static final int MAX_INTERCEPTION_TICKS = 240;
     private static final int MIN_INTERCEPTION_TICKS = 4;
     private static final int INTERCEPT_COARSE_STEP_TICKS = 3;
@@ -72,7 +72,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     private double powerWatts;
     private double yawVelocityDegreesPerTick;
     private double pitchVelocityDegreesPerTick;
-    private UUID networkId;
+    private UUID interceptionChannelId;
     private UUID assignedThreatUuid;
     private float desiredYawDegrees;
     private float desiredPitchDegrees;
@@ -80,7 +80,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     private float currentPitchDegrees;
     private double interceptTicks;
     private Status status = Status.NO_NETWORK;
-    private RadarLinkConnectionResolver.Status lastLinkStatus = RadarLinkConnectionResolver.Status.NONE;
+    private String lastFrequencyStatus = "NO_FREQUENCY";
+    private UUID cachedInterceptionChannelId;
     private String lastSolveReason = "startup";
     private long lastClientSyncGameTime = Long.MIN_VALUE;
     private long lastPublishedThreatRevision = Long.MIN_VALUE;
@@ -114,8 +115,23 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             InterceptionControllerBlockEntity controller
     ) {
         if (level instanceof ServerLevel serverLevel) {
+            controller.tick();
             controller.tickServer(serverLevel, state);
         }
+    }
+
+    @Override
+    public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
+    }
+
+    @Override
+    public void addBehavioursDeferred(List<BlockEntityBehaviour> behaviours) {
+        Pair<ValueBoxTransform, ValueBoxTransform> slots =
+                ValueBoxTransform.Dual.makeSlots(first ->
+                        new PowerRadarFrequencySlot(first, PowerRadarFrequencySlot.Face.SIDE));
+        LinkBehaviour interceptionFrequency = new CachedFrequencyLinkBehaviour(
+                this, slots, frequency -> this.cachedInterceptionChannelId = InterceptionFrequencyKey.from(frequency));
+        behaviours.add(interceptionFrequency);
     }
 
     public boolean readyToFire() {
@@ -163,14 +179,14 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
                 && aim.applied
                 && Math.abs(aim.remainingYawError) <= AIM_TOLERANCE_DEGREES
                 && Math.abs(aim.remainingPitchError) <= AIM_TOLERANCE_DEGREES;
-        if (nextReady && this.networkId != null && this.assignedThreatUuid != null) {
+        if (nextReady && this.interceptionChannelId != null && this.assignedThreatUuid != null) {
             if (!burstActiveFor(this.assignedThreatUuid, level.getGameTime())) {
                 startBurst(this.assignedThreatUuid, solution.aimPoint, level.getGameTime());
             }
             this.trackingThreatUuid = this.assignedThreatUuid;
             InterceptionCoordinator.registerPendingLaunch(
                     level,
-                    this.networkId,
+                    this.interceptionChannelId,
                     this.worldPosition,
                     solution.muzzle,
                     this.assignedThreatUuid);
@@ -188,30 +204,18 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             releaseAssignment(level);
             return Solution.invalid();
         }
-        RadarLinkConnectionResolver.Resolution link =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(level, this.worldPosition);
-        this.lastLinkStatus = link.status();
-        if (link.status() != RadarLinkConnectionResolver.Status.SINGLE || link.link().networkId() == null) {
-            this.lastSolveReason = "link-" + link.status().name().toLowerCase(java.util.Locale.ROOT);
+        UUID resolvedChannelId = this.cachedInterceptionChannelId;
+        this.lastFrequencyStatus = resolvedChannelId == null ? "NO_FREQUENCY" : "FREQUENCY";
+        if (resolvedChannelId == null) {
+            this.lastSolveReason = "no-frequency";
             releaseAssignment(level);
-            this.networkId = null;
+            this.interceptionChannelId = null;
             return Solution.invalid();
         }
-        UUID resolvedNetworkId = link.link().networkId();
-        if (this.networkId != null && !this.networkId.equals(resolvedNetworkId)) {
+        if (this.interceptionChannelId != null && !this.interceptionChannelId.equals(resolvedChannelId)) {
             releaseAssignment(level);
         }
-        this.networkId = resolvedNetworkId;
-        RadarNetworkManager.ControllersResolution radarResolution = RadarNetworkManager.get(level.getServer())
-                .resolveControllersForConsumer(
-                        resolvedNetworkId,
-                        GlobalPos.of(level.dimension(), link.link().getBlockPos()));
-        if (radarResolution.controllers().isEmpty()) {
-            this.lastSolveReason = "radar-offline";
-            releaseAssignment(level);
-            return Solution.invalid();
-        }
-        RadarDataSource radar = new CombinedRadarDataSource(radarResolution.controllers());
+        this.interceptionChannelId = resolvedChannelId;
         if (!validVoltage()) {
             this.lastSolveReason = "voltage-invalid";
             releaseAssignment(level);
@@ -220,9 +224,9 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
 
         long gameTime = level.getGameTime();
         long threatRevision = InterceptionCoordinator.threatRevision(
-                level.getServer(), resolvedNetworkId, gameTime);
+                level.getServer(), resolvedChannelId, gameTime);
         this.assignedThreatUuid = InterceptionCoordinator.assignedThreat(
-                level, resolvedNetworkId, this.worldPosition);
+                level, resolvedChannelId, this.worldPosition);
         boolean snapshotDue = gameTime - this.lastControllerSnapshotGameTime
                 >= CONTROLLER_SNAPSHOT_REFRESH_TICKS;
         if (this.assignedThreatUuid == null
@@ -268,7 +272,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
                 || snapshotDue) {
             InterceptionCoordinator.publishControllerSnapshot(
                     level,
-                    resolvedNetworkId,
+                    resolvedChannelId,
                     this.worldPosition,
                     new InterceptionCoordinator.ControllerSnapshot(
                             cannon.muzzleOrigin(),
@@ -281,7 +285,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             this.lastControllerSnapshotGameTime = gameTime;
         }
         this.assignedThreatUuid = InterceptionCoordinator.assignedThreat(
-                level, resolvedNetworkId, this.worldPosition);
+                level, resolvedChannelId, this.worldPosition);
         if (this.assignedThreatUuid == null) {
             this.trackingThreatUuid = null;
             clearBurst();
@@ -295,7 +299,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
         }
         ThreatSnapshot threatSnapshot = InterceptionCoordinator.threatSnapshot(
                 level.getServer(),
-                resolvedNetworkId,
+                resolvedChannelId,
                 this.assignedThreatUuid,
                 level.getGameTime());
         if (threatSnapshot == null) {
@@ -303,10 +307,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             this.lastSolveReason = "invalid-threat-snapshot";
             return Solution.invalid();
         }
-        TrackedTargetView track = radar.findTrackedTarget(this.assignedThreatUuid);
         Entity targetEntity = level.getEntity(this.assignedThreatUuid);
-        if ((track != null && track.sourceType() != TargetSourceType.CBC_BIG_CANNON_PROJECTILE)
-                || targetEntity == null
+        if (targetEntity == null
                 || !targetEntity.isAlive()) {
             rejectAssignment(level);
             this.lastSolveReason = "invalid-threat";
@@ -387,7 +389,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             PowerRadar.LOGGER.info(
                     "[PowerRadar BugReport][Interception][Target] controller={} network={} target={} trackAge={} trackingSource=entity shellPos={} shellVelocity={} shellGravity={} shellDrag={} shellQuadraticDrag={} cannon={} interceptorSpeed={} interceptorGravity={} interceptorDrag={} muzzle={} logicalPitch={} physicalPitch={} pitchMultiplier={} interceptPos={} clearShot={} targetTicks={} aimTicks={} shotTicks={} timingError={}",
                     this.worldPosition,
-                    resolvedNetworkId,
+                    resolvedChannelId,
                     this.assignedThreatUuid,
                     trackAgeTicks,
                     shortVec(trackedPosition),
@@ -1238,9 +1240,9 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     }
 
     private void releaseAssignment(ServerLevel level) {
-        if (this.networkId != null) {
+        if (this.interceptionChannelId != null) {
             InterceptionCoordinator.unregisterController(
-                    level, this.networkId, this.worldPosition);
+                    level, this.interceptionChannelId, this.worldPosition);
         }
         this.assignedThreatUuid = null;
         this.trackingThreatUuid = null;
@@ -1250,9 +1252,9 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     }
 
     private void rejectAssignment(ServerLevel level) {
-        if (this.networkId != null && this.assignedThreatUuid != null) {
+        if (this.interceptionChannelId != null && this.assignedThreatUuid != null) {
             InterceptionCoordinator.rejectAssignment(
-                    level, this.networkId, this.worldPosition, this.assignedThreatUuid);
+                    level, this.interceptionChannelId, this.worldPosition, this.assignedThreatUuid);
         }
         this.assignedThreatUuid = null;
         this.trackingThreatUuid = null;
@@ -1284,7 +1286,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
             return Math.abs(this.powerVoltageVolts) > PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE
                     ? Status.OVERVOLTAGE : Status.UNDERVOLTAGE;
         }
-        if (this.networkId == null) {
+        if (this.interceptionChannelId == null) {
             return Status.NO_NETWORK;
         }
         if (this.assignedThreatUuid == null) {
@@ -1312,7 +1314,7 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
                     "[PowerRadar BugReport][Interception][Launch] controller={} ready={} network={} target={} voltage={} interceptTicks={}",
                     this.worldPosition,
                     ready,
-                    this.networkId,
+                    this.interceptionChannelId,
                     this.assignedThreatUuid,
                     round(this.powerVoltageVolts),
                     round(this.interceptTicks));
@@ -1334,8 +1336,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
+    protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.read(tag, registries, clientPacket);
         this.readyToFire = tag.getBoolean("ReadyToFire");
         this.powerVoltageVolts = tag.getDouble("PowerVoltage");
         this.currentAmps = tag.getDouble("CurrentAmps");
@@ -1356,8 +1358,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.write(tag, registries, clientPacket);
         tag.putBoolean("ReadyToFire", this.readyToFire);
         tag.putDouble("PowerVoltage", this.powerVoltageVolts);
         tag.putDouble("CurrentAmps", this.currentAmps);
@@ -1431,8 +1433,8 @@ public class InterceptionControllerBlockEntity extends BlockEntity implements IH
                 "[PowerRadar BugReport][Interception][Controller] pos={} reason={} linkStatus={} network={} target={} status={} voltage={} current={} power={} powered={} solution={} ammo={} desiredYaw={} currentYaw={} yawError={} desiredPitch={} currentPitch={} pitchError={} applied={} timingError={} interceptTicks={} ready={}",
                 this.worldPosition,
                 this.lastSolveReason,
-                this.lastLinkStatus,
-                this.networkId,
+                this.lastFrequencyStatus,
+                this.interceptionChannelId,
                 this.assignedThreatUuid,
                 this.status,
                 round(this.powerVoltageVolts),

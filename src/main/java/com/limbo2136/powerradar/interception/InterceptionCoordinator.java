@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.interception;
 
+import com.limbo2136.powerradar.compat.create.PowerRadarLinkRange;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -520,6 +521,10 @@ public final class InterceptionCoordinator {
             for (GlobalPos controllerPos : availableControllers) {
                 if (assignedControllers.contains(controllerPos)
                         || network.rejections.containsKey(new ControllerThreat(controllerPos, threatUuid))) {
+                    continue;
+                }
+                Threat threat = network.threats.get(threatUuid);
+                if (threat == null || !PowerRadarLinkRange.withinRange(controllerPos.pos(), threat.alarmPos)) {
                     continue;
                 }
                 ControllerSnapshot snapshot = network.controllers.get(controllerPos).snapshot;

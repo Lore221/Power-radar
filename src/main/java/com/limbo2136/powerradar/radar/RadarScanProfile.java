@@ -34,7 +34,7 @@ public record RadarScanProfile(
         int minOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMinYOffset();
             case GROUND -> -PowerRadarCeeConstants.groundDownBlocks();
-            case SURFACE_SCANNER -> -range;
+            case SURFACE_SCANNER -> -PowerRadarCeeConstants.surfaceDownBlocks();
         };
         int maxOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMaxYOffset();

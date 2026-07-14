@@ -47,6 +47,7 @@ public record RadarMonitorDisplayData(
         long lastScanGameTime,
         long serverGameTime,
         List<RadarDisplayCoverage> coverages,
+        List<ShellAlarmDisplayZone> shellAlarmZones,
         List<RadarDisplayTarget> targets
 ) {
     public RadarMonitorDisplayData withTargets(List<RadarDisplayTarget> targets) {
@@ -92,6 +93,7 @@ public record RadarMonitorDisplayData(
                 lastScanGameTime,
                 serverGameTime,
                 this.coverages,
+                this.shellAlarmZones,
                 List.copyOf(targets)
         );
     }
@@ -144,7 +146,22 @@ public record RadarMonitorDisplayData(
                 this.lastScanGameTime,
                 this.serverGameTime,
                 this.coverages,
+                this.shellAlarmZones,
                 this.targets
         );
+    }
+
+    public RadarMonitorDisplayData withShellAlarmZones(List<ShellAlarmDisplayZone> zones) {
+        return new RadarMonitorDisplayData(
+                this.monitorPos, this.connectionStatus, this.linked, this.radarId, this.controllerPos,
+                this.radarDimensionId, this.radarOriginX, this.radarOriginY, this.radarOriginZ,
+                this.radarFacing, this.monitorViewYawDegrees, this.orientationState, this.structureValid,
+                this.active, this.monitorElectricalState, this.monitorVoltageVolts, this.monitorResistanceOhms,
+                this.monitorDisplayCount, this.monitorScreenSize, this.monitorRendererEnabled, this.mode,
+                this.detectionFilterMask, this.autotargetFilterMask, this.manualTargetUuid,
+                this.onlinePlayerNames, this.whitelistedPlayerNames, this.whitelistedSableNames,
+                this.validPanelCount, this.currentRange, this.maxRange, this.sectorAngle,
+                this.verticalScanHeight, this.displayedTargetCount, this.trackUpdateIntervalTicks,
+                this.lastScanGameTime, this.serverGameTime, this.coverages, List.copyOf(zones), this.targets);
     }
 }

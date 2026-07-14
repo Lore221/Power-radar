@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.RadarTargetSourceKind;
+import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,13 +66,14 @@ public record RadarMonitorSnapshotPayload(
         long lastScanGameTime,
         long serverGameTime,
         List<RadarDisplayCoverage> coverages,
+        List<ShellAlarmDisplayZone> shellAlarmZones,
         List<RadarDisplayTarget> targets
 ) implements CustomPacketPayload {
     /**
      * Increment when the encoded snapshot bytes change intentionally. The value also versions the
      * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
      */
-    public static final int WIRE_SCHEMA_VERSION = 2;
+    public static final int WIRE_SCHEMA_VERSION = 3;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
@@ -120,6 +122,7 @@ public record RadarMonitorSnapshotPayload(
                 buffer.readLong(),
                 buffer.readLong(),
                 readCoverages(buffer),
+                readShellAlarmZones(buffer),
                 readTargets(buffer)
         );
     }
@@ -171,6 +174,7 @@ public record RadarMonitorSnapshotPayload(
                 data.lastScanGameTime(),
                 data.serverGameTime(),
                 data.coverages(),
+                data.shellAlarmZones(),
                 data.targets()
         );
     }
@@ -218,6 +222,7 @@ public record RadarMonitorSnapshotPayload(
                 this.lastScanGameTime,
                 this.serverGameTime,
                 this.coverages,
+                this.shellAlarmZones,
                 List.copyOf(targets)
         );
     }
@@ -267,6 +272,14 @@ public record RadarMonitorSnapshotPayload(
         for (RadarDisplayCoverage coverage : this.coverages) {
             writeCoverage(buffer, coverage);
         }
+        buffer.writeVarInt(this.shellAlarmZones.size());
+        for (ShellAlarmDisplayZone zone : this.shellAlarmZones) {
+            buffer.writeResourceLocation(zone.dimensionId());
+            buffer.writeDouble(zone.centerX());
+            buffer.writeDouble(zone.centerY());
+            buffer.writeDouble(zone.centerZ());
+            buffer.writeVarInt(zone.sideBlocks());
+        }
         buffer.writeVarInt(this.targets.size());
         for (RadarDisplayTarget target : this.targets) {
             writeTarget(buffer, target);
@@ -302,6 +315,16 @@ public record RadarMonitorSnapshotPayload(
                     sectorAngle));
         }
         return List.copyOf(coverages);
+    }
+
+    private static List<ShellAlarmDisplayZone> readShellAlarmZones(RegistryFriendlyByteBuf buffer) {
+        int count = buffer.readVarInt();
+        ArrayList<ShellAlarmDisplayZone> zones = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            zones.add(new ShellAlarmDisplayZone(buffer.readResourceLocation(), buffer.readDouble(),
+                    buffer.readDouble(), buffer.readDouble(), buffer.readVarInt()));
+        }
+        return List.copyOf(zones);
     }
 
     private static void writeCoverage(RegistryFriendlyByteBuf buffer, RadarDisplayCoverage coverage) {
@@ -476,6 +499,7 @@ public record RadarMonitorSnapshotPayload(
                 this.lastScanGameTime,
                 this.serverGameTime,
                 this.coverages,
+                this.shellAlarmZones,
                 this.targets
         );
     }
@@ -522,6 +546,10 @@ public record RadarMonitorSnapshotPayload(
         size += varIntBytes(this.coverages.size());
         for (RadarDisplayCoverage coverage : this.coverages) {
             size += coverageBytes(coverage);
+        }
+        size += varIntBytes(this.shellAlarmZones.size());
+        for (ShellAlarmDisplayZone zone : this.shellAlarmZones) {
+            size += resourceLocationBytes(zone.dimensionId()) + 24 + varIntBytes(zone.sideBlocks());
         }
         size += varIntBytes(this.targets.size());
         for (RadarDisplayTarget target : this.targets) {

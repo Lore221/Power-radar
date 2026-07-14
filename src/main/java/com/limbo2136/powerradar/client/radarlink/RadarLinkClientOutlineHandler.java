@@ -3,7 +3,9 @@ package com.limbo2136.powerradar.client.radarlink;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
+import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
+import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.UUID;
 import net.createmod.catnip.animation.AnimationTickHolder;
@@ -43,7 +45,8 @@ public final class RadarLinkClientOutlineHandler {
         }
 
         ItemStack stack = player.getMainHandItem();
-        if (!(stack.getItem() instanceof RadarLinkBlockItem)) {
+        if (!(stack.getItem() instanceof RadarLinkBlockItem)
+                && !(stack.getItem() instanceof ShellAlarmBlockItem)) {
             return;
         }
         UUID networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
@@ -58,13 +61,17 @@ public final class RadarLinkClientOutlineHandler {
                 RadarLinkClientCache.unregister(level, pos);
                 continue;
             }
-            if (!(level.getBlockEntity(pos) instanceof RadarLinkBlockEntity link)) {
+            UUID nodeNetworkId;
+            if (level.getBlockEntity(pos) instanceof RadarLinkBlockEntity link) {
+                nodeNetworkId = link.networkId();
+            } else if (level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
+                nodeNetworkId = alarm.networkId();
+            } else {
                 RadarLinkClientCache.unregister(level, pos);
                 continue;
             }
-            UUID linkNetworkId = link.networkId();
-            if (!networkId.equals(linkNetworkId)) {
-                RadarLinkClientCache.registerOrUpdate(level, pos, linkNetworkId);
+            if (!networkId.equals(nodeNetworkId)) {
+                RadarLinkClientCache.registerOrUpdate(level, pos, nodeNetworkId);
                 continue;
             }
             if (player.distanceToSqr(Vec3.atCenterOf(pos)) > outlineRangeSquared()) {
@@ -76,12 +83,12 @@ public final class RadarLinkClientOutlineHandler {
 
     private static int outlineLink(ClientLevel level, BlockPos pos, UUID networkId, int color) {
         BlockState state = level.getBlockState(pos);
-        if (!state.hasProperty(RadarLinkBlock.FACING)) {
-            return 0;
-        }
+        AABB outline = state.hasProperty(RadarLinkBlock.FACING)
+                ? outlineBoxFor(state.getValue(RadarLinkBlock.FACING)).move(pos)
+                : state.getShape(level, pos).bounds().move(pos);
         CatnipOutlinerAdapter.showRadarLinkOutline(
                 new OutlineKey(level.dimension().location().toString(), networkId, pos.immutable()),
-                outlineBoxFor(state.getValue(RadarLinkBlock.FACING)).move(pos),
+                outline,
                 color
         );
         return 1;

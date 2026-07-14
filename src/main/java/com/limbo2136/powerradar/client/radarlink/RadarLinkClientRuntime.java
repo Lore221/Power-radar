@@ -1,6 +1,6 @@
 package com.limbo2136.powerradar.client.radarlink;
 
-import com.limbo2136.powerradar.client.bridge.RadarLinkClientCacheBridge;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.Level;
 
@@ -15,7 +15,7 @@ public final class RadarLinkClientRuntime {
             return;
         }
         initialized = true;
-        RadarLinkClientCacheBridge.setHandler(new RadarLinkClientCacheBridge.Handler() {
+        RadarNetworkNodeClientCacheBridge.setHandler(new RadarNetworkNodeClientCacheBridge.Handler() {
             @Override
             public void onLoaded(Level level, net.minecraft.core.BlockPos pos, java.util.UUID networkId) {
                 if (level instanceof ClientLevel clientLevel) {

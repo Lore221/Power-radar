@@ -3,7 +3,6 @@ package com.limbo2136.powerradar.block;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
-import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
@@ -59,13 +58,6 @@ public class InterceptionControllerBlock extends BaseEntityBlock
         super.onPlace(state, level, pos, oldState, movedByPiston);
         if (!level.getBlockTicks().hasScheduledTick(pos, this)) {
             level.scheduleTick(pos, this, 1);
-        }
-        if (!level.isClientSide()) {
-            for (Direction direction : Direction.values()) {
-                if (level.getBlockEntity(pos.relative(direction)) instanceof RadarLinkBlockEntity link) {
-                    link.reconcileFacingEndpoint(null);
-                }
-            }
         }
     }
 

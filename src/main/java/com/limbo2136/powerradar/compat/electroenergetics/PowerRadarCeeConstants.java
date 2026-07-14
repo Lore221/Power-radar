@@ -61,6 +61,7 @@ public final class PowerRadarCeeConstants {
 
     public static final int GROUND_UP_BLOCKS = 128;
     public static final int GROUND_DOWN_BLOCKS = 20;
+    public static final int SURFACE_DOWN_BLOCKS = 1500;
 
     public static final double AIR_RANGE_MULTIPLIER = 1.5;
     public static final double AIR_FOV_DEGREES = 90.0;
@@ -212,6 +213,7 @@ public final class PowerRadarCeeConstants {
     public static int basicPanelRangeBonusBlocks() { return PowerRadarServerConfig.basicPanelRangeBonusBlocks(); }
     public static int groundUpBlocks() { return PowerRadarServerConfig.groundUpBlocks(); }
     public static int groundDownBlocks() { return PowerRadarServerConfig.groundDownBlocks(); }
+    public static int surfaceDownBlocks() { return PowerRadarServerConfig.surfaceDownBlocks(); }
     public static double airRangeMultiplier() { return PowerRadarServerConfig.airRangeMultiplier(); }
     public static double airFovDegrees() { return PowerRadarServerConfig.airFovDegrees(); }
     public static int airMinYOffset() { return PowerRadarServerConfig.airMinYOffset(); }
