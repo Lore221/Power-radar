@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.radar;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
@@ -202,14 +203,22 @@ public final class RadarMonitorDisplayBuilder {
             int radarSectorAngle = radar.orientationState().structureType() == RadarStructureType.OVERVIEW
                     ? 360
                     : radar.scanMode().sectorAngleDegrees();
+            RadarWorldPose radarWorldPose = radar.worldPoseAt(serverGameTime);
+            RadarOrientationState radarWorldOrientation = RadarOrientationState.fixed(
+                    radar.orientationState().structureType(),
+                    radar.orientationState().structureType() == RadarStructureType.OVERVIEW
+                            ? 0.0F
+                            : radarWorldPose.yawDegrees(),
+                    serverGameTime
+            );
             coverages.add(new RadarDisplayCoverage(
                     radar.radarId(),
-                    radar.getBlockPos(),
+                    radar.worldControllerPos(),
                     radar.dimensionId(),
-                    radar.radarOriginX(),
-                    radar.radarOriginY(),
-                    radar.radarOriginZ(),
-                    radar.orientationState(),
+                    radarWorldPose.origin().x,
+                    radarWorldPose.origin().y,
+                    radarWorldPose.origin().z,
+                    radarWorldOrientation,
                     radarCurrentRange,
                     radarSectorAngle));
             long targetDisplayGameTime = radarLastScanGameTime > 0L
@@ -231,19 +240,27 @@ public final class RadarMonitorDisplayBuilder {
         int sectorAngle = controller.orientationState().structureType() == RadarStructureType.OVERVIEW
                 ? 360
                 : controller.scanMode().sectorAngleDegrees();
+        RadarWorldPose controllerWorldPose = controller.worldPoseAt(serverGameTime);
+        RadarOrientationState controllerWorldOrientation = RadarOrientationState.fixed(
+                controller.orientationState().structureType(),
+                controller.orientationState().structureType() == RadarStructureType.OVERVIEW
+                        ? 0.0F
+                        : controllerWorldPose.yawDegrees(),
+                serverGameTime
+        );
         RadarMonitorDisplayData data = new RadarMonitorDisplayData(
                 monitorPos,
                 RadarNetworkConnectionStatus.CONNECTED,
                 true,
                 controller.radarId(),
-                controller.getBlockPos(),
+                controller.worldControllerPos(),
                 controller.dimensionId(),
-                controller.radarOriginX(),
-                controller.radarOriginY(),
-                controller.radarOriginZ(),
+                controllerWorldPose.origin().x,
+                controllerWorldPose.origin().y,
+                controllerWorldPose.origin().z,
                 controller.radarFacing(),
                 monitorViewYawDegrees(),
-                controller.orientationState(),
+                controllerWorldOrientation,
                 structureValid,
                 active,
                 monitorElectricalState,

@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
@@ -546,6 +547,11 @@ public class RadarNetworkManager {
         if (eligibleBinding == null) {
             return LeaseDecision.release(id, consumerLinkPos, "no-eligible-radar");
         }
+        ServerLevel radarLevel = this.server.getLevel(eligibleBinding.radarLinkPos().dimension());
+        if (radarLevel != null && RadarWorldPoseResolver.isOnSableStructure(
+                radarLevel, eligibleBinding.radarLinkPos().pos())) {
+            return LeaseDecision.release(id, consumerLinkPos, "sable-sublevel-manages-chunks");
+        }
         return LeaseDecision.keep(id, consumerLinkPos, eligibleBinding.radarLinkPos());
     }
 
@@ -599,11 +605,15 @@ public class RadarNetworkManager {
     private void applyTicketsIfNeeded(UUID id, GlobalPos radarLinkPos) {
         RadarNetworkRuntime runtime = this.runtime(id);
         RadarNetworkChunkLoadState state = runtime.chunkLoadState();
+        ServerLevel level = this.server.getLevel(radarLinkPos.dimension());
+        if (level != null && RadarWorldPoseResolver.isOnSableStructure(level, radarLinkPos.pos())) {
+            this.removeAllTickets(id);
+            return;
+        }
         if (state.radarLinkPos().filter(radarLinkPos::equals).isPresent() && state.ticketsApplied()) {
             return;
         }
         this.removeAllTickets(id);
-        ServerLevel level = this.server.getLevel(radarLinkPos.dimension());
         if (level == null || runtime.chunkLoadState().activeConsumerLeaseLinks().isEmpty()) {
             return;
         }
@@ -643,15 +653,20 @@ public class RadarNetworkManager {
         return chunks;
     }
 
-    private static boolean isWithinLinkRange(GlobalPos consumerLinkPos, GlobalPos radarLinkPos) {
+    private boolean isWithinLinkRange(GlobalPos consumerLinkPos, GlobalPos radarLinkPos) {
         if (!consumerLinkPos.dimension().equals(radarLinkPos.dimension())) {
             return false;
         }
-        long dx = consumerLinkPos.pos().getX() - radarLinkPos.pos().getX();
-        long dy = consumerLinkPos.pos().getY() - radarLinkPos.pos().getY();
-        long dz = consumerLinkPos.pos().getZ() - radarLinkPos.pos().getZ();
+        ServerLevel level = this.server.getLevel(consumerLinkPos.dimension());
+        if (level == null) {
+            return false;
+        }
+        net.minecraft.world.phys.Vec3 consumerWorldPos = RadarWorldPoseResolver.worldPosition(
+                level, consumerLinkPos.pos());
+        net.minecraft.world.phys.Vec3 radarWorldPos = RadarWorldPoseResolver.worldPosition(
+                level, radarLinkPos.pos());
         long max = RadarConstants.radarLinkMaxConnectionDistanceBlocks();
-        return dx * dx + dy * dy + dz * dz <= max * max;
+        return consumerWorldPos.distanceToSqr(radarWorldPos) <= (double) max * max;
     }
 
     private RadarNetworkRuntime runtime(UUID id) {

@@ -73,7 +73,7 @@ public record RadarMonitorSnapshotPayload(
      * Increment when the encoded snapshot bytes change intentionally. The value also versions the
      * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
      */
-    public static final int WIRE_SCHEMA_VERSION = 3;
+    public static final int WIRE_SCHEMA_VERSION = 4;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
@@ -393,6 +393,8 @@ public record RadarMonitorSnapshotPayload(
                 buffer.readDouble(),
                 buffer.readDouble(),
                 buffer.readBoolean(),
+                buffer.readFloat(),
+                buffer.readVarInt(),
                 buffer.readVarInt()
         );
     }
@@ -412,6 +414,8 @@ public record RadarMonitorSnapshotPayload(
         buffer.writeDouble(target.velocityY());
         buffer.writeDouble(target.velocityZ());
         buffer.writeBoolean(target.hasVelocity());
+        buffer.writeFloat(target.structureHeadingDegrees());
+        buffer.writeVarInt(target.silhouetteVersion());
         buffer.writeVarInt(target.displayAgeTicks());
     }
 
@@ -586,6 +590,8 @@ public record RadarMonitorSnapshotPayload(
                 + resourceLocationBytes(target.dimensionId())
                 + 48
                 + 1
+                + 4
+                + varIntBytes(target.silhouetteVersion())
                 + varIntBytes(target.displayAgeTicks());
         return size;
     }

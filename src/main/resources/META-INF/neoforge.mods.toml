@@ -57,3 +57,10 @@ type="required"
 versionRange="[${ritchies_projectile_lib_version},)"
 ordering="AFTER"
 side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="aeronautics"
+type="optional"
+versionRange="[${aeronautics_version},)"
+ordering="AFTER"
+side="BOTH"

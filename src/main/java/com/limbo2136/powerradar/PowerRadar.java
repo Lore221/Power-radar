@@ -13,10 +13,14 @@ import com.limbo2136.powerradar.compat.create.PowerRadarMovementChecks;
 import com.limbo2136.powerradar.compat.create.PowerRadarStressValues;
 import com.limbo2136.powerradar.compat.create.display.PowerRadarDisplaySources;
 import com.limbo2136.powerradar.network.ModNetwork;
+import com.limbo2136.powerradar.radar.RadarScanCoordinator;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,5 +45,15 @@ public final class PowerRadar {
         modEventBus.addListener(PowerRadarDisplaySources::setup);
         modEventBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) -> event.enqueueWork(PowerRadarStressValues::register));
         PowerRadarMovementChecks.register();
+        NeoForge.EVENT_BUS.addListener(PowerRadar::onServerTick);
+        NeoForge.EVENT_BUS.addListener(PowerRadar::onServerStopped);
+    }
+
+    private static void onServerTick(ServerTickEvent.Post event) {
+        RadarScanCoordinator.tickServer(event.getServer());
+    }
+
+    private static void onServerStopped(ServerStoppedEvent event) {
+        RadarScanCoordinator.stopServer(event.getServer());
     }
 }

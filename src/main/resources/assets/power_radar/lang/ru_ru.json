@@ -91,7 +91,7 @@
   "goggles.power_radar.radar_controller.range": "Дальность: %s блоков",
   "goggles.power_radar.radar_monitor_controller": "Контроллер радарного монитора",
   "goggles.power_radar.target_controller": "Контроллер наведения",
-  "message.power_radar.target_controller.trajectory": "Тип траектории",
+  "message.power_radar.target_controller.trajectory": "Режим наведения",
   "message.power_radar.target_controller.trajectory.flat": "Настильная",
   "message.power_radar.target_controller.trajectory.high": "Навесная",
   "goggles.power_radar.target_controller.fire_status": "Стрельба: %s",

@@ -19,6 +19,8 @@ public record RadarDisplayTarget(
         double velocityY,
         double velocityZ,
         boolean hasVelocity,
+        float structureHeadingDegrees,
+        int silhouetteVersion,
         int displayAgeTicks
 ) {
     public static RadarDisplayTarget fromTrack(RadarTargetTrack target, long serverGameTime, int trackUpdateIntervalTicks) {
@@ -39,6 +41,8 @@ public record RadarDisplayTarget(
                 target.velocityY(),
                 target.velocityZ(),
                 target.hasVelocity(),
+                target.structureHeadingDegrees(),
+                target.silhouetteVersion(),
                 displayAgeTicks
         );
     }
@@ -59,8 +63,18 @@ public record RadarDisplayTarget(
                 this.velocityY,
                 this.velocityZ,
                 this.hasVelocity,
+                this.structureHeadingDegrees,
+                this.silhouetteVersion,
                 displayAgeTicks
         );
+    }
+
+    public RadarDisplayTarget withPosition(double x, double y, double z) {
+        return new RadarDisplayTarget(
+                this.targetUuid, this.targetId, this.entityTypeId, this.sourceKind, this.displayName,
+                this.category, this.dimensionId, x, y, z,
+                this.velocityX, this.velocityY, this.velocityZ, this.hasVelocity,
+                this.structureHeadingDegrees, this.silhouetteVersion, this.displayAgeTicks);
     }
 
     public String stableSelectionKey() {

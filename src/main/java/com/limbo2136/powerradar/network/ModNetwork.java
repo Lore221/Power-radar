@@ -2,6 +2,10 @@ package com.limbo2136.powerradar.network;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
+import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
+import com.limbo2136.powerradar.radar.RadarDisplayTarget;
+import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
@@ -33,7 +37,10 @@ public final class ModNetwork {
         registrar.playToClient(RadarMonitorBlockSnapshotPayload.TYPE, RadarMonitorBlockSnapshotPayload.STREAM_CODEC, ModNetwork::handleBlockSnapshot);
         registrar.playToClient(RadarMonitorBlockStaticPayload.TYPE, RadarMonitorBlockStaticPayload.STREAM_CODEC, ModNetwork::handleBlockStatic);
         registrar.playToClient(RadarMonitorBlockTargetsPayload.TYPE, RadarMonitorBlockTargetsPayload.STREAM_CODEC, ModNetwork::handleBlockTargets);
+        registrar.playToClient(RadarMonitorBlockPosePayload.TYPE, RadarMonitorBlockPosePayload.STREAM_CODEC, ModNetwork::handleBlockPose);
+        registrar.playToClient(RadarMonitorSilhouettePayload.TYPE, RadarMonitorSilhouettePayload.STREAM_CODEC, ModNetwork::handleSilhouette);
         registrar.playToServer(RadarMonitorRequestPayload.TYPE, RadarMonitorRequestPayload.STREAM_CODEC, ModNetwork::handleRequest);
+        registrar.playToServer(RadarMonitorSilhouetteRequestPayload.TYPE, RadarMonitorSilhouetteRequestPayload.STREAM_CODEC, ModNetwork::handleSilhouetteRequest);
         registrar.playToServer(RadarMonitorTargetSelectionPayload.TYPE, RadarMonitorTargetSelectionPayload.STREAM_CODEC, ModNetwork::handleTargetSelection);
         registrar.playToClient(TargetingCardOpenPayload.TYPE, TargetingCardOpenPayload.STREAM_CODEC, ModNetwork::handleTargetingCardOpen);
         registrar.playToServer(TargetingCardSavePayload.TYPE, TargetingCardSavePayload.STREAM_CODEC, ModNetwork::handleTargetingCardSave);
@@ -76,6 +83,38 @@ public final class ModNetwork {
             return;
         }
         context.enqueueWork(() -> invokeClientBlockTargetsHandler(payload));
+    }
+
+    private static void handleBlockPose(RadarMonitorBlockPosePayload payload, IPayloadContext context) {
+        if (!FMLEnvironment.dist.isClient()) {
+            return;
+        }
+        context.enqueueWork(() -> invokeClientBlockPoseHandler(payload));
+    }
+
+    private static void handleSilhouette(RadarMonitorSilhouettePayload payload, IPayloadContext context) {
+        if (!FMLEnvironment.dist.isClient()) {
+            return;
+        }
+        context.enqueueWork(() -> invokeClientSilhouetteHandler(payload));
+    }
+
+    private static void invokeClientSilhouetteHandler(RadarMonitorSilhouettePayload payload) {
+        try {
+            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
+            hooks.getMethod("handleSilhouette", RadarMonitorSilhouettePayload.class).invoke(null, payload);
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
+            PowerRadar.LOGGER.error("[PowerRadar] Failed to update Sable silhouette cache", exception);
+        }
+    }
+
+    private static void invokeClientBlockPoseHandler(RadarMonitorBlockPosePayload payload) {
+        try {
+            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
+            hooks.getMethod("handleBlockPose", RadarMonitorBlockPosePayload.class).invoke(null, payload);
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
+            PowerRadar.LOGGER.error("[PowerRadar] Failed to update moving radar monitor pose", exception);
+        }
     }
 
     private static void invokeClientBlockSnapshotHandler(RadarMonitorBlockSnapshotPayload payload) {
@@ -183,6 +222,45 @@ public final class ModNetwork {
         }
     }
 
+    private static void handleSilhouetteRequest(
+            RadarMonitorSilhouetteRequestPayload payload,
+            IPayloadContext context
+    ) {
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
+        context.enqueueWork(() -> {
+            RadarMonitorSnapshotPayload monitor = RadarMonitorControllerBlockEntity.getOrCreateSnapshotPayload(
+                    player.serverLevel(), payload.monitorPos());
+            RadarDisplayTarget target = monitor.targets().stream()
+                    .filter(candidate -> candidate.category() == RadarTargetCategory.SABLE_STRUCTURE)
+                    .filter(candidate -> payload.structureUuid().equals(candidate.targetUuid()))
+                    .findFirst()
+                    .orElse(null);
+            if (target == null) {
+                return;
+            }
+            SableSilhouetteSnapshot snapshot = SableRadarIntegration.silhouetteSnapshot(
+                            player.server, target.dimensionId(), payload.structureUuid())
+                    .orElse(null);
+            if (snapshot == null || snapshot.version() <= payload.knownVersion()) {
+                return;
+            }
+            PacketDistributor.sendToPlayer(player, new RadarMonitorSilhouettePayload(
+                    snapshot.dimensionId(),
+                    snapshot.structureUuid(),
+                    snapshot.version(),
+                    snapshot.lines().stream()
+                            .map(line -> new RadarMonitorSilhouettePayload.Line(
+                                    line.x1(), line.z1(), line.x2(), line.z2()))
+                            .toList(),
+                    snapshot.fills().stream()
+                            .map(fill -> new RadarMonitorSilhouettePayload.Fill(
+                                    fill.minX(), fill.minZ(), fill.maxX(), fill.maxZ()))
+                            .toList()));
+        });
+    }
+
     private static void handleTargetSelection(RadarMonitorTargetSelectionPayload payload, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer player)) {
             return;
@@ -204,8 +282,6 @@ public final class ModNetwork {
                 return;
             }
             manager.setSelectedTargetUuid(linkResolution.link().networkId(), payload.targetUuid());
-            PowerRadar.LOGGER.info("[PowerRadar] Target selection changed from monitor network={} target={}",
-                    linkResolution.link().networkId(), payload.targetUuid());
         });
     }
 
