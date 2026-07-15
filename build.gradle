@@ -37,6 +37,14 @@ repositories {
             includeGroup "dev.architectury"
         }
     }
+    maven {
+        name = "Ryanhcode"
+        url = uri("https://maven.ryanhcode.dev/releases")
+        content {
+            includeGroup "dev.ryanhcode.sable"
+            includeGroup "dev.ryanhcode.sable-companion"
+        }
+    }
     exclusiveContent {
         forRepository {
             maven {
@@ -143,6 +151,16 @@ dependencies {
     implementation("maven.modrinth:B3pb093D:${ritchies_projectile_lib_modrinth_version}") {
         transitive = false
     }
+    compileOnly("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}") {
+        transitive = false
+    }
+    compileOnly "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
+    localRuntime("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}") {
+        transitive = false
+    }
+    if (file("libs/create-aeronautics-bundled-${minecraft_version}-${aeronautics_version}.jar").exists()) {
+        localRuntime files("libs/create-aeronautics-bundled-${minecraft_version}-${aeronautics_version}.jar")
+    }
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.12.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -167,7 +185,10 @@ tasks.withType(ProcessResources).configureEach {
             architectury_version             : architectury_version,
             electroenergetics_version        : electroenergetics_version,
             create_big_cannons_version       : create_big_cannons_version,
-            ritchies_projectile_lib_version : ritchies_projectile_lib_version
+            ritchies_projectile_lib_version : ritchies_projectile_lib_version,
+            aeronautics_version              : aeronautics_version,
+            sable_version                    : sable_version,
+            sable_companion_version          : sable_companion_version
     ]
     inputs.properties replaceProperties
 
