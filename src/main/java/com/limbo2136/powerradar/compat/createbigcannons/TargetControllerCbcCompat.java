@@ -132,6 +132,10 @@ public final class TargetControllerCbcCompat {
                 ? dropMortarCbcPitch(blockEntity, logicalPitchDegrees)
                 : logicalPitchDegrees;
         invokeVoid(blockEntity, "setPitch", new Class<?>[] { float.class }, new Object[] { cbcPitch });
+        // CBC's public setters only update the mount fields. Its own tick applies those fields
+        // to the cannon contraption later; do that now so a same-tick fire signal cannot use
+        // the previous yaw/pitch while a moving carrier keeps changing the required angle.
+        invokeVoidRecursive(blockEntity, "applyRotation");
         invokeVoid(blockEntity, "notifyUpdate");
         return true;
     }
@@ -705,6 +709,10 @@ public final class TargetControllerCbcCompat {
 
     private static void invokeVoid(Object target, String methodName, Class<?>[] parameterTypes, Object[] args) {
         invokeObject(target, methodName, parameterTypes, args);
+    }
+
+    private static void invokeVoidRecursive(Object target, String methodName) {
+        invokeObjectRecursive(target, methodName);
     }
 
     private static float readFloatField(Object target, String fieldName) {

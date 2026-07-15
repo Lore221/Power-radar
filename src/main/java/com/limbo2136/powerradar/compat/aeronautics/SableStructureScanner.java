@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.compat.aeronautics;
 
+import dev.ryanhcode.sable.Sable;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
@@ -69,10 +70,9 @@ final class SableStructureScanner {
         Vec3 worldOrigin = serverSubLevel.logicalPose().transformPosition(localCenter);
         Vector3d worldForward = serverSubLevel.logicalPose().transformNormal(new Vector3d(0.0D, 0.0D, 1.0D));
         float heading = (float) Math.toDegrees(Math.atan2(-worldForward.x(), worldForward.z()));
-        Vec3 velocity = new Vec3(
-                serverSubLevel.latestLinearVelocity.x,
-                serverSubLevel.latestLinearVelocity.y,
-                serverSubLevel.latestLinearVelocity.z);
+        Vec3 velocity = Sable.HELPER
+                .getVelocity(serverSubLevel.getLevel(), serverSubLevel, localCenter)
+                .scale(0.05D);
         String name = serverSubLevel.getName();
         if (name == null || name.isBlank()) {
             name = "Sable Structure";
