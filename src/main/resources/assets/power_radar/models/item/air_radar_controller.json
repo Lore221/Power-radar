@@ -1,1 +1,1 @@
-{ "parent": "power_radar:item/radar_controller" }
+{ "parent": "power_radar:item/air_radar_controller" }
