@@ -1,8 +1,8 @@
 {
   "variants": {
-    "facing=north": { "model": "power_radar:block/radar_controller" },
-    "facing=east": { "model": "power_radar:block/radar_controller", "y": 90 },
-    "facing=south": { "model": "power_radar:block/radar_controller", "y": 180 },
-    "facing=west": { "model": "power_radar:block/radar_controller", "y": 270 }
+    "facing=north": { "model": "power_radar:block/air_radar_controller" },
+    "facing=east": { "model": "power_radar:block/air_radar_controller", "y": 90 },
+    "facing=south": { "model": "power_radar:block/air_radar_controller", "y": 180 },
+    "facing=west": { "model": "power_radar:block/air_radar_controller", "y": 270 }
   }
 }
