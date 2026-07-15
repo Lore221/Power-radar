@@ -12,6 +12,7 @@ public final class PowerRadarServerConfig {
     private static final ModConfigSpec.DoubleValue AIR_FOV_DEGREES;
     private static final ModConfigSpec.IntValue GROUND_UP_BLOCKS;
     private static final ModConfigSpec.IntValue GROUND_DOWN_BLOCKS;
+    private static final ModConfigSpec.IntValue SURFACE_DOWN_BLOCKS;
     private static final ModConfigSpec.IntValue AIR_MIN_Y_OFFSET;
     private static final ModConfigSpec.IntValue AIR_MAX_Y_OFFSET;
 
@@ -56,6 +57,7 @@ public final class PowerRadarServerConfig {
         AIR_FOV_DEGREES = builder.defineInRange("air_fov_degrees", 90.0D, 1.0D, 360.0D);
         GROUND_UP_BLOCKS = builder.defineInRange("ground_up_blocks", 128, 0, 4096);
         GROUND_DOWN_BLOCKS = builder.defineInRange("ground_down_blocks", 20, 0, 4096);
+        SURFACE_DOWN_BLOCKS = builder.defineInRange("surface_down_blocks", 1500, 0, 32_000);
         AIR_MIN_Y_OFFSET = builder.defineInRange("air_min_y_offset", 40, -4096, 4096);
         AIR_MAX_Y_OFFSET = builder.defineInRange("air_max_y_offset", 1500, 0, 32_000);
         builder.pop();
@@ -125,6 +127,7 @@ public final class PowerRadarServerConfig {
     public static double airFovDegrees() { return value(AIR_FOV_DEGREES); }
     public static int groundUpBlocks() { return value(GROUND_UP_BLOCKS); }
     public static int groundDownBlocks() { return value(GROUND_DOWN_BLOCKS); }
+    public static int surfaceDownBlocks() { return value(SURFACE_DOWN_BLOCKS); }
     public static int airMinYOffset() { return value(AIR_MIN_Y_OFFSET); }
     public static int airMaxYOffset() { return Math.max(value(AIR_MIN_Y_OFFSET), value(AIR_MAX_Y_OFFSET)); }
     public static double radarControllerPowerWatts() { return value(RADAR_CONTROLLER_POWER_WATTS); }

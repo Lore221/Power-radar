@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.registry;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
+import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import net.minecraft.world.item.BlockItem;
@@ -59,10 +60,9 @@ public final class ModItems {
                     PowerRadarElectricalBlockItem.TooltipKind.TARGET_CONTROLLER));
     public static final DeferredItem<BlockItem> MECHANICAL_SIREN =
             ITEMS.registerSimpleBlockItem(ModBlocks.MECHANICAL_SIREN);
-    public static final DeferredItem<BlockItem> SHELL_ALARM = ITEMS.register(
+    public static final DeferredItem<ShellAlarmBlockItem> SHELL_ALARM = ITEMS.register(
             "shell_alarm",
-            () -> new PowerRadarElectricalBlockItem(ModBlocks.SHELL_ALARM.get(), new Item.Properties(),
-                    PowerRadarElectricalBlockItem.TooltipKind.SHELL_ALARM));
+            () -> new ShellAlarmBlockItem(ModBlocks.SHELL_ALARM.get(), new Item.Properties()));
     public static final DeferredItem<BlockItem> INTERCEPTION_CONTROLLER = ITEMS.register(
             "interception_controller",
             () -> new PowerRadarElectricalBlockItem(

@@ -1,4 +1,6 @@
 {
-  "parent": "power_radar:item/targeting_card",
-  "textures": { "card": "minecraft:block/blue_concrete" }
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "power_radar:item/dispaly_card"
+  }
 }

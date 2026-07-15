@@ -7,16 +7,21 @@ import com.limbo2136.powerradar.api.radar.RadarDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
+import com.limbo2136.powerradar.compat.create.InterceptionFrequencyKey;
+import com.limbo2136.powerradar.compat.create.CachedFrequencyLinkBehaviour;
+import com.limbo2136.powerradar.compat.create.PowerRadarFrequencySlot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
-import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -25,6 +30,8 @@ import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBox
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBoard;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsFormatter;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollValueBehaviour;
+import com.simibubi.create.content.redstone.link.LinkBehaviour;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueBoxTransform;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.commons.lang3.tuple.Pair;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -56,11 +64,17 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     private boolean networkConnected;
     private boolean alarmActive;
     private int trackedShellCount;
-    private RadarDataSource lastProcessedRadar;
     private long lastProcessedRadarScanGameTime = Long.MIN_VALUE;
     private long lastStatusLogGameTime = Long.MIN_VALUE;
     private String lastStatusLog = "";
     private PowerRadarCeeSnapshot electrical = PowerRadarCeeSnapshot.EMPTY;
+    private UUID radarStructureEntityUuid;
+    private boolean radarStructureEntityActive;
+    private UUID networkId;
+    private boolean runtimeRegisteredLoaded;
+    private boolean needsRuntimeRegister;
+    private int startupSafetyTicks;
+    private UUID cachedInterceptionChannelId;
 
     public ShellAlarmBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SHELL_ALARM.get(), pos, state);
@@ -69,7 +83,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     @Override
     public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
         CenteredSideValueBoxTransform transform = new CenteredSideValueBoxTransform(
-                (state, direction) -> direction == state.getValue(com.limbo2136.powerradar.block.ShellAlarmBlock.FACING)) {
+                (state, direction) -> direction == state.getValue(
+                        com.limbo2136.powerradar.block.ShellAlarmBlock.FACING).getOpposite()) {
             @Override
             public float getScale() {
                 return 0.75F;
@@ -81,11 +96,20 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         this.protectionSide.value = sideToIndex(PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SIDE_BLOCKS);
         this.protectionSide.withCallback(ignored -> {
             this.evaluations.clear();
-            this.lastProcessedRadar = null;
             this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
             setChanged();
         });
         behaviours.add(this.protectionSide);
+    }
+
+    @Override
+    public void addBehavioursDeferred(List<BlockEntityBehaviour> behaviours) {
+        Pair<ValueBoxTransform, ValueBoxTransform> slots =
+                ValueBoxTransform.Dual.makeSlots(first ->
+                        new PowerRadarFrequencySlot(first, PowerRadarFrequencySlot.Face.FRONT));
+        LinkBehaviour interceptionFrequency = new CachedFrequencyLinkBehaviour(
+                this, slots, frequency -> this.cachedInterceptionChannelId = InterceptionFrequencyKey.from(frequency));
+        behaviours.add(interceptionFrequency);
     }
 
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state,
@@ -97,9 +121,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private void tickServer(ServerLevel level, BlockState state) {
+        if (this.startupSafetyTicks > 0) {
+            this.startupSafetyTicks--;
+        } else if (this.networkId != null && (this.needsRuntimeRegister || !this.runtimeRegisteredLoaded)) {
+            registerLoaded(level);
+            this.needsRuntimeRegister = false;
+        }
         boolean powered = this.electrical.electricalState() == PowerRadarCeeState.POWERED;
-        RadarLinkConnectionResolver.Resolution link =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(level, this.worldPosition);
         this.networkConnected = false;
         Set<UUID> present = new HashSet<>();
         int shellCount = 0;
@@ -107,19 +135,17 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         UUID connectedNetworkId = null;
         RadarDataSource controller = null;
 
-        if (powered && link.status() == RadarLinkConnectionResolver.Status.SINGLE
-                && link.link().networkId() != null) {
+        if (powered && this.networkId != null) {
             RadarNetworkManager.ControllersResolution resolution = RadarNetworkManager.get(level.getServer())
-                    .resolveControllersForConsumer(link.link().networkId(),
-                            GlobalPos.of(level.dimension(), link.link().getBlockPos()));
+                    .resolveControllersForConsumer(this.networkId, globalPos());
             controller = resolution.controllers().isEmpty() ? null : new CombinedRadarDataSource(resolution.controllers());
             this.networkConnected = controller != null;
-            connectedNetworkId = link.link().networkId();
+            connectedNetworkId = this.networkId;
         }
-        logStatus(level, powered, link, connectedNetworkId, controller);
+        logStatus(level, powered, connectedNetworkId, controller);
+        syncRadarStructureEntityState(level, powered && this.networkConnected);
 
         if (controller == null) {
-            this.lastProcessedRadar = null;
             this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
             clearInactiveState(level, state);
             return;
@@ -129,7 +155,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (radarScanGameTime == previousRadarScanGameTime) {
             return;
         }
-        this.lastProcessedRadar = controller;
         this.lastProcessedRadarScanGameTime = radarScanGameTime;
 
         RadarDataSource radarController = controller;
@@ -174,7 +199,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             }
         }
         this.trackedShellCount = shellCount;
-        if (powered && this.networkConnected && connectedNetworkId != null) {
+        UUID interceptionChannelId = this.cachedInterceptionChannelId;
+        if (powered && this.networkConnected && connectedNetworkId != null && interceptionChannelId != null) {
             Set<UUID> dangerousShells = new HashSet<>();
             List<ThreatSnapshot> threatSnapshots = new ArrayList<>();
             for (Map.Entry<UUID, Evaluation> entry : this.evaluations.entrySet()) {
@@ -201,7 +227,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             }
             InterceptionCoordinator.publishThreats(
                     level,
-                    connectedNetworkId,
+                    interceptionChannelId,
                     this.worldPosition,
                     threatSnapshots,
                     InterceptionCoordinator.threatTtlTicksForScanInterval(
@@ -210,7 +236,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 PowerRadar.LOGGER.info(
                         "[PowerRadar BugReport][ShellAlarm][Scan] alarm={} network={} scanTick={} side={} trackedShells={} dangerousShells={}",
                         this.worldPosition,
-                        connectedNetworkId,
+                        interceptionChannelId,
                         radarScanGameTime,
                         protectionSideBlocks(),
                         shellCount,
@@ -229,16 +255,14 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     private void logStatus(
             ServerLevel level,
             boolean powered,
-            RadarLinkConnectionResolver.Resolution link,
             UUID connectedNetworkId,
             RadarDataSource controller
     ) {
         if (!PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
             return;
         }
-        UUID linkNetworkId = link.link() == null ? null : link.link().networkId();
         String status = powered + "|" + this.electrical.electricalState()
-                + "|" + link.status() + "|" + linkNetworkId + "|" + (controller != null);
+                + "|" + this.networkId + "|" + (controller != null);
         long gameTime = level.getGameTime();
         if (status.equals(this.lastStatusLog) && gameTime - this.lastStatusLogGameTime < 20L) {
             return;
@@ -252,8 +276,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 powered,
                 this.electrical.electricalState(),
                 round(this.electrical.voltageVolts()),
-                link.status(),
-                linkNetworkId,
+                this.networkId == null ? "UNTUNED" : "TUNED",
+                this.networkId,
                 connectedNetworkId,
                 controller != null);
     }
@@ -500,6 +524,151 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return indexToSide(index);
     }
 
+    private void syncRadarStructureEntityState(ServerLevel level, boolean active) {
+        if (active == this.radarStructureEntityActive) {
+            return;
+        }
+        this.radarStructureEntityActive = active;
+        if (!active) {
+            removeRadarStructureEntity(level);
+            return;
+        }
+        RadarStructureEntity existing = findRadarStructureEntity(level);
+        if (existing != null) {
+            this.radarStructureEntityUuid = existing.getUUID();
+            return;
+        }
+        RadarStructureEntity marker = ModEntities.RADAR_STRUCTURE.get().create(level);
+        if (marker != null) {
+            marker.setControllerPos(this.worldPosition);
+            if (level.addFreshEntity(marker)) {
+                this.radarStructureEntityUuid = marker.getUUID();
+                setChanged();
+            }
+        }
+    }
+
+    private RadarStructureEntity findRadarStructureEntity(ServerLevel level) {
+        if (this.radarStructureEntityUuid != null
+                && level.getEntity(this.radarStructureEntityUuid) instanceof RadarStructureEntity marker
+                && marker.belongsTo(this.worldPosition)) {
+            return marker;
+        }
+        return level.getEntitiesOfClass(RadarStructureEntity.class, new AABB(this.worldPosition).inflate(1.0D),
+                        marker -> marker.belongsTo(this.worldPosition))
+                .stream().findFirst().orElse(null);
+    }
+
+    private void removeRadarStructureEntity(ServerLevel level) {
+        RadarStructureEntity marker = findRadarStructureEntity(level);
+        if (marker != null) {
+            marker.discard();
+        }
+        if (this.radarStructureEntityUuid != null) {
+            this.radarStructureEntityUuid = null;
+            setChanged();
+        }
+    }
+
+    public void deactivateRadarStructureEntity() {
+        this.radarStructureEntityActive = false;
+        if (this.level instanceof ServerLevel serverLevel) {
+            removeRadarStructureEntity(serverLevel);
+        }
+    }
+
+    public void initializeNetwork(UUID networkId) {
+        if (networkId == null || !(this.level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+        if (this.networkId != null && !this.networkId.equals(networkId)) {
+            manager.removePersistentLink(this.networkId, globalPos());
+        }
+        this.networkId = networkId;
+        manager.loadLink(networkId, globalPos());
+        this.runtimeRegisteredLoaded = true;
+        this.needsRuntimeRegister = false;
+        setChanged();
+        sendData();
+    }
+
+    public UUID networkId() {
+        return this.networkId;
+    }
+
+    public UUID ensureNetworkId() {
+        if (this.networkId == null && this.level instanceof ServerLevel serverLevel) {
+            initializeNetwork(RadarNetworkManager.get(serverLevel.getServer()).createNetwork());
+        }
+        return this.networkId;
+    }
+
+    public void destroyNetworkMembership() {
+        if (this.level instanceof ServerLevel serverLevel && this.networkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).removePersistentLink(this.networkId, globalPos());
+            this.runtimeRegisteredLoaded = false;
+        }
+    }
+
+    @Override
+    public void clearRemoved() {
+        super.clearRemoved();
+        if (this.level instanceof ServerLevel && this.networkId != null) {
+            this.needsRuntimeRegister = true;
+            this.startupSafetyTicks = 2;
+        }
+        if (this.level != null && this.level.isClientSide()) {
+            RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+        }
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (this.level != null && this.level.isClientSide()) {
+            RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+        }
+    }
+
+    @Override
+    public void remove() {
+        unloadNetworkRuntime();
+        if (this.level != null && this.level.isClientSide()) {
+            RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        }
+        super.remove();
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        unloadNetworkRuntime();
+        if (this.level != null && this.level.isClientSide()) {
+            RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        }
+        super.onChunkUnloaded();
+    }
+
+    private void unloadNetworkRuntime() {
+        if (this.level instanceof ServerLevel serverLevel && this.networkId != null
+                && this.runtimeRegisteredLoaded) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadLink(this.networkId, globalPos());
+            this.runtimeRegisteredLoaded = false;
+        }
+    }
+
+    private void registerLoaded(ServerLevel level) {
+        if (this.networkId != null) {
+            RadarNetworkManager.get(level.getServer()).loadLink(this.networkId, globalPos());
+            this.runtimeRegisteredLoaded = true;
+        }
+    }
+
+    private GlobalPos globalPos() {
+        return GlobalPos.of(this.level == null ? net.minecraft.world.level.Level.OVERWORLD : this.level.dimension(),
+                this.worldPosition);
+    }
+
     public boolean networkConnected() {
         return this.networkConnected;
     }
@@ -534,11 +703,18 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         tag.putDouble("ElectricalCurrentAmps", this.electrical.currentAmps());
         tag.putDouble("ElectricalPowerWatts", this.electrical.powerWatts());
         tag.putDouble("ElectricalResistanceOhms", this.electrical.resistanceOhms());
+        if (this.radarStructureEntityUuid != null) {
+            tag.putUUID("RadarStructureEntity", this.radarStructureEntityUuid);
+        }
+        if (this.networkId != null) {
+            tag.putUUID("PowerRadarNetworkId", this.networkId);
+        }
     }
 
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
+        UUID oldNetworkId = this.networkId;
         PowerRadarCeeState state;
         try {
             state = PowerRadarCeeState.valueOf(tag.getString("ElectricalState"));
@@ -554,6 +730,14 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 tag.contains("ElectricalResistanceOhms")
                         ? tag.getDouble("ElectricalResistanceOhms")
                         : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS));
+        this.radarStructureEntityUuid = tag.hasUUID("RadarStructureEntity")
+                ? tag.getUUID("RadarStructureEntity") : null;
+        this.networkId = tag.hasUUID("PowerRadarNetworkId")
+                ? tag.getUUID("PowerRadarNetworkId") : null;
+        if (this.level != null && this.level.isClientSide()) {
+            RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                    this.level, this.worldPosition, oldNetworkId, this.networkId);
+        }
     }
 
     @Override

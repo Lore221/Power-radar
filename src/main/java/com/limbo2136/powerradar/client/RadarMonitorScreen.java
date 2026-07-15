@@ -7,6 +7,7 @@ import com.limbo2136.powerradar.network.RadarMonitorRequestPayload;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.limbo2136.powerradar.network.RadarMonitorTargetSelectionPayload;
 import com.limbo2136.powerradar.radar.RadarDisplayCoverage;
+import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarDisplayProjection;
 import com.limbo2136.powerradar.radar.RadarDisplayProjector;
@@ -53,6 +54,7 @@ public class RadarMonitorScreen extends Screen {
     private static final int GUI_HEIGHT_PERCENT = 90;
     private static final int GUI_INNER_INSET_TEXTURE_PIXELS = 2;
     private static final int RADAR_SCREEN_TEXTURE_SIZE = 128;
+    private static final int SHELL_ALARM_ZONE_ALPHA = 32;
     private static final int MIN_VISIBLE_MAP_SIZE_BLOCKS = RadarDisplayProjector.MIN_MONITOR_MAP_SIZE_BLOCKS;
     private static final int MAX_VISIBLE_MAP_SIZE_BLOCKS = RadarDisplayProjector.MAX_MONITOR_MAP_SIZE_BLOCKS;
     private static final int MAP_ZOOM_STEP_BLOCKS = 100;
@@ -65,6 +67,7 @@ public class RadarMonitorScreen extends Screen {
     private static final int GRID_LOD_NEAR_STEP_BLOCKS = 100;
     private static final int GRID_LOD_MID_STEP_BLOCKS = 500;
     private static final int GRID_LOD_FAR_STEP_BLOCKS = 1000;
+    private static final double MAP_DRAG_THRESHOLD_SQUARED = 4.0D;
     private static final int FULL_SNAPSHOT_FALLBACK_TICKS = 100;
     private static final float GUI_BLIP_DEPTH_STEP = 1.0F;
     private static final int RADAR_SCREEN_FRAME_PIXELS = 3;
@@ -93,6 +96,9 @@ public class RadarMonitorScreen extends Screen {
     private double mapCenterOffsetX;
     private double mapCenterOffsetZ;
     private boolean draggingMap;
+    private boolean mapDragMoved;
+    private double dragStartMouseX;
+    private double dragStartMouseY;
     private double lastDragMouseX;
     private double lastDragMouseY;
     private String selectedTargetKey;
@@ -191,7 +197,7 @@ public class RadarMonitorScreen extends Screen {
 
     private void renderRadarDisplay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         PowerRadarClientConfig.RadarRenderPalette palette = PowerRadarClientConfig.radarRenderPalette();
-        drawRadarWorkArea(graphics, partialTick, palette.cone());
+        drawRadarWorkArea(graphics, partialTick, palette.cone(), palette.shellAlarmZone());
         if (!this.displayData.monitorRendererEnabled()) {
             drawCenteredInRadarArea(graphics, Component.translatable(this.displayData.monitorElectricalState().translationKey()), TEXT_BAD);
             return;
@@ -239,7 +245,7 @@ public class RadarMonitorScreen extends Screen {
         RenderSystem.disableBlend();
     }
 
-    private void drawRadarWorkArea(GuiGraphics graphics, float partialTick, int coneColor) {
+    private void drawRadarWorkArea(GuiGraphics graphics, float partialTick, int coneColor, int shellAlarmZoneColor) {
         int size = this.radarRadius * 2;
         int x = this.radarOriginX - this.radarRadius;
         int y = this.radarOriginY - this.radarRadius;
@@ -255,12 +261,38 @@ public class RadarMonitorScreen extends Screen {
                     ? List.of(legacyCoverage())
                     : this.displayData.coverages();
             graphics.enableScissor(x + inset, y + inset, x + inset + innerSize, y + inset + innerSize);
+            for (ShellAlarmDisplayZone zone : this.displayData.shellAlarmZones()) {
+                drawShellAlarmZone(graphics, zone, x + inset, y + inset, innerSize, shellAlarmZoneColor);
+            }
             for (RadarDisplayCoverage coverageData : coverages) {
                 drawRadarCoverage(graphics, coverageData, x + inset, y + inset, innerSize, coneColor);
             }
             graphics.disableScissor();
         }
         RenderSystem.disableBlend();
+    }
+
+    private void drawShellAlarmZone(
+            GuiGraphics graphics,
+            ShellAlarmDisplayZone zone,
+            int x,
+            int y,
+            int innerSize,
+            int color
+    ) {
+        RadarDisplayProjection projection = RadarDisplayProjector.projectWorldPointUnclipped(
+                this.displayData, zone.dimensionId(), zone.centerX(), zone.centerY(), zone.centerZ(),
+                viewYawDegrees(), visibleMapRadiusBlocks(), this.mapCenterOffsetX, this.mapCenterOffsetZ);
+        if (!projection.visible()) {
+            return;
+        }
+        double contentRadius = innerSize / 2.0D;
+        int halfSide = Math.max(1, (int) Math.round(contentRadius * zone.sideBlocks()
+                / (2.0D * visibleMapRadiusBlocks())));
+        int centerX = x + innerSize / 2 + (int) Math.round(projection.x() * contentRadius);
+        int centerY = y + innerSize / 2 + (int) Math.round(projection.y() * contentRadius);
+        graphics.fill(centerX - halfSide, centerY - halfSide, centerX + halfSide, centerY + halfSide,
+                SHELL_ALARM_ZONE_ALPHA << 24 | color);
     }
 
     private void drawRadarCoverage(
@@ -609,6 +641,11 @@ public class RadarMonitorScreen extends Screen {
         return mouseX >= x && mouseX < x + size && mouseY >= y && mouseY < y + size;
     }
 
+    private boolean isMouseOverMonitor(double mouseX, double mouseY) {
+        return mouseX >= this.guiX && mouseX < this.guiX + this.guiSize
+                && mouseY >= this.guiY && mouseY < this.guiY + this.guiSize;
+    }
+
     private boolean adjustMapZoom(double scrollY) {
         if (scrollY == 0.0D) {
             return false;
@@ -673,17 +710,16 @@ public class RadarMonitorScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0 && isMouseOverRadar(mouseX, mouseY)) {
-            if (!selectTargetAt(mouseX, mouseY)) {
-                PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), null));
-                this.selectedTargetKey = null;
-                this.targetSelectionChangedInScreen = true;
-            }
-            return true;
-        }
-        if (button == 1 && isMouseOverRadar(mouseX, mouseY)) {
             this.draggingMap = true;
+            this.mapDragMoved = false;
+            this.dragStartMouseX = mouseX;
+            this.dragStartMouseY = mouseY;
             this.lastDragMouseX = mouseX;
             this.lastDragMouseY = mouseY;
+            return true;
+        }
+        if (button == 1 && isMouseOverMonitor(mouseX, mouseY)) {
+            clearSelectedTarget();
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
@@ -691,8 +727,18 @@ public class RadarMonitorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (button == 1 && this.draggingMap) {
-            panMapByPixels(mouseX - this.lastDragMouseX, mouseY - this.lastDragMouseY);
+        if (button == 0 && this.draggingMap) {
+            if (!this.mapDragMoved) {
+                double totalDragX = mouseX - this.dragStartMouseX;
+                double totalDragY = mouseY - this.dragStartMouseY;
+                if (totalDragX * totalDragX + totalDragY * totalDragY < MAP_DRAG_THRESHOLD_SQUARED) {
+                    return true;
+                }
+                this.mapDragMoved = true;
+                panMapByPixels(totalDragX, totalDragY);
+            } else {
+                panMapByPixels(mouseX - this.lastDragMouseX, mouseY - this.lastDragMouseY);
+            }
             this.lastDragMouseX = mouseX;
             this.lastDragMouseY = mouseY;
             return true;
@@ -702,11 +748,28 @@ public class RadarMonitorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 1 && this.draggingMap) {
+        if (button == 0 && this.draggingMap) {
             this.draggingMap = false;
+            if (!this.mapDragMoved) {
+                double totalDragX = mouseX - this.dragStartMouseX;
+                double totalDragY = mouseY - this.dragStartMouseY;
+                if (totalDragX * totalDragX + totalDragY * totalDragY >= MAP_DRAG_THRESHOLD_SQUARED) {
+                    this.mapDragMoved = true;
+                    panMapByPixels(totalDragX, totalDragY);
+                }
+            }
+            if (!this.mapDragMoved && isMouseOverRadar(mouseX, mouseY)) {
+                selectTargetAt(mouseX, mouseY);
+            }
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void clearSelectedTarget() {
+        PacketDistributor.sendToServer(new RadarMonitorTargetSelectionPayload(this.snapshot.monitorPos(), null));
+        this.selectedTargetKey = null;
+        this.targetSelectionChangedInScreen = true;
     }
 
     private boolean selectTargetAt(double mouseX, double mouseY) {

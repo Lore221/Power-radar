@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
+import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.util.ArrayList;
@@ -64,6 +65,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final int SCREEN_LIGHT = 0x00F000F0;
     private static final int GRID_ALPHA = 48;
     private static final int COVERAGE_ALPHA = 255;
+    private static final int SHELL_ALARM_ZONE_ALPHA = 32;
     private final Map<BlockPos, InWorldBlipCache> blipCaches = new HashMap<>();
     private Level cachedLevel;
 
@@ -119,6 +121,26 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                 : displayData.coverages();
         double gameTime = clientState.lastClientUpdateGameTime() + ticksSinceSnapshot;
         PowerRadarClientConfig.RadarRenderPalette palette = PowerRadarClientConfig.radarRenderPalette();
+        for (ShellAlarmDisplayZone zone : displayData.shellAlarmZones()) {
+            RadarDisplayProjection zoneProjection = RadarDisplayProjector.projectWorldPointUnclipped(
+                    displayData, zone.dimensionId(), zone.centerX(), zone.centerY(), zone.centerZ(),
+                    viewYawDegrees, mapRadiusBlocks, 0.0D, 0.0D);
+            if (!zoneProjection.visible()) {
+                continue;
+            }
+            float halfSide = (float) (projectionRadius * zone.sideBlocks() / (2.0D * mapRadiusBlocks));
+            ScreenPoint center = new ScreenPoint(
+                    SCREEN_CENTER + (float) zoneProjection.x() * projectionRadius,
+                    SCREEN_CENTER + (float) zoneProjection.y() * projectionRadius);
+            drawClippedRotatedMatrixQuad(poseStack, bufferSource, RadarBlipSprite.ATLAS, facing,
+                    relativeOrigin, size, center.u() - halfSide, center.v() - halfSide,
+                    center.u() + halfSide, center.v() + halfSide,
+                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V,
+                    center, 0.0F,
+                    palette.red(palette.shellAlarmZone()), palette.green(palette.shellAlarmZone()),
+                    palette.blue(palette.shellAlarmZone()), SHELL_ALARM_ZONE_ALPHA, screenLight,
+                    COVERAGE_FACE_OFFSET, true);
+        }
         for (int coverageIndex = 0; coverageIndex < coverages.size(); coverageIndex++) {
             RadarDisplayCoverage coverageData = coverages.get(coverageIndex);
             float coverageFaceOffset = COVERAGE_FACE_OFFSET

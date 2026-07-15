@@ -7,10 +7,12 @@ import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -313,6 +315,7 @@ public class RadarNetworkManager {
                 runtime.putDisplaySnapshot(revision, baseData);
             }
         }
+        baseData = baseData.withShellAlarmZones(shellAlarmZones(runtime));
         return baseData.withMonitorContext(
                 monitorPos,
                 monitorFacing,
@@ -322,6 +325,22 @@ public class RadarNetworkManager {
                 monitorDisplayCount,
                 monitorScreenSize,
                 monitorRendererEnabled);
+    }
+
+    private List<ShellAlarmDisplayZone> shellAlarmZones(RadarNetworkRuntime runtime) {
+        ArrayList<ShellAlarmDisplayZone> zones = new ArrayList<>();
+        for (GlobalPos linkPos : runtime.loadedLinks()) {
+            ServerLevel level = this.server.getLevel(linkPos.dimension());
+            if (level == null
+                    || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)) {
+                continue;
+            }
+            BlockPos pos = linkPos.pos();
+            zones.add(new ShellAlarmDisplayZone(
+                    linkPos.dimension().location(), pos.getX() + 0.5D, pos.getY() + 0.5D,
+                    pos.getZ() + 0.5D, alarm.protectionSideBlocks()));
+        }
+        return List.copyOf(zones);
     }
 
     private static long displaySnapshotRevision(

@@ -93,6 +93,7 @@ public final class RadarMonitorDisplayBuilder {
                 0L,
                 serverGameTime,
                 List.of(),
+                List.of(),
                 List.of()
         );
     }
@@ -268,6 +269,7 @@ public final class RadarMonitorDisplayBuilder {
                 lastScanGameTime,
                 serverGameTime,
                 List.copyOf(coverages),
+                List.of(),
                 List.copyOf(targets)
         );
         if (PowerRadarDebugOptions.scanOptimizationLogging()) {
