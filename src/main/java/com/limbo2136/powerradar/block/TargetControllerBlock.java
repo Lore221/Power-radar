@@ -119,8 +119,8 @@ public class TargetControllerBlock extends BaseEntityBlock implements Electrical
         Direction right = rightOf(facing);
         Direction up = upOf(facing);
         return switch (index) {
-            case 0 -> facePoint(rear, right, up, -0.24, 0.22);
-            case 1 -> facePoint(rear, right, up, 0.24, 0.22);
+            case 0 -> facePoint(rear, right, up, -0.24, -0.22);
+            case 1 -> facePoint(rear, right, up, 0.24, -0.22);
             default -> Vec3.atCenterOf(pos);
         };
     }
