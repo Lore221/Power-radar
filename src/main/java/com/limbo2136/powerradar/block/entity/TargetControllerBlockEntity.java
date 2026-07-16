@@ -125,6 +125,15 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private TargetLeadSolver.BallisticAim cachedLeadBallisticAim;
     private double cachedLeadFlightTicks;
     private boolean cachedLeadUsesAcceleration;
+<<<<<<< HEAD
+=======
+    private Vec3 lastPlatformWorldPoint;
+    private Vec3 platformVelocity = Vec3.ZERO;
+    private Vec3 platformAcceleration = Vec3.ZERO;
+    private long lastPlatformMotionGameTime = Long.MIN_VALUE;
+    private boolean platformVelocityInitialized;
+    private boolean platformAccelerationInitialized;
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private UUID aimRateTargetUuid;
     private float lastDesiredYawDegrees;
     private float lastDesiredPitchDegrees;
@@ -352,10 +361,16 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return TargetSolution.invalid("no-cbc-mount");
         }
         WeaponMount cannonState = cannon.get();
+<<<<<<< HEAD
         Vec3 localOrigin = cannonAimOrigin(cannonState);
         Vec3 origin = RadarWorldPoseResolver.worldPosition(
                 level, this.worldPosition, localOrigin);
         boolean controllerOnSable = RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition);
+=======
+        Vec3 origin = RadarWorldPoseResolver.worldPosition(
+                level, this.worldPosition, cannonAimOrigin(cannonState));
+        PlatformMotion platformMotion = updatePlatformMotion(level);
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
         boolean ammunitionAvailable = cannonState.kind() == WeaponKind.AUTOCANNON
                 || cannonState.ballistics().available();
         WeaponBallistics aimBallistics = aimBallistics(cannonState);
@@ -367,7 +382,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                     && snapshotGameTime != this.lastAutotargetSnapshotGameTime) {
                 this.lastAutotargetSnapshotGameTime = snapshotGameTime;
                 track = selectAutotargetForSnapshot(level, radarController, networkManager, networkId,
-                        autotargetFilterMask, origin, aimBallistics, preferHighArc, cannonState.kind());
+                        autotargetFilterMask, origin, aimBallistics, preferHighArc, cannonState.kind(), platformMotion);
                 selectedTarget = track == null ? null : track.targetUuid();
                 this.cachedAutotargetUuid = selectedTarget;
             }
@@ -379,7 +394,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         int lockTicks = updateTargetLock(selectedTarget);
         long gameTime = level.getGameTime();
-        TrackedTargetView aimTrack = liveTargetView(level, track, gameTime);
+        TrackedTargetView aimTrack = withPlatformMotion(liveTargetView(level, track, gameTime), platformMotion);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
                 cannonState.kind(),
                 preferHighArc,
@@ -438,7 +453,11 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 targetReachable,
                 targetOutsideMinimumDistance,
                 ammunitionAvailable,
+<<<<<<< HEAD
                 controllerOnSable,
+=======
+                platformMotion.onSable(),
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
                 ballisticMode(aimBallistics, ballisticAim, cannonState.ballistics()),
                 targetDistance,
                 minimumFiringDistance,
@@ -517,7 +536,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             Vec3 origin,
             WeaponBallistics aimBallistics,
             boolean preferHighArc,
-            WeaponKind cannonKind
+            WeaponKind cannonKind,
+            PlatformMotion platformMotion
     ) {
         long gameTime = level.getGameTime();
         if (this.lastAutotargetCacheResetGameTime == Long.MIN_VALUE
@@ -538,7 +558,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             if (cached != null && gameTime - cached.checkedGameTime() < AUTOTARGET_READINESS_CACHE_TICKS) {
                 ready = cached.ready();
             } else {
-                ready = autotargetReady(level, track, origin, aimBallistics, preferHighArc, cannonKind);
+                ready = autotargetReady(level, track, origin, aimBallistics, preferHighArc, cannonKind, platformMotion);
                 this.autotargetReadinessCache.put(uuid, new AutotargetReadiness(gameTime, ready));
             }
             if (ready) readyMatch[0] = track;
@@ -554,9 +574,15 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             Vec3 origin,
             WeaponBallistics aimBallistics,
             boolean preferHighArc,
+<<<<<<< HEAD
             WeaponKind cannonKind
+=======
+            WeaponKind cannonKind,
+            PlatformMotion platformMotion
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     ) {
-        TrackedTargetView aimTrack = liveTargetView(level, track, level.getGameTime());
+        TrackedTargetView aimTrack = withPlatformMotion(
+                liveTargetView(level, track, level.getGameTime()), platformMotion);
         if (!preferHighArc && !hasLineOfSightToTrack(level, origin, aimTrack)) {
             return false;
         }
@@ -591,6 +617,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         double acceleration = accelerationDegreesPerTickSquared();
         AimFeedForward feedForward = updateAimFeedForward(solution, level.getGameTime(), targetMaxStep);
+<<<<<<< HEAD
         float commandYaw = TargetingMath.normalize360((float) (
                 solution.desiredYawDegrees()
                         + feedForward.yawDegreesPerTick() * CBC_FIRE_SIGNAL_DELAY_TICKS));
@@ -605,6 +632,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 targetMaxStep);
         double targetPitchVelocity = clamp(
                 targetVelocityForError(commandPitchError, targetMaxStep) + feedForward.pitchDegreesPerTick(),
+=======
+        double targetYawVelocity = clamp(
+                targetVelocityForError(solution.yawErrorDegrees(), targetMaxStep) + feedForward.yawDegreesPerTick(),
+                -targetMaxStep,
+                targetMaxStep);
+        double targetPitchVelocity = clamp(
+                targetVelocityForError(solution.pitchErrorDegrees(), targetMaxStep) + feedForward.pitchDegreesPerTick(),
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
                 -targetMaxStep,
                 targetMaxStep);
         this.yawVelocityDegreesPerTick = approach(this.yawVelocityDegreesPerTick, targetYawVelocity, acceleration);
@@ -619,8 +654,13 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         } else {
             invalidateEstimatedAimAngles();
         }
+<<<<<<< HEAD
         float remainingYawError = Mth.wrapDegrees(commandYaw - nextYaw);
         float remainingPitchError = Mth.wrapDegrees(commandPitch - nextPitch);
+=======
+        float remainingYawError = Mth.wrapDegrees(solution.desiredYawDegrees() - nextYaw);
+        float remainingPitchError = Mth.wrapDegrees(solution.desiredPitchDegrees() - nextPitch);
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
         double tolerance = aimToleranceDegrees(solution);
         boolean yawWithinTolerance = Math.abs(remainingYawError) <= tolerance;
         boolean pitchWithinTolerance = Math.abs(remainingPitchError) <= tolerance;
@@ -628,9 +668,15 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 && Math.abs(this.pitchVelocityDegreesPerTick) <= PowerRadarCeeConstants.TARGET_CONTROLLER_READY_MAX_SPEED_DEGREES_PER_TICK;
         double trackingVelocityTolerance = Math.max(0.05D, acceleration * 2.0D);
         boolean stableTracking = feedForward.initialized()
+<<<<<<< HEAD
                 && Math.abs(this.yawVelocityDegreesPerTick - targetYawVelocity)
                         <= trackingVelocityTolerance
                 && Math.abs(this.pitchVelocityDegreesPerTick - targetPitchVelocity)
+=======
+                && Math.abs(this.yawVelocityDegreesPerTick - feedForward.yawDegreesPerTick())
+                        <= trackingVelocityTolerance
+                && Math.abs(this.pitchVelocityDegreesPerTick - feedForward.pitchDegreesPerTick())
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
                         <= trackingVelocityTolerance;
         settled = settled || stableTracking && yawWithinTolerance && pitchWithinTolerance;
         return new AimStep(
@@ -974,8 +1020,12 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return false;
         }
         if (track.sourceType() == TargetSourceType.STRUCTURE) {
+<<<<<<< HEAD
             return level.getGameTime() - track.lastSeenGameTime()
                     <= RadarConstants.staleTrackExpirationTicks();
+=======
+            return SableRadarIntegration.loadedStructure(level, track.targetUuid()).isPresent();
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
         }
         Entity entity = level.getEntity(track.targetUuid());
         return entity != null && entity.isAlive();
@@ -997,6 +1047,25 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return new LiveTrackedTargetView(track, entity, gameTime);
     }
 
+<<<<<<< HEAD
+=======
+    private static TrackedTargetView withPlatformMotion(TrackedTargetView track, PlatformMotion platformMotion) {
+        if (!platformMotion.hasVelocity() && !platformMotion.hasAcceleration()) {
+            return track;
+        }
+        return new AdjustedTrackedTargetView(
+                track,
+                track.position(),
+                track.velocity().subtract(platformMotion.velocity()),
+                track.hasVelocity() || platformMotion.hasVelocity(),
+                track.acceleration().subtract(platformMotion.acceleration()),
+                track.hasAcceleration() || platformMotion.hasAcceleration(),
+                track.lastSeenGameTime(),
+                track.lastConfirmedAliveGameTime(),
+                track.boundingHeight());
+    }
+
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private static TrackedTargetView liveSableTargetView(
             TrackedTargetView track,
             SableStructureObservation observation,
@@ -1066,10 +1135,89 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 : cannonState.muzzleOrigin();
     }
 
+<<<<<<< HEAD
+=======
+    private PlatformMotion updatePlatformMotion(ServerLevel level) {
+        if (!RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)) {
+            resetPlatformMotion();
+            return PlatformMotion.GROUND_STATIONARY;
+        }
+        long gameTime = level.getGameTime();
+        Vec3 worldPoint = RadarWorldPoseResolver.worldPosition(
+                level, this.worldPosition, Vec3.atCenterOf(this.worldPosition));
+        if (this.lastPlatformWorldPoint == null
+                || this.lastPlatformMotionGameTime == Long.MIN_VALUE
+                || gameTime <= this.lastPlatformMotionGameTime
+                || gameTime - this.lastPlatformMotionGameTime > 5L) {
+            this.lastPlatformWorldPoint = worldPoint;
+            this.lastPlatformMotionGameTime = gameTime;
+            this.platformVelocity = Vec3.ZERO;
+            this.platformAcceleration = Vec3.ZERO;
+            this.platformVelocityInitialized = false;
+            this.platformAccelerationInitialized = false;
+            return PlatformMotion.SABLE_STATIONARY;
+        }
+        double elapsedTicks = gameTime - this.lastPlatformMotionGameTime;
+        Vec3 nextVelocity = suppressNoise(
+                worldPoint.subtract(this.lastPlatformWorldPoint).scale(1.0D / elapsedTicks), 1.0E-5D);
+        if (this.platformVelocityInitialized) {
+            Vec3 rawAcceleration = clampAcceleration(suppressNoise(
+                    nextVelocity.subtract(this.platformVelocity).scale(1.0D / elapsedTicks), 1.0E-4D));
+            this.platformAcceleration = this.platformAccelerationInitialized
+                    ? lerp(this.platformAcceleration, rawAcceleration, 0.65D)
+                    : rawAcceleration;
+            this.platformAccelerationInitialized = true;
+        } else {
+            this.platformAcceleration = Vec3.ZERO;
+        }
+        this.platformVelocity = nextVelocity;
+        this.platformVelocityInitialized = true;
+        this.lastPlatformWorldPoint = worldPoint;
+        this.lastPlatformMotionGameTime = gameTime;
+        return new PlatformMotion(
+                this.platformVelocity,
+                this.platformAcceleration,
+                true,
+                this.platformAccelerationInitialized,
+                true);
+    }
+
+    private void resetPlatformMotion() {
+        this.lastPlatformWorldPoint = null;
+        this.lastPlatformMotionGameTime = Long.MIN_VALUE;
+        this.platformVelocity = Vec3.ZERO;
+        this.platformAcceleration = Vec3.ZERO;
+        this.platformVelocityInitialized = false;
+        this.platformAccelerationInitialized = false;
+    }
+
+    private static Vec3 lerp(Vec3 from, Vec3 to, double factor) {
+        return from.add(to.subtract(from).scale(factor));
+    }
+
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private static double lerp(double from, double to, double factor) {
         return from + (to - from) * factor;
     }
 
+<<<<<<< HEAD
+=======
+    private static Vec3 suppressNoise(Vec3 value, double epsilon) {
+        return new Vec3(
+                Math.abs(value.x) < epsilon ? 0.0D : value.x,
+                Math.abs(value.y) < epsilon ? 0.0D : value.y,
+                Math.abs(value.z) < epsilon ? 0.0D : value.z);
+    }
+
+    private static Vec3 clampAcceleration(Vec3 acceleration) {
+        double limit = 0.25D;
+        return new Vec3(
+                clamp(acceleration.x, -limit, limit),
+                clamp(acceleration.y, -limit, limit),
+                clamp(acceleration.z, -limit, limit));
+    }
+
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private static Vec3 directionFromAngles(float yawDegrees, float pitchDegrees) {
         double yaw = Math.toRadians(yawDegrees);
         double pitch = Math.toRadians(pitchDegrees);
@@ -1403,6 +1551,22 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         private static final AimFeedForward ZERO = new AimFeedForward(0.0D, 0.0D, false);
     }
 
+<<<<<<< HEAD
+=======
+    private record PlatformMotion(
+            Vec3 velocity,
+            Vec3 acceleration,
+            boolean hasVelocity,
+            boolean hasAcceleration,
+            boolean onSable
+    ) {
+        private static final PlatformMotion GROUND_STATIONARY =
+                new PlatformMotion(Vec3.ZERO, Vec3.ZERO, false, false, false);
+        private static final PlatformMotion SABLE_STATIONARY =
+                new PlatformMotion(Vec3.ZERO, Vec3.ZERO, false, false, true);
+    }
+
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private static class TrajectoryModeBehaviour extends ScrollOptionBehaviour<TrajectoryModeOption> {
         private TrajectoryModeBehaviour(Component label, SmartBlockEntity blockEntity,
                                         CenteredSideValueBoxTransform transform) {

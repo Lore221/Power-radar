@@ -4,7 +4,10 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
+<<<<<<< HEAD
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureNames;
+=======
+>>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
