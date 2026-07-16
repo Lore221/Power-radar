@@ -43,6 +43,8 @@
   "screen.power_radar.allowlist_card.sable": "Sable структуры",
   "screen.power_radar.allowlist_card.add": "Добавить в список",
   "screen.power_radar.allowlist_card.remove": "Удалить из списка",
+  "screen.power_radar.allowlist_card.players": "Игроки:",
+  "screen.power_radar.allowlist_card.sable_entries": "Sable:",
   "item.power_radar.display_card": "Карта отображения",
   "item.power_radar.allowlist_card": "Карта допуска",
   "goggles.power_radar.computing_block": "Вычислительный блок",
@@ -257,5 +259,11 @@
   "power_radar.interception.status.aiming": "Наведение",
   "power_radar.interception.status.firing": "Окно стрельбы",
   "power_radar.tooltip.interception_fuze.range": "Дальность перехвата: %s блоков",
-  "power_radar.tooltip.interception_fuze.cone": "Конус обнаружения: %s градусов"
+  "power_radar.tooltip.interception_fuze.cone": "Конус обнаружения: %s градусов",
+  "block.power_radar.onboard_computer": "Бортовой компьютер",
+  "item.power_radar.name_card": "Именная карта",
+  "screen.power_radar.name_card": "Название структуры",
+  "screen.power_radar.name_card.name": "Название",
+  "goggles.power_radar.onboard_computer": "Бортовой компьютер",
+  "message.power_radar.onboard_computer.sable_only": "можно размещать только на sable структуре"
 }

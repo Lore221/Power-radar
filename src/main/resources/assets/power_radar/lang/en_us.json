@@ -43,6 +43,8 @@
   "screen.power_radar.allowlist_card.sable": "Sable Structures",
   "screen.power_radar.allowlist_card.add": "Add to List",
   "screen.power_radar.allowlist_card.remove": "Remove from List",
+  "screen.power_radar.allowlist_card.players": "Players:",
+  "screen.power_radar.allowlist_card.sable_entries": "Sable:",
   "item.power_radar.display_card": "Display Card",
   "item.power_radar.allowlist_card": "Allowlist Card",
   "goggles.power_radar.computing_block": "Computing Block",
@@ -257,5 +259,11 @@
   "power_radar.interception.status.aiming": "Aiming",
   "power_radar.interception.status.firing": "Firing window",
   "power_radar.tooltip.interception_fuze.range": "Interception range: %s blocks",
-  "power_radar.tooltip.interception_fuze.cone": "Detection cone: %s degrees"
+  "power_radar.tooltip.interception_fuze.cone": "Detection cone: %s degrees",
+  "block.power_radar.onboard_computer": "Onboard Computer",
+  "item.power_radar.name_card": "Name Card",
+  "screen.power_radar.name_card": "Structure Name",
+  "screen.power_radar.name_card.name": "Name",
+  "goggles.power_radar.onboard_computer": "Onboard Computer",
+  "message.power_radar.onboard_computer.sable_only": "Can only be placed on a Sable structure"
 }

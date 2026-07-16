@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -101,15 +102,30 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
     }
 
     public List<String> allowlistedPlayers() {
-        if (cards[2].isEmpty() || !allowlistIsWhitelist() || allowlistTargetsSable()) {
+        if (cards[2].isEmpty() || !allowlistIsWhitelist()) {
             return List.of();
         }
-        return allowlistNames();
+        return allowlistData().playerNames();
     }
 
     public boolean allowlistIsWhitelist() { return cards[2].isEmpty() || RadarFilterCardItem.cardOption(cards[2], 1) == 1; }
-    public boolean allowlistTargetsSable() { return !cards[2].isEmpty() && RadarFilterCardItem.allowlistSableMode(cards[2]); }
-    public List<String> allowlistNames() { return cards[2].isEmpty() ? List.of() : RadarFilterCardItem.allowlistNames(cards[2]); }
+    public List<String> allowlistPlayerNames() { return allowlistData().playerNames(); }
+    public List<UUID> allowlistSableUuids() {
+        return allowlistData().sableEntries().stream().map(RadarFilterCardItem.SableAllowlistEntry::structureUuid).toList();
+    }
+    public List<String> allowlistSableNames() {
+        return allowlistData().sableEntries().stream().map(RadarFilterCardItem.SableAllowlistEntry::displayName).toList();
+    }
+    public List<String> unresolvedSableNames() { return allowlistData().unresolvedSableNames(); }
+    public List<String> allowlistedSableNames() {
+        return cards[2].isEmpty() || !allowlistIsWhitelist() ? List.of() : allowlistSableNames();
+    }
+
+    private RadarFilterCardItem.AllowlistData allowlistData() {
+        return cards[2].isEmpty()
+                ? new RadarFilterCardItem.AllowlistData(List.of(), List.of(), List.of())
+                : RadarFilterCardItem.allowlistData(cards[2]);
+    }
 
     public void dropCards() {
         if (level == null || level.isClientSide()) {

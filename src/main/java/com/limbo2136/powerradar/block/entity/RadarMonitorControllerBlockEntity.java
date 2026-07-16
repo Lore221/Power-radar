@@ -46,6 +46,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -96,14 +97,18 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private boolean dynamicSnapshotResolution;
 
     public RadarMonitorControllerBlockEntity(BlockPos pos, BlockState blockState) {
-        super(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), pos, blockState);
+        this(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), pos, blockState);
+    }
+
+    protected RadarMonitorControllerBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
+        super(type, pos, blockState);
         this.activeFacing = facingFromState(blockState);
     }
 
     @Override
     public void onLoad() {
         super.onLoad();
-        this.needsStructureReconcile = !hasDisplayStructureCache();
+        this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
         this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
@@ -115,7 +120,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     @Override
     public void clearRemoved() {
         super.clearRemoved();
-        this.needsStructureReconcile = !hasDisplayStructureCache();
+        this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
         this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
@@ -484,6 +489,21 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                 && !hasRemovedCachedSnapshotController()) {
             return;
         }
+        UUID directNetworkId = directNetworkId();
+        if (directNetworkId != null) {
+            RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
+            GlobalPos consumerPos = GlobalPos.of(level.dimension(), controllerPos);
+            RadarNetworkManager.ControllersResolution resolution = networkManager
+                    .resolveControllersForConsumer(directNetworkId, consumerPos);
+            this.cachedSnapshotNetworkId = directNetworkId;
+            this.cachedSnapshotLinkPos = consumerPos;
+            this.cachedSnapshotControllers = resolution.controllers();
+            this.cachedSnapshotConnectionStatus = resolution.status();
+            this.cachedSnapshotResolutionGameTime = gameTime;
+            this.dynamicSnapshotResolution = monitorOnSable || this.cachedSnapshotControllers.stream()
+                    .anyMatch(controller -> controller.worldPoseAt(gameTime).onSableStructure());
+            return;
+        }
         RadarLinkConnectionResolver.Resolution linkResolution =
                 RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(level, controllerPos);
         UUID networkId = linkResolution.link() == null ? null : linkResolution.link().networkId();
@@ -511,6 +531,11 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             }
         }
     }
+
+    @Nullable
+    protected UUID directNetworkId() { return null; }
+
+    protected boolean usesDisplayStructureResolver() { return true; }
 
     private boolean hasRemovedCachedSnapshotController() {
         for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
@@ -715,7 +740,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         return canHoldLeaseNow();
     }
 
-    private boolean hasValidDisplayStructure() {
+    protected boolean hasValidDisplayStructure() {
         return this.structureStatus == RadarDisplayStructureResolver.StructureStatus.ACTIVE && this.activeSize > 0;
     }
 

@@ -4,11 +4,13 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
+import com.limbo2136.powerradar.compat.aeronautics.SableStructureNames;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
+import com.limbo2136.powerradar.item.NameCardItem;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.lang.reflect.InvocationTargetException;
@@ -46,6 +48,32 @@ public final class ModNetwork {
         registrar.playToServer(TargetingCardSavePayload.TYPE, TargetingCardSavePayload.STREAM_CODEC, ModNetwork::handleTargetingCardSave);
         registrar.playToClient(AllowlistCardOpenPayload.TYPE, AllowlistCardOpenPayload.STREAM_CODEC, ModNetwork::handleAllowlistCardOpen);
         registrar.playToServer(AllowlistCardSavePayload.TYPE, AllowlistCardSavePayload.STREAM_CODEC, ModNetwork::handleAllowlistCardSave);
+        registrar.playToClient(NameCardOpenPayload.TYPE, NameCardOpenPayload.STREAM_CODEC, ModNetwork::handleNameCardOpen);
+        registrar.playToServer(NameCardSavePayload.TYPE, NameCardSavePayload.STREAM_CODEC, ModNetwork::handleNameCardSave);
+    }
+
+    private static void handleNameCardOpen(NameCardOpenPayload payload, IPayloadContext context) {
+        if (!FMLEnvironment.dist.isClient()) return;
+        context.enqueueWork(() -> {
+            try {
+                Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.NameCardClientHooks");
+                hooks.getMethod("open", NameCardOpenPayload.class).invoke(null, payload);
+            } catch (ReflectiveOperationException exception) {
+                PowerRadar.LOGGER.error("[PowerRadar] Failed to open name card screen", exception);
+            }
+        });
+    }
+
+    private static void handleNameCardSave(NameCardSavePayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) return;
+        context.enqueueWork(() -> {
+            var stack = player.getItemInHand(payload.hand());
+            if (!(stack.getItem() instanceof NameCardItem)) return;
+            String name = payload.name().trim();
+            if (name.length() > 64) name = name.substring(0, 64);
+            if (name.isEmpty()) stack.remove(ModDataComponents.NAME_CARD_NAME.get());
+            else stack.set(ModDataComponents.NAME_CARD_NAME.get(), name);
+        });
     }
 
     private static void handleSnapshot(RadarMonitorSnapshotPayload payload, IPayloadContext context) {
@@ -197,15 +225,26 @@ public final class ModNetwork {
                     || card.kind() != RadarFilterCardItem.Kind.ALLOWLIST) {
                 return;
             }
-            java.util.LinkedHashMap<String, String> unique = new java.util.LinkedHashMap<>();
-            for (String rawName : payload.storedNames()) {
-                if (rawName == null) continue;
-                String name = rawName.trim();
-                if (name.isEmpty() || name.length() > 64) continue;
-                unique.putIfAbsent(name.toLowerCase(java.util.Locale.ROOT), name);
-                if (unique.size() >= 1024) break;
+            RadarFilterCardItem.AllowlistData submitted = RadarFilterCardItem.decodeAllowlistLines(
+                    payload.storedNames(), payload.sableMode());
+            java.util.LinkedHashMap<java.util.UUID, RadarFilterCardItem.SableAllowlistEntry> sables =
+                    new java.util.LinkedHashMap<>();
+            for (RadarFilterCardItem.SableAllowlistEntry entry : submitted.sableEntries()) {
+                String displayName = SableStructureNames.name(player.getServer(), entry.structureUuid())
+                        .orElse(entry.displayName());
+                sables.putIfAbsent(entry.structureUuid(),
+                        new RadarFilterCardItem.SableAllowlistEntry(entry.structureUuid(), displayName));
             }
-            stack.set(ModDataComponents.RADAR_ALLOWLIST.get(), String.join("\n", unique.values()));
+            for (String requestedName : submitted.unresolvedSableNames()) {
+                SableStructureNames.matchingName(player.getServer(), requestedName).forEach((uuid, displayName) ->
+                        sables.putIfAbsent(uuid, new RadarFilterCardItem.SableAllowlistEntry(uuid, displayName)));
+                if (sables.size() >= 1024) break;
+            }
+            RadarFilterCardItem.AllowlistData resolved = new RadarFilterCardItem.AllowlistData(
+                    submitted.playerNames(),
+                    sables.values().stream().limit(1024).toList(),
+                    java.util.List.of());
+            stack.set(ModDataComponents.RADAR_ALLOWLIST.get(), String.join("\n", resolved.encodedLines()));
             stack.set(ModDataComponents.ALLOWLIST_SABLE_MODE.get(), payload.sableMode());
             stack.set(ModDataComponents.TARGETING_CARD_OPTION.get(), payload.option() == 0 ? 0 : 1);
         });

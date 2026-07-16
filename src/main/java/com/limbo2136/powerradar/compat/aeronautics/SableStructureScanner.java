@@ -61,6 +61,16 @@ final class SableStructureScanner {
         return Optional.ofNullable(observe(serverSubLevel));
     }
 
+    static Optional<UUID> containingStructureUuid(ServerLevel level, net.minecraft.core.BlockPos pos) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
+        return subLevel == null || subLevel.isRemoved() ? Optional.empty() : Optional.of(subLevel.getUniqueId());
+    }
+
+    static boolean isInsideStructure(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
+        return subLevel != null && !subLevel.isRemoved();
+    }
+
     private static SableStructureObservation observe(ServerSubLevel serverSubLevel) {
         BoundingBox3ic localBounds = serverSubLevel.getPlot().getBoundingBox();
         if (!valid(localBounds)) {
@@ -77,6 +87,7 @@ final class SableStructureScanner {
         if (name == null || name.isBlank()) {
             name = "Sable Structure";
         }
+        name = SableStructureNames.resolve(serverSubLevel.getLevel().getServer(), serverSubLevel.getUniqueId(), name);
         return new SableStructureObservation(
                 serverSubLevel.getUniqueId(),
                 name,

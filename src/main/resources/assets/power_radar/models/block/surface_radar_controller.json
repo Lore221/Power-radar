@@ -4,7 +4,8 @@
 	"render_type": "minecraft:cutout",
 	"texture_size": [48, 48],
 	"textures": {
-		"1": "power_radar:block/surface_radar_controller"
+		"1": "power_radar:block/surface_radar_controller" ,
+		"particle": "power_radar:block/surface_radar_controller"
 	},
 	"elements": [
 		{

@@ -15,8 +15,39 @@ import net.minecraft.world.level.Level;
 import java.util.List;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.minecraft.server.level.ServerPlayer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.UUID;
 
 public class RadarFilterCardItem extends Item {
+    private static final String PLAYER_PREFIX = "P\t";
+    private static final String SABLE_PREFIX = "S\t";
+    private static final String SABLE_QUERY_PREFIX = "Q\t";
+
+    public record SableAllowlistEntry(UUID structureUuid, String displayName) { }
+
+    public record AllowlistData(
+            List<String> playerNames,
+            List<SableAllowlistEntry> sableEntries,
+            List<String> unresolvedSableNames
+    ) {
+        public AllowlistData {
+            playerNames = List.copyOf(playerNames);
+            sableEntries = List.copyOf(sableEntries);
+            unresolvedSableNames = List.copyOf(unresolvedSableNames);
+        }
+
+        public List<String> encodedLines() {
+            ArrayList<String> lines = new ArrayList<>(
+                    this.playerNames.size() + this.sableEntries.size() + this.unresolvedSableNames.size());
+            this.playerNames.forEach(name -> lines.add(PLAYER_PREFIX + name));
+            this.sableEntries.forEach(entry -> lines.add(
+                    SABLE_PREFIX + entry.structureUuid() + "\t" + entry.displayName()));
+            this.unresolvedSableNames.forEach(name -> lines.add(SABLE_QUERY_PREFIX + name));
+            return List.copyOf(lines);
+        }
+    }
     public enum Kind {
         TARGETING,
         DISPLAY,
@@ -45,10 +76,61 @@ public class RadarFilterCardItem extends Item {
     }
 
     public static List<String> allowlistNames(ItemStack stack) {
-        return java.util.Arrays.stream(allowlist(stack).split("\\n"))
-                .map(String::trim)
-                .filter(name -> !name.isBlank())
-                .toList();
+        return allowlistData(stack).playerNames();
+    }
+
+    public static AllowlistData allowlistData(ItemStack stack) {
+        return decodeAllowlistLines(
+                java.util.Arrays.asList(allowlist(stack).split("\\n")),
+                allowlistSableMode(stack));
+    }
+
+    public static AllowlistData decodeAllowlistLines(List<String> lines, boolean legacySableMode) {
+        LinkedHashMap<String, String> players = new LinkedHashMap<>();
+        LinkedHashMap<UUID, SableAllowlistEntry> sables = new LinkedHashMap<>();
+        LinkedHashMap<String, String> unresolved = new LinkedHashMap<>();
+        for (String rawLine : lines == null ? List.<String>of() : lines) {
+            if (rawLine == null || rawLine.isBlank()) continue;
+            if (rawLine.startsWith(PLAYER_PREFIX)) {
+                putName(players, rawLine.substring(PLAYER_PREFIX.length()));
+                continue;
+            }
+            if (rawLine.startsWith(SABLE_QUERY_PREFIX)) {
+                putName(unresolved, rawLine.substring(SABLE_QUERY_PREFIX.length()));
+                continue;
+            }
+            if (rawLine.startsWith(SABLE_PREFIX)) {
+                String[] parts = rawLine.split("\\t", 3);
+                if (parts.length != 3) continue;
+                try {
+                    UUID uuid = UUID.fromString(parts[1]);
+                    String name = sanitizeName(parts[2]);
+                    if (!name.isEmpty()) sables.putIfAbsent(uuid, new SableAllowlistEntry(uuid, name));
+                } catch (IllegalArgumentException ignored) {
+                }
+                continue;
+            }
+            if (legacySableMode) {
+                putName(unresolved, rawLine);
+            } else {
+                putName(players, rawLine);
+            }
+        }
+        return new AllowlistData(
+                List.copyOf(players.values()), List.copyOf(sables.values()), List.copyOf(unresolved.values()));
+    }
+
+    private static void putName(LinkedHashMap<String, String> target, String rawName) {
+        String name = sanitizeName(rawName);
+        if (!name.isEmpty() && target.size() < 1024) {
+            target.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
+        }
+    }
+
+    private static String sanitizeName(String rawName) {
+        if (rawName == null) return "";
+        String name = rawName.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim();
+        return name.length() <= 64 ? name : name.substring(0, 64).trim();
     }
 
     public static boolean allowlistSableMode(ItemStack stack) {
@@ -85,7 +167,7 @@ public class RadarFilterCardItem extends Item {
                         allowlistSableMode(stack),
                         cardOption(stack, 1),
                         onlinePlayers,
-                        allowlistNames(stack)));
+                        allowlistData(stack).encodedLines()));
             }
             return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
         }

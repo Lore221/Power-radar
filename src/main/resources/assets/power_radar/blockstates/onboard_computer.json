@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/onboard_computer" },
+    "facing=east": { "model": "power_radar:block/onboard_computer", "y": 90 },
+    "facing=south": { "model": "power_radar:block/onboard_computer", "y": 180 },
+    "facing=west": { "model": "power_radar:block/onboard_computer", "y": 270 }
+  }
+}

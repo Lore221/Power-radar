@@ -143,6 +143,11 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         CenteredSideValueBoxTransform transform = new CenteredSideValueBoxTransform(
                 TargetControllerBlockEntity::isTrajectoryPanelFace) {
             @Override
+            protected Vec3 getSouthLocation() {
+                return new Vec3(0.5D, 0.5D, 16.5D / 16.0D);
+            }
+
+            @Override
             public float getScale() {
                 return 0.375F;
             }
@@ -679,8 +684,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private static boolean autotargetPermitted(RadarNetworkManager manager, UUID networkId, int mask, TrackedTargetView track) {
         String name = targetDisplayName(track);
         boolean sable = track.classification() == TargetClassification.STRUCTURE;
-        if (manager.isAutotargetExcluded(networkId, name, sable)) return false;
-        return manager.isAutotargetForced(networkId, name, sable) || autotargetEnabled(mask, track);
+        if (manager.isAutotargetExcluded(networkId, track.targetUuid(), name, sable)) return false;
+        return manager.isAutotargetForced(networkId, track.targetUuid(), name, sable) || autotargetEnabled(mask, track);
     }
 
     private AimAngles currentAimAngles(WeaponMount cannonState, long gameTime) {

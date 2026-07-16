@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -37,6 +38,10 @@ public final class ModBlockEntities {
             BLOCK_ENTITIES.register("computing_block", () -> BlockEntityType.Builder
                     .of(ComputingBlockEntity::new, ModBlocks.COMPUTING_BLOCK.get())
                     .build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OnboardComputerBlockEntity>> ONBOARD_COMPUTER =
+            BLOCK_ENTITIES.register("onboard_computer", () -> BlockEntityType.Builder
+                    .of(OnboardComputerBlockEntity::new, ModBlocks.ONBOARD_COMPUTER.get()).build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OverviewModuleBlockEntity>> OVERVIEW_MODULE =
             BLOCK_ENTITIES.register("overview_module", () -> BlockEntityType.Builder

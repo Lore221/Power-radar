@@ -4,8 +4,10 @@ import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
+import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
+import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.UUID;
 import net.createmod.catnip.animation.AnimationTickHolder;
@@ -46,7 +48,8 @@ public final class RadarLinkClientOutlineHandler {
 
         ItemStack stack = player.getMainHandItem();
         if (!(stack.getItem() instanceof RadarLinkBlockItem)
-                && !(stack.getItem() instanceof ShellAlarmBlockItem)) {
+                && !(stack.getItem() instanceof ShellAlarmBlockItem)
+                && !(stack.getItem() instanceof OnboardComputerBlockItem)) {
             return;
         }
         UUID networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
@@ -66,6 +69,8 @@ public final class RadarLinkClientOutlineHandler {
                 nodeNetworkId = link.networkId();
             } else if (level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
                 nodeNetworkId = alarm.networkId();
+            } else if (level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
+                nodeNetworkId = computer.networkId();
             } else {
                 RadarLinkClientCache.unregister(level, pos);
                 continue;
