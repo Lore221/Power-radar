@@ -8,6 +8,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
 public final class SableRadarIntegration {
@@ -32,6 +34,50 @@ public final class SableRadarIntegration {
         return SABLE_LOADED
                 ? SableStructureScanner.loadedStructure(level, structureUuid)
                 : Optional.empty();
+    }
+
+    public static Optional<SableStructureGeometry> loadedStructureGeometry(
+            ServerLevel level,
+            UUID structureUuid
+    ) {
+        return SABLE_LOADED
+                ? SableStructureScanner.loadedStructureGeometry(level, structureUuid)
+                : Optional.empty();
+    }
+
+    public static Optional<SableStructureMotion> loadedStructureMotion(
+            ServerLevel level,
+            UUID structureUuid,
+            Vec3 localCenter
+    ) {
+        return SABLE_LOADED
+                ? SableStructureScanner.loadedStructureMotion(level, structureUuid, localCenter)
+                : Optional.empty();
+    }
+
+    public static Optional<SableStructurePose> loadedStructurePose(
+            ServerLevel level,
+            UUID structureUuid,
+            AABB localBounds,
+            Vec3 localCenter
+    ) {
+        return SABLE_LOADED
+                ? SableStructureScanner.loadedStructurePose(level, structureUuid, localBounds, localCenter)
+                : Optional.empty();
+    }
+
+    public static Optional<Vec3> loadedStructureOrigin(
+            ServerLevel level,
+            UUID structureUuid,
+            Vec3 localCenter
+    ) {
+        return SABLE_LOADED
+                ? SableStructureScanner.loadedStructureOrigin(level, structureUuid, localCenter)
+                : Optional.empty();
+    }
+
+    public static int geometryRefreshIntervalTicks() {
+        return SableStructureScanner.geometryRefreshIntervalTicks();
     }
 
     public static Optional<UUID> containingStructureUuid(ServerLevel level, BlockPos pos) {

@@ -26,6 +26,24 @@ class LinearDragTrajectoryCrossingsTest {
     }
 
     @Test
+    void axisCoefficientsMatchSharedFractionalPositionFormula() {
+        Vec3 position = new Vec3(4.0D, 70.0D, -3.0D);
+        Vec3 velocity = new Vec3(2.5D, 1.25D, -0.75D);
+        double gravity = 0.05D;
+        double drag = 0.01D;
+        double ticks = 37.25D;
+        Vec3 expected = LinearDragTrajectory.positionAfterTicks(
+                position, velocity, gravity, drag, ticks);
+
+        assertEquals(expected.x, LinearDragTrajectory.axisTrajectory(
+                position.x, velocity.x, 0.0D, drag).position(ticks), 1.0E-9D);
+        assertEquals(expected.y, LinearDragTrajectory.axisTrajectory(
+                position.y, velocity.y, -gravity, drag).position(ticks), 1.0E-9D);
+        assertEquals(expected.z, LinearDragTrajectory.axisTrajectory(
+                position.z, velocity.z, 0.0D, drag).position(ticks), 1.0E-9D);
+    }
+
+    @Test
     void bundledCrossingsMatchIndependentPlaneSolutions() {
         Vec3 position = new Vec3(12.0, 100.0, -8.0);
         Vec3 velocity = new Vec3(3.0, 2.0, -1.25);

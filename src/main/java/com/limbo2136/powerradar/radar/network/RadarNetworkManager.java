@@ -366,13 +366,13 @@ public class RadarNetworkManager {
                     || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)) {
                 continue;
             }
-            BlockPos pos = linkPos.pos();
+            net.minecraft.world.phys.AABB bounds = alarm.displayProtectionBounds();
+            net.minecraft.world.phys.Vec3 center = bounds.getCenter();
             zones.add(new ShellAlarmDisplayZone(
-                    linkPos.dimension().location(), pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D,
-                    alarm.protectionWidthBlocks(),
-                    alarm.protectionHeightBlocks(),
-                    alarm.protectionDepthBlocks()));
+                    linkPos.dimension().location(), center.x, center.y, center.z,
+                    (int) Math.ceil(bounds.getXsize()),
+                    (int) Math.ceil(bounds.getYsize()),
+                    (int) Math.ceil(bounds.getZsize())));
         }
         return List.copyOf(zones);
     }

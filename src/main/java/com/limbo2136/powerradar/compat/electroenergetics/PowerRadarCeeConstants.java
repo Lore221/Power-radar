@@ -37,6 +37,8 @@ public final class PowerRadarCeeConstants {
     public static final int SHELL_ALARM_DEFAULT_DEPTH_BLOCKS = 64;
     public static final int SHELL_ALARM_MIN_DIMENSION_BLOCKS = 1;
     public static final int SHELL_ALARM_MAX_DIMENSION_BLOCKS = 200;
+    public static final int SHELL_ALARM_DEFAULT_SABLE_MARGIN_PERCENT = 10;
+    public static final int SHELL_ALARM_MAX_SABLE_MARGIN_PERCENT = 100;
     public static final int SHELL_ALARM_MAX_SIMULATION_TICKS = 1200;
 
     public static final double TARGET_CONTROLLER_POWER_RESISTANCE_OHMS = 30.0;

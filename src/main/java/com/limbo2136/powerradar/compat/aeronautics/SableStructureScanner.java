@@ -27,6 +27,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
 
@@ -59,6 +60,71 @@ final class SableStructureScanner {
             return Optional.empty();
         }
         return Optional.ofNullable(observe(serverSubLevel));
+    }
+
+    static Optional<SableStructureGeometry> loadedStructureGeometry(ServerLevel level, UUID structureUuid) {
+        SubLevel subLevel = SubLevelContainer.getContainer(level).getSubLevel(structureUuid);
+        if (!(subLevel instanceof ServerSubLevel serverSubLevel) || subLevel.isRemoved()) {
+            return Optional.empty();
+        }
+        BoundingBox3ic localBounds = serverSubLevel.getPlot().getBoundingBox();
+        if (!valid(localBounds)) {
+            return Optional.empty();
+        }
+        AABB localAabb = localAabb(localBounds);
+        Vec3 localCenter = localCenter(localBounds);
+        return Optional.of(new SableStructureGeometry(
+                localAabb,
+                localCenter,
+                serverSubLevel.logicalPose().transformPosition(localCenter),
+                worldBounds(serverSubLevel, localAabb)));
+    }
+
+    static Optional<SableStructurePose> loadedStructurePose(
+            ServerLevel level,
+            UUID structureUuid,
+            AABB localBounds,
+            Vec3 localCenter
+    ) {
+        SubLevel subLevel = SubLevelContainer.getContainer(level).getSubLevel(structureUuid);
+        if (!(subLevel instanceof ServerSubLevel serverSubLevel) || subLevel.isRemoved()) {
+            return Optional.empty();
+        }
+        return Optional.of(new SableStructurePose(
+                serverSubLevel.logicalPose().transformPosition(localCenter),
+                worldBounds(serverSubLevel, localBounds)));
+    }
+
+    static Optional<SableStructureMotion> loadedStructureMotion(
+            ServerLevel level,
+            UUID structureUuid,
+            Vec3 localCenter
+    ) {
+        SubLevel subLevel = SubLevelContainer.getContainer(level).getSubLevel(structureUuid);
+        if (!(subLevel instanceof ServerSubLevel serverSubLevel) || subLevel.isRemoved()) {
+            return Optional.empty();
+        }
+        Vec3 worldOrigin = serverSubLevel.logicalPose().transformPosition(localCenter);
+        Vec3 velocity = Sable.HELPER
+                .getVelocity(serverSubLevel.getLevel(), serverSubLevel, localCenter)
+                .scale(0.05D);
+        return Optional.of(new SableStructureMotion(worldOrigin, velocity));
+    }
+
+    static Optional<Vec3> loadedStructureOrigin(
+            ServerLevel level,
+            UUID structureUuid,
+            Vec3 localCenter
+    ) {
+        SubLevel subLevel = SubLevelContainer.getContainer(level).getSubLevel(structureUuid);
+        if (!(subLevel instanceof ServerSubLevel serverSubLevel) || subLevel.isRemoved()) {
+            return Optional.empty();
+        }
+        return Optional.of(serverSubLevel.logicalPose().transformPosition(localCenter));
+    }
+
+    static int geometryRefreshIntervalTicks() {
+        return REBUILD_CYCLE_TICKS;
     }
 
     static Optional<UUID> containingStructureUuid(ServerLevel level, net.minecraft.core.BlockPos pos) {
@@ -131,6 +197,22 @@ final class SableStructureScanner {
                 (bounds.minX() + bounds.maxX() + 1.0D) * 0.5D,
                 (bounds.minY() + bounds.maxY() + 1.0D) * 0.5D,
                 (bounds.minZ() + bounds.maxZ() + 1.0D) * 0.5D);
+    }
+
+    private static AABB localAabb(BoundingBox3ic bounds) {
+        return new AABB(
+                bounds.minX(),
+                bounds.minY(),
+                bounds.minZ(),
+                bounds.maxX() + 1.0D,
+                bounds.maxY() + 1.0D,
+                bounds.maxZ() + 1.0D);
+    }
+
+    private static AABB worldBounds(ServerSubLevel subLevel, AABB localBounds) {
+        return SableStructureGeometry.enclosingWorldBounds(
+                localBounds,
+                subLevel.logicalPose()::transformPosition);
     }
 
     private record StructureKey(ResourceLocation dimensionId, UUID structureUuid) {

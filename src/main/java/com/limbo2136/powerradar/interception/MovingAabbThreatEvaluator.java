@@ -8,11 +8,46 @@ import net.minecraft.world.phys.Vec3;
 
 /** Three-stage projectile threat test for a translating protected AABB. */
 public final class MovingAabbThreatEvaluator {
-    private static final double COARSE_STEP_TICKS = 4.0D;
-    private static final double REFINEMENT_STEP_TICKS = 0.25D;
     private static final double MOTION_EPSILON_SQR = 1.0E-8D;
 
     private MovingAabbThreatEvaluator() {
+    }
+
+    /** Cheap first-stage filter which intentionally does not inspect acceleration or ballistics. */
+    public static boolean passesInitialBroadPhase(
+            MovingProtectedZone zone,
+            Vec3 projectilePosition,
+            Vec3 projectileVelocity,
+            double projectileRadius,
+            double maximumTicks
+    ) {
+        if (maximumTicks <= 0.0D) {
+            return false;
+        }
+        AABB protectedBounds = protectedBounds(
+                zone.bounds(), projectileRadius, zone.safetyMarginPerSide());
+        if (protectedBounds.contains(projectilePosition)) {
+            return true;
+        }
+        if (projectileVelocity.lengthSqr() < MOTION_EPSILON_SQR) {
+            return false;
+        }
+        Vec3 center = protectedBounds.getCenter();
+        double sphereRadius = Math.sqrt(
+                square(protectedBounds.getXsize())
+                        + square(protectedBounds.getYsize())
+                        + square(protectedBounds.getZsize())) * 0.5D;
+        double relativeX = projectilePosition.x - center.x;
+        double relativeZ = projectilePosition.z - center.z;
+        double velocityX = projectileVelocity.x - zone.velocity().x;
+        double velocityZ = projectileVelocity.z - zone.velocity().z;
+        double speed = Math.sqrt(velocityX * velocityX + velocityZ * velocityZ);
+        if (speed < Math.sqrt(MOTION_EPSILON_SQR)) {
+            return relativeX * relativeX + relativeZ * relativeZ <= sphereRadius * sphereRadius;
+        }
+        double distance = Math.sqrt(relativeX * relativeX + relativeZ * relativeZ);
+        boolean closing = relativeX * velocityX + relativeZ * velocityZ < 0.0D;
+        return closing && distance <= sphereRadius + speed * maximumTicks;
     }
 
     public static boolean threatens(
@@ -58,35 +93,24 @@ public final class MovingAabbThreatEvaluator {
         if (projectileVelocity.lengthSqr() < MOTION_EPSILON_SQR) {
             return false;
         }
+        if (!ballistics.quadraticDrag()
+                && (ballistics.drag() <= 1.0E-6D || LinearDragTrajectory.supported(ballistics.drag()))) {
+            AnalyticMovingAabbIntersection.Result result = AnalyticMovingAabbIntersection.evaluate(
+                    protectedBounds,
+                    shipVelocity,
+                    shipAcceleration,
+                    projectilePosition,
+                    projectileVelocity,
+                    ballistics.gravity(),
+                    ballistics.drag(),
+                    maximumTicks);
+            return result != AnalyticMovingAabbIntersection.Result.MISS;
+        }
         Vec3 center = protectedBounds.getCenter();
         double sphereRadius = Math.sqrt(
                 square(protectedBounds.getXsize())
                         + square(protectedBounds.getYsize())
                         + square(protectedBounds.getZsize())) * 0.5D;
-        if (!passesBroadPhase(
-                center,
-                sphereRadius,
-                shipVelocity,
-                shipAcceleration,
-                projectilePosition,
-                projectileVelocity,
-                ballistics,
-                maximumTicks)) {
-            return false;
-        }
-        if (!ballistics.quadraticDrag()
-                && (ballistics.drag() <= 1.0E-6D || LinearDragTrajectory.supported(ballistics.drag()))) {
-            return evaluateAnalytic(
-                    protectedBounds,
-                    center,
-                    sphereRadius,
-                    shipVelocity,
-                    shipAcceleration,
-                    projectilePosition,
-                    projectileVelocity,
-                    ballistics,
-                    maximumTicks);
-        }
         return evaluateSimulated(
                 protectedBounds,
                 center,
@@ -112,138 +136,6 @@ public final class MovingAabbThreatEvaluator {
                 bounds.getXsize() * margin + radius,
                 bounds.getYsize() * margin + radius,
                 bounds.getZsize() * margin + radius);
-    }
-
-    private static boolean passesBroadPhase(
-            Vec3 center,
-            double radius,
-            Vec3 shipVelocity,
-            Vec3 shipAcceleration,
-            Vec3 projectilePosition,
-            Vec3 projectileVelocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double maximumTicks
-    ) {
-        boolean accelerating = horizontalLengthSqr(shipAcceleration) > MOTION_EPSILON_SQR;
-        boolean curvedRelativePath = ballistics.quadraticDrag()
-                || (ballistics.drag() > 1.0E-6D && horizontalLengthSqr(shipVelocity) > MOTION_EPSILON_SQR);
-        if (accelerating || curvedRelativePath) {
-            return true;
-        }
-        double relativeX = projectilePosition.x - center.x;
-        double relativeZ = projectilePosition.z - center.z;
-        double velocityX = projectileVelocity.x - shipVelocity.x;
-        double velocityZ = projectileVelocity.z - shipVelocity.z;
-        double speedSqr = velocityX * velocityX + velocityZ * velocityZ;
-        if (speedSqr < MOTION_EPSILON_SQR) {
-            return relativeX * relativeX + relativeZ * relativeZ <= radius * radius;
-        }
-        double closestTicks = Math.clamp(
-                -(relativeX * velocityX + relativeZ * velocityZ) / speedSqr,
-                0.0D,
-                maximumTicks);
-        double closestX = relativeX + velocityX * closestTicks;
-        double closestZ = relativeZ + velocityZ * closestTicks;
-        return closestX * closestX + closestZ * closestZ <= radius * radius;
-    }
-
-    private static boolean evaluateAnalytic(
-            AABB protectedBounds,
-            Vec3 center,
-            double sphereRadius,
-            Vec3 shipVelocity,
-            Vec3 shipAcceleration,
-            Vec3 initialPosition,
-            Vec3 initialVelocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double maximumTicks
-    ) {
-        double startTicks = 0.0D;
-        Vec3 start = relativePosition(
-                analyticPosition(initialPosition, initialVelocity, ballistics, startTicks),
-                shipVelocity,
-                shipAcceleration,
-                startTicks);
-        if (protectedBounds.contains(start)) {
-            return true;
-        }
-        while (startTicks < maximumTicks) {
-            double endTicks = Math.min(maximumTicks, startTicks + COARSE_STEP_TICKS);
-            Vec3 end = relativePosition(
-                    analyticPosition(initialPosition, initialVelocity, ballistics, endTicks),
-                    shipVelocity,
-                    shipAcceleration,
-                    endTicks);
-            double curveMargin = (ballistics.gravity() + shipAcceleration.length())
-                    * (endTicks - startTicks) * (endTicks - startTicks) * 0.125D;
-            if (segmentDistanceToCenterSqr(start, end, center)
-                    <= square(sphereRadius + curveMargin)
-                    && refineAnalyticInterval(
-                            protectedBounds,
-                            shipVelocity,
-                            shipAcceleration,
-                            initialPosition,
-                            initialVelocity,
-                            ballistics,
-                            startTicks,
-                            endTicks)) {
-                return true;
-            }
-            startTicks = endTicks;
-            start = end;
-        }
-        return false;
-    }
-
-    private static boolean refineAnalyticInterval(
-            AABB protectedBounds,
-            Vec3 shipVelocity,
-            Vec3 shipAcceleration,
-            Vec3 initialPosition,
-            Vec3 initialVelocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double startTicks,
-            double endTicks
-    ) {
-        double time = startTicks;
-        Vec3 start = relativePosition(
-                analyticPosition(initialPosition, initialVelocity, ballistics, time),
-                shipVelocity,
-                shipAcceleration,
-                time);
-        while (time < endTicks) {
-            time = Math.min(endTicks, time + REFINEMENT_STEP_TICKS);
-            Vec3 end = relativePosition(
-                    analyticPosition(initialPosition, initialVelocity, ballistics, time),
-                    shipVelocity,
-                    shipAcceleration,
-                    time);
-            if (intersects(protectedBounds, start, end)) {
-                return true;
-            }
-            start = end;
-        }
-        return false;
-    }
-
-    private static Vec3 analyticPosition(
-            Vec3 initialPosition,
-            Vec3 initialVelocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double ticks
-    ) {
-        if (LinearDragTrajectory.supported(ballistics.drag())) {
-            return LinearDragTrajectory.positionAfterTicks(
-                    initialPosition,
-                    initialVelocity,
-                    ballistics.gravity(),
-                    ballistics.drag(),
-                    ticks);
-        }
-        return initialPosition.add(
-                initialVelocity.x * ticks,
-                initialVelocity.y * ticks - 0.5D * ballistics.gravity() * ticks * ticks,
-                initialVelocity.z * ticks);
     }
 
     private static boolean evaluateSimulated(
@@ -311,10 +203,6 @@ public final class MovingAabbThreatEvaluator {
         }
         double interpolation = Math.clamp(center.subtract(start).dot(segment) / lengthSqr, 0.0D, 1.0D);
         return start.add(segment.scale(interpolation)).distanceToSqr(center);
-    }
-
-    private static double horizontalLengthSqr(Vec3 vector) {
-        return vector.x * vector.x + vector.z * vector.z;
     }
 
     private static double square(double value) {

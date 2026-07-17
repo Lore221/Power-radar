@@ -45,6 +45,7 @@ public final class PowerRadarServerConfig {
     private static final ModConfigSpec.DoubleValue AUTOCANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY;
+    private static final ModConfigSpec.DoubleValue MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -112,6 +113,11 @@ public final class PowerRadarServerConfig {
                         "The chance increases by the same amount after every failure, up to guaranteed success.",
                         "Example: 0.1 produces 0.1, 0.2, 0.3, ... 1.0 for repeated attempts against one shell.")
                 .defineInRange("shell_destruction_probability", 0.1D, 0.001D, 1.0D);
+        MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS = builder
+                .comment(
+                        "Distance travelled before an unassigned interception fuze performs a manual airburst.",
+                        "Automatically assigned interceptor shells continue to detonate from their tracked target.")
+                .defineInRange("manual_fuze_distance_blocks", 50.0D, 1.0D, 100_000.0D);
         builder.pop();
 
         SPEC = builder.build();
@@ -158,6 +164,9 @@ public final class PowerRadarServerConfig {
     public static double bigCannonMinFiringDistanceBlocks() { return value(BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS); }
     public static double interceptionShellDestructionProbability() {
         return value(INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY);
+    }
+    public static double manualInterceptionFuzeDistanceBlocks() {
+        return value(MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS);
     }
 
     private static <T> T value(ModConfigSpec.ConfigValue<T> configValue) {
