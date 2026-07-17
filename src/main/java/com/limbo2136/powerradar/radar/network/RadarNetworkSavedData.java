@@ -32,6 +32,7 @@ public class RadarNetworkSavedData extends SavedData {
     private static final String WHITELISTED_SABLE_KEY = "WhitelistedSable";
     private static final String SELECTED_TARGET_UUID_KEY = "SelectedTargetUuid";
     private static final String AUTOTARGET_FILTER_MASK_KEY = "AutotargetFilterMask";
+    private static final String CONTROL_CONSUMERS_ALLOWED_KEY = "ControlConsumersAllowed";
 
     private final Map<UUID, RadarNetworkRecord> networks = new LinkedHashMap<>();
     private final List<CompoundTag> preservedFutureNetworkTags = new ArrayList<>();
@@ -79,6 +80,7 @@ public class RadarNetworkSavedData extends SavedData {
                 record.setSelectedTargetUuid(networkTag.getUUID(SELECTED_TARGET_UUID_KEY));
             }
             record.setAutotargetFilterMask(networkTag.getInt(AUTOTARGET_FILTER_MASK_KEY));
+            record.setControlConsumersAllowed(networkTag.getBoolean(CONTROL_CONSUMERS_ALLOWED_KEY));
             if (data.networks.putIfAbsent(id, record) != null) {
                 needsResave = true;
                 PowerRadar.LOGGER.warn("[PowerRadar] Skipping duplicate radar network record {}", id);
@@ -115,6 +117,7 @@ public class RadarNetworkSavedData extends SavedData {
                 networkTag.putUUID(SELECTED_TARGET_UUID_KEY, record.selectedTargetUuid());
             }
             networkTag.putInt(AUTOTARGET_FILTER_MASK_KEY, record.autotargetFilterMask());
+            networkTag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, record.controlConsumersAllowed());
             networksTag.add(networkTag);
         }
         for (CompoundTag futureNetworkTag : this.preservedFutureNetworkTags) {
@@ -149,6 +152,16 @@ public class RadarNetworkSavedData extends SavedData {
         }
     }
 
+    boolean removeIfNoLinks(UUID id) {
+        RadarNetworkRecord record = this.networks.get(id);
+        if (record == null || !record.linkNodes().isEmpty()) {
+            return false;
+        }
+        this.networks.remove(id);
+        this.setDirty();
+        return true;
+    }
+
     private static MigrationResult migrateNetworkTag(CompoundTag source) {
         CompoundTag tag = source.copy();
         if (!tag.hasUUID(ID_KEY)) {
@@ -171,6 +184,7 @@ public class RadarNetworkSavedData extends SavedData {
                 case 0 -> migrateV0ToV1(tag);
                 case 1 -> migrateV1ToV2(tag);
                 case 2 -> migrateV2ToV3(tag);
+                case 3 -> migrateV3ToV4(tag);
                 default -> throw new IllegalStateException("Unsupported radar network schema " + schemaVersion);
             }
             schemaVersion++;
@@ -197,6 +211,12 @@ public class RadarNetworkSavedData extends SavedData {
         }
     }
 
+    private static void migrateV3ToV4(CompoundTag tag) {
+        if (!tag.contains(CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)) {
+            tag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, true);
+        }
+    }
+
     private static boolean normalizeCurrentSchema(CompoundTag tag) {
         boolean changed = false;
         changed |= ensureCompoundList(tag, LINK_NODES_KEY);
@@ -205,6 +225,10 @@ public class RadarNetworkSavedData extends SavedData {
         changed |= ensureStringList(tag, WHITELISTED_SABLE_KEY);
         if (!tag.contains(AUTOTARGET_FILTER_MASK_KEY, Tag.TAG_INT)) {
             tag.putInt(AUTOTARGET_FILTER_MASK_KEY, 0);
+            changed = true;
+        }
+        if (!tag.contains(CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)) {
+            tag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, true);
             changed = true;
         }
         return changed;

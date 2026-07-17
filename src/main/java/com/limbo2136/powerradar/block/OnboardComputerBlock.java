@@ -25,6 +25,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -97,6 +98,7 @@ public final class OnboardComputerBlock extends BaseEntityBlock implements Elect
     }
     @Override protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState next, boolean moved) {
         if (!state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
+            computer.destroyOwnedNetworks();
             computer.clearStructureName();
             if (!computer.nameCard().isEmpty()) Block.popResource(level, pos, computer.removeNameCard());
         }
@@ -104,6 +106,18 @@ public final class OnboardComputerBlock extends BaseEntityBlock implements Elect
     }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) { builder.add(FACING); }
     @Override public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
+    @Override protected boolean isSignalSource(BlockState state) { return true; }
+    @Override protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+        return alarmSignal(level, pos);
+    }
+    @Override protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+        return alarmSignal(level, pos);
+    }
+    private static int alarmSignal(BlockGetter level, BlockPos pos) {
+        return level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer && computer.alarmActive()
+                ? 15
+                : 0;
+    }
     @Override public SimulatedDeviceType<MonitorControllerCeeDevice> getDevice() { return PowerRadarCeeDeviceTypes.RADAR_MONITOR_CONTROLLER.get(); }
     @Override public Map<Integer, Vec3> getNodePositions(Level level, BlockPos pos, BlockState state) {
         return Map.of(0, getNodePosition(level, pos, state, 0), 1, getNodePosition(level, pos, state, 1));

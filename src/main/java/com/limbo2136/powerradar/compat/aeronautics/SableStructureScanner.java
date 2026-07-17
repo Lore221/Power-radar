@@ -1,9 +1,6 @@
 package com.limbo2136.powerradar.compat.aeronautics;
 
-<<<<<<< HEAD
 import dev.ryanhcode.sable.Sable;
-=======
->>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
@@ -64,7 +61,6 @@ final class SableStructureScanner {
         return Optional.ofNullable(observe(serverSubLevel));
     }
 
-<<<<<<< HEAD
     static Optional<UUID> containingStructureUuid(ServerLevel level, net.minecraft.core.BlockPos pos) {
         SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
         return subLevel == null || subLevel.isRemoved() ? Optional.empty() : Optional.of(subLevel.getUniqueId());
@@ -74,9 +70,6 @@ final class SableStructureScanner {
         SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
         return subLevel != null && !subLevel.isRemoved();
     }
-
-=======
->>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
     private static SableStructureObservation observe(ServerSubLevel serverSubLevel) {
         BoundingBox3ic localBounds = serverSubLevel.getPlot().getBoundingBox();
         if (!valid(localBounds)) {
@@ -86,24 +79,14 @@ final class SableStructureScanner {
         Vec3 worldOrigin = serverSubLevel.logicalPose().transformPosition(localCenter);
         Vector3d worldForward = serverSubLevel.logicalPose().transformNormal(new Vector3d(0.0D, 0.0D, 1.0D));
         float heading = (float) Math.toDegrees(Math.atan2(-worldForward.x(), worldForward.z()));
-<<<<<<< HEAD
         Vec3 velocity = Sable.HELPER
                 .getVelocity(serverSubLevel.getLevel(), serverSubLevel, localCenter)
                 .scale(0.05D);
-=======
-        Vec3 velocity = new Vec3(
-                serverSubLevel.latestLinearVelocity.x,
-                serverSubLevel.latestLinearVelocity.y,
-                serverSubLevel.latestLinearVelocity.z);
->>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
         String name = serverSubLevel.getName();
         if (name == null || name.isBlank()) {
             name = "Sable Structure";
         }
-<<<<<<< HEAD
         name = SableStructureNames.resolve(serverSubLevel.getLevel().getServer(), serverSubLevel.getUniqueId(), name);
-=======
->>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
         return new SableStructureObservation(
                 serverSubLevel.getUniqueId(),
                 name,

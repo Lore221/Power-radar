@@ -45,4 +45,9 @@ final class SableRadarWorldPose {
         SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
         return subLevel == null ? worldDirection : subLevel.logicalPose().transformNormalInverse(worldDirection);
     }
+
+    static Vec3 worldDirection(ServerLevel level, BlockPos containingPos, Vec3 localDirection) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
+        return subLevel == null ? localDirection : subLevel.logicalPose().transformNormal(localDirection);
+    }
 }

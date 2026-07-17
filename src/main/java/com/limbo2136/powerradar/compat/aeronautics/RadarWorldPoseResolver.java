@@ -41,6 +41,13 @@ public final class RadarWorldPoseResolver {
         return SableRadarWorldPose.localDirection(level, containingPos, worldDirection);
     }
 
+    public static Vec3 worldDirection(ServerLevel level, BlockPos containingPos, Vec3 localDirection) {
+        if (!SABLE_LOADED) {
+            return localDirection;
+        }
+        return SableRadarWorldPose.worldDirection(level, containingPos, localDirection);
+    }
+
     public static boolean isOnSableStructure(ServerLevel level, BlockPos localPos) {
         return resolve(level, localPos, Vec3.atCenterOf(localPos), 0.0F).onSableStructure();
     }

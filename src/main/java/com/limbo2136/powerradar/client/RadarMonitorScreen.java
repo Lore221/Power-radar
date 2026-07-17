@@ -260,7 +260,38 @@ public class RadarMonitorScreen extends Screen {
                 this.spriteRenderer.drawBlip(graphics, blip, alpha, blipDrawSize(blip), palette, depth);
             }
         }
+        drawSableNames(graphics, partialTick, palette.sableSilhouette());
         drawGridScaleOverlay(graphics);
+    }
+
+    private void drawSableNames(GuiGraphics graphics, float partialTick, int color) {
+        int left = this.radarOriginX - this.radarRadius + RADAR_SCREEN_FRAME_PIXELS;
+        int top = this.radarOriginY - this.radarRadius + RADAR_SCREEN_FRAME_PIXELS;
+        int right = this.radarOriginX + this.radarRadius - RADAR_SCREEN_FRAME_PIXELS;
+        int bottom = this.radarOriginY + this.radarRadius - RADAR_SCREEN_FRAME_PIXELS;
+        graphics.enableScissor(left, top, right, bottom);
+        for (RadarBlipRenderData blip : this.blips) {
+            if (blip.category() != RadarTargetCategory.SABLE_STRUCTURE
+                    || blip.targetIndex() < 0
+                    || blip.targetIndex() >= this.displayData.targets().size()) {
+                continue;
+            }
+            RadarDisplayTarget target = this.displayData.targets().get(blip.targetIndex());
+            String name = target.displayName();
+            int alpha = blipAlpha(blip, partialTick);
+            if (name == null || name.isBlank() || alpha <= 0) {
+                continue;
+            }
+            String label = this.font.plainSubstrByWidth(name.trim(), Math.max(24, this.radarRadius));
+            int halfWidth = this.font.width(label) / 2;
+            int labelX = Math.clamp(blip.screenX(), left + halfWidth, right - halfWidth);
+            int labelY = Math.clamp(
+                    blip.screenY() + blipDrawSize(blip) / 2 + 2,
+                    top,
+                    bottom - this.font.lineHeight);
+            graphics.drawCenteredString(this.font, label, labelX, labelY, alpha << 24 | color & 0xFFFFFF);
+        }
+        graphics.disableScissor();
     }
 
     private void drawGridScaleOverlay(GuiGraphics graphics) {
@@ -463,12 +494,29 @@ public class RadarMonitorScreen extends Screen {
             return;
         }
         double contentRadius = innerSize / 2.0D;
-        int halfSide = Math.max(1, (int) Math.round(contentRadius * zone.sideBlocks()
-                / (2.0D * visibleMapRadiusBlocks())));
-        int centerX = x + innerSize / 2 + (int) Math.round(projection.x() * contentRadius);
-        int centerY = y + innerSize / 2 + (int) Math.round(projection.y() * contentRadius);
-        graphics.fill(centerX - halfSide, centerY - halfSide, centerX + halfSide, centerY + halfSide,
-                SHELL_ALARM_ZONE_ALPHA << 24 | color);
+        float centerX = x + innerSize / 2.0F + (float) (projection.x() * contentRadius);
+        float centerY = y + innerSize / 2.0F + (float) (projection.y() * contentRadius);
+        double unitsPerBlock = contentRadius / visibleMapRadiusBlocks();
+        float halfWidth = zone.widthBlocks() * 0.5F;
+        float halfDepth = zone.depthBlocks() * 0.5F;
+        SableSilhouetteProjection.Point first = SableSilhouetteProjection.projectOffset(
+                -halfWidth, -halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
+        SableSilhouetteProjection.Point second = SableSilhouetteProjection.projectOffset(
+                halfWidth, -halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
+        SableSilhouetteProjection.Point third = SableSilhouetteProjection.projectOffset(
+                halfWidth, halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
+        SableSilhouetteProjection.Point fourth = SableSilhouetteProjection.projectOffset(
+                -halfWidth, halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
+        drawGuiSilhouetteQuads(
+                graphics,
+                graphics.pose().last().pose(),
+                List.of(new GuiSilhouetteQuad(
+                        new GuiPoint(centerX + first.x(), centerY + first.y()),
+                        new GuiPoint(centerX + second.x(), centerY + second.y()),
+                        new GuiPoint(centerX + third.x(), centerY + third.y()),
+                        new GuiPoint(centerX + fourth.x(), centerY + fourth.y()),
+                        SHELL_ALARM_ZONE_ALPHA)),
+                color);
     }
 
     private void drawRadarCoverage(

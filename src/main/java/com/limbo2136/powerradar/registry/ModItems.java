@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
+import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.NameCardItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
@@ -69,12 +70,11 @@ public final class ModItems {
     public static final DeferredItem<ShellAlarmBlockItem> SHELL_ALARM = ITEMS.register(
             "shell_alarm",
             () -> new ShellAlarmBlockItem(ModBlocks.SHELL_ALARM.get(), new Item.Properties()));
-    public static final DeferredItem<BlockItem> INTERCEPTION_CONTROLLER = ITEMS.register(
+    public static final DeferredItem<InterceptionControllerBlockItem> INTERCEPTION_CONTROLLER = ITEMS.register(
             "interception_controller",
-            () -> new PowerRadarElectricalBlockItem(
+            () -> new InterceptionControllerBlockItem(
                     ModBlocks.INTERCEPTION_CONTROLLER.get(),
-                    new Item.Properties(),
-                    PowerRadarElectricalBlockItem.TooltipKind.INTERCEPTION_CONTROLLER));
+                    new Item.Properties()));
     public static final DeferredItem<InterceptionFuzeItem> INTERCEPTION_FUZE = ITEMS.register(
             "interception_fuze",
             () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(16)));

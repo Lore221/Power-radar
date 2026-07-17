@@ -65,6 +65,12 @@ public class RadarNetworkManager {
         return id;
     }
 
+    public UUID createOnboardNetwork() {
+        UUID id = createNetwork();
+        setControlConsumersAllowed(id, false);
+        return id;
+    }
+
     public boolean networkExists(UUID id) {
         return this.savedData.get(id).isPresent();
     }
@@ -73,6 +79,26 @@ public class RadarNetworkManager {
         RadarNetworkRecord record = this.savedData.ensure(id);
         this.runtimeNetworks.computeIfAbsent(id, ignored -> new RadarNetworkRuntime());
         return record;
+    }
+
+    public boolean controlConsumersAllowed(UUID id) {
+        return this.savedData.get(id)
+                .map(RadarNetworkRecord::controlConsumersAllowed)
+                .orElse(true);
+    }
+
+    public void setControlConsumersAllowed(UUID id, boolean allowed) {
+        RadarNetworkRecord record = ensureNetwork(id);
+        if (record.controlConsumersAllowed() == allowed) {
+            return;
+        }
+        record.setControlConsumersAllowed(allowed);
+        if (!allowed) {
+            record.setSelectedTargetUuid(null);
+            runtime(id).setSelectedTargetUuid(null);
+        }
+        invalidateComputingCache(id);
+        this.savedData.setDirty();
     }
 
     public void addPersistentLink(UUID id, GlobalPos linkPos) {
@@ -232,6 +258,9 @@ public class RadarNetworkManager {
     }
 
     public void setSelectedTargetUuid(UUID id, UUID targetUuid) {
+        if (targetUuid != null && !controlConsumersAllowed(id)) {
+            return;
+        }
         RadarNetworkRecord record = this.ensureNetwork(id);
         if (!Objects.equals(record.selectedTargetUuid(), targetUuid)) {
             record.setSelectedTargetUuid(targetUuid);
@@ -340,7 +369,10 @@ public class RadarNetworkManager {
             BlockPos pos = linkPos.pos();
             zones.add(new ShellAlarmDisplayZone(
                     linkPos.dimension().location(), pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D, alarm.protectionSideBlocks()));
+                    pos.getZ() + 0.5D,
+                    alarm.protectionWidthBlocks(),
+                    alarm.protectionHeightBlocks(),
+                    alarm.protectionDepthBlocks()));
         }
         return List.copyOf(zones);
     }
@@ -413,10 +445,13 @@ public class RadarNetworkManager {
         if (id == null) return;
         this.computingResolutionCache.remove(id);
         this.computingPolicyCache.remove(id);
-        this.runtime(id).invalidateDisplaySnapshots();
+        this.runtime(id).markSettingsChanged();
     }
 
     public ComputingResolution resolveComputingBlock(UUID id) {
+        if (!controlConsumersAllowed(id)) {
+            return new ComputingResolution(null, false);
+        }
         List<ComputingBlockEntity> computers = new ArrayList<>();
         this.runtime(id).loadedLinks().stream()
                 .sorted(java.util.Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
@@ -459,15 +494,16 @@ public class RadarNetworkManager {
     }
 
     public void cleanupEmptyNetwork(UUID id) {
-        this.savedData.get(id).ifPresent(record -> {
-            if (record.linkNodes().isEmpty()) {
-                this.removeAllTickets(id);
-                this.savedData.remove(id);
-                this.runtimeNetworks.remove(id);
-                this.computingResolutionCache.remove(id);
-                this.computingPolicyCache.remove(id);
-            }
-        });
+        if (this.savedData.get(id).filter(record -> record.linkNodes().isEmpty()).isEmpty()) {
+            return;
+        }
+        this.removeAllTickets(id);
+        if (!this.savedData.removeIfNoLinks(id)) {
+            return;
+        }
+        this.runtimeNetworks.remove(id);
+        this.computingResolutionCache.remove(id);
+        this.computingPolicyCache.remove(id);
     }
 
     private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {

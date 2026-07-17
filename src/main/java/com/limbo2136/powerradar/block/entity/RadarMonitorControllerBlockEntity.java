@@ -537,6 +537,10 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     protected boolean usesDisplayStructureResolver() { return true; }
 
+    protected List<RadarControllerBlockEntity> resolvedRadarControllers() {
+        return this.cachedSnapshotControllers;
+    }
+
     private boolean hasRemovedCachedSnapshotController() {
         for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
             if (controller == null || controller.isRemoved()) {

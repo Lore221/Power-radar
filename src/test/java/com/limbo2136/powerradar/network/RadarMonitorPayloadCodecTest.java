@@ -31,8 +31,8 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 class RadarMonitorPayloadCodecTest {
-    private static final String V4_FIXTURE_SHA_256 =
-            "2ce9ce442b75505e9b0ebf7839e5b27e183ca194c63dbc1aeff58773b097f14a";
+    private static final String V5_FIXTURE_SHA_256 =
+            "a509099f2ae4d4094723b165c447c5bd423d1bd4366c908e90b6b80bf3f96969";
 
     @Test
     void fullSnapshotRoundTripsWithoutUnreadBytes() {
@@ -173,9 +173,9 @@ class RadarMonitorPayloadCodecTest {
     }
 
     @Test
-    void v4WireBytesRemainStable() throws NoSuchAlgorithmException {
-        assertEquals("4", ModNetwork.PROTOCOL_VERSION);
-        assertEquals(4, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
+    void v5WireBytesRemainStable() throws NoSuchAlgorithmException {
+        assertEquals("5", ModNetwork.PROTOCOL_VERSION);
+        assertEquals(5, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
 
         RegistryFriendlyByteBuf buffer = newBuffer();
         try {
@@ -184,7 +184,7 @@ class RadarMonitorPayloadCodecTest {
             buffer.getBytes(buffer.readerIndex(), encoded);
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
 
-            assertEquals(V4_FIXTURE_SHA_256, digest);
+            assertEquals(V5_FIXTURE_SHA_256, digest);
         } finally {
             buffer.release();
         }
@@ -298,7 +298,8 @@ class RadarMonitorPayloadCodecTest {
                 123_456_789L,
                 123_456_799L,
                 coverages,
-                List.of(new ShellAlarmDisplayZone(testDimension, 17.5D, 71.5D, -22.5D, 128)),
+                List.of(new ShellAlarmDisplayZone(
+                        testDimension, 17.5D, 71.5D, -22.5D, 128, 72, 96)),
                 targets);
     }
 

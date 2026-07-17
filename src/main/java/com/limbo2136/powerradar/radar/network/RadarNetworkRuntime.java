@@ -51,6 +51,11 @@ public class RadarNetworkRuntime {
         return this.settingsRevision;
     }
 
+    public void markSettingsChanged() {
+        this.settingsRevision++;
+        invalidateDisplaySnapshots();
+    }
+
     public DisplaySnapshotCacheEntry displaySnapshot() {
         return this.displaySnapshot;
     }

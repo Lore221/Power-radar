@@ -21,10 +21,7 @@ public final class PowerRadarClient {
         event.registerBlockEntityRenderer(ModBlockEntities.OVERVIEW_MODULE.get(), OverviewModuleRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), RadarMonitorControllerBlockEntityRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);
-        event.registerBlockEntityRenderer(ModBlockEntities.SHELL_ALARM.get(), PowerRadarFrequencyRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.ONBOARD_COMPUTER.get(), OnboardComputerRenderer::new);
-        event.registerBlockEntityRenderer(
-                ModBlockEntities.INTERCEPTION_CONTROLLER.get(), PowerRadarFrequencyRenderer::new);
         event.registerEntityRenderer(ModEntities.RADAR_STRUCTURE.get(), RadarStructureEntityRenderer::new);
     }
 }

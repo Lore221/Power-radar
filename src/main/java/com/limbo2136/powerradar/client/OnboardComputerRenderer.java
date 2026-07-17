@@ -12,6 +12,7 @@ import org.joml.Quaternionf;
 public final class OnboardComputerRenderer implements BlockEntityRenderer<OnboardComputerBlockEntity> {
     private static final float PANEL_HEIGHT = 11.0F / 16.0F;
     private static final float SCREEN_SIDE = 10.5F / 16.0F;
+    private static final int MAP_RADIUS_BLOCKS = 100;
     // Maps the delegate's vertical monitor plane onto the model element's upper face:
     // +90 degrees to lay it flat with an outward normal, then the element's own
     // -22.5-degree X tilt. The negative Y scale preserves the map orientation.
@@ -40,7 +41,9 @@ public final class OnboardComputerRenderer implements BlockEntityRenderer<Onboar
         poseStack.translate(0.5D, 0.0D, 0.5D);
         poseStack.scale(SCREEN_SIDE, -SCREEN_SIDE, SCREEN_SIDE);
         poseStack.translate(-0.5D, 0.0D, -0.5D);
-        this.delegate.render(computer, partialTick, poseStack, buffers, packedLight, packedOverlay);
+        this.delegate.renderFullSurfaceWithFixedMapSize(
+                computer, partialTick, poseStack, buffers, packedLight, packedOverlay,
+                MAP_RADIUS_BLOCKS * 2);
         poseStack.popPose();
     }
 }

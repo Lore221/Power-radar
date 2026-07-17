@@ -99,9 +99,12 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
                                 PowerRadarCeeConstants.SHELL_ALARM_MIN_VOLTAGE,
                                 PowerRadarCeeConstants.SHELL_ALARM_MAX_VOLTAGE))));
                 tooltip.add(property(
-                        "power_radar.tooltip.shell_alarm_side",
-                        Component.translatable("power_radar.unit.blocks",
-                                PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SIDE_BLOCKS)));
+                        "power_radar.tooltip.shell_alarm_zone",
+                        Component.translatable(
+                                "power_radar.tooltip.shell_alarm_dimensions",
+                                PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS,
+                                PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS,
+                                PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS)));
             }
         }
     }

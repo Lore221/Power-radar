@@ -32,11 +32,11 @@ public final class PowerRadarCeeConstants {
     public static final double SHELL_ALARM_MAX_VOLTAGE = 400.0;
     public static final double SHELL_ALARM_OVERVOLTAGE_RECOVERY = 380.0;
 
-    public static final int SHELL_ALARM_DEFAULT_SIDE_BLOCKS = 64;
-    public static final int SHELL_ALARM_MIN_SIDE_BLOCKS = 16;
-    public static final int SHELL_ALARM_MAX_SIDE_BLOCKS = 512;
-    public static final int SHELL_ALARM_SIDE_STEP_BLOCKS = 16;
-    public static final int SHELL_ALARM_VERTICAL_MARGIN_BLOCKS = 20;
+    public static final int SHELL_ALARM_DEFAULT_WIDTH_BLOCKS = 64;
+    public static final int SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS = 40;
+    public static final int SHELL_ALARM_DEFAULT_DEPTH_BLOCKS = 64;
+    public static final int SHELL_ALARM_MIN_DIMENSION_BLOCKS = 1;
+    public static final int SHELL_ALARM_MAX_DIMENSION_BLOCKS = 200;
     public static final int SHELL_ALARM_MAX_SIMULATION_TICKS = 1200;
 
     public static final double TARGET_CONTROLLER_POWER_RESISTANCE_OHMS = 30.0;

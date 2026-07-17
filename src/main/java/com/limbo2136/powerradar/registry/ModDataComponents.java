@@ -21,6 +21,12 @@ public final class ModDataComponents {
                     .networkSynchronized(UUIDUtil.STREAM_CODEC)
                     .build());
 
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<UUID>> INTERCEPTION_NETWORK_ID =
+            DATA_COMPONENTS.register("interception_network_id", () -> DataComponentType.<UUID>builder()
+                    .persistent(UUIDUtil.CODEC)
+                    .networkSynchronized(UUIDUtil.STREAM_CODEC)
+                    .build());
+
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Integer>> RADAR_FILTER_MASK =
             DATA_COMPONENTS.register("radar_filter_mask", () -> DataComponentType.<Integer>builder()
                     .persistent(Codec.INT)

@@ -152,11 +152,16 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
             RadarLinkConnectionResolver.Resolution resolution =
                     RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, worldPosition);
             if (resolution.status() == RadarLinkConnectionResolver.Status.SINGLE && resolution.link().networkId() != null) {
-                RadarNetworkManager.ComputingResolution computing = RadarNetworkManager.get(serverLevel.getServer())
-                        .resolveComputingBlock(resolution.link().networkId());
-                tooltip.add(Component.translatable(computing.conflict()
-                        ? "goggles.power_radar.computing_block.conflict"
-                        : "goggles.power_radar.computing_block.connected"));
+                RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+                if (!manager.controlConsumersAllowed(resolution.link().networkId())) {
+                    tooltip.add(Component.translatable("goggles.power_radar.computing_block.onboard_network"));
+                } else {
+                    RadarNetworkManager.ComputingResolution computing = manager
+                            .resolveComputingBlock(resolution.link().networkId());
+                    tooltip.add(Component.translatable(computing.conflict()
+                            ? "goggles.power_radar.computing_block.conflict"
+                            : "goggles.power_radar.computing_block.connected"));
+                }
             } else {
                 tooltip.add(Component.translatable("goggles.power_radar.computing_block.disconnected"));
             }

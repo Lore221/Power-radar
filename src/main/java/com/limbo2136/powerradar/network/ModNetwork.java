@@ -4,10 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
-<<<<<<< HEAD
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureNames;
-=======
->>>>>>> f5d96b00c884c42dfafa46e4f214952d230a016d
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
@@ -315,6 +312,9 @@ public final class ModNetwork {
                 return;
             }
             RadarNetworkManager manager = RadarNetworkManager.get(player.server);
+            if (!manager.controlConsumersAllowed(linkResolution.link().networkId())) {
+                return;
+            }
             RadarNetworkManager.ControllersResolution controllerResolution = manager.resolveControllersForConsumer(
                     linkResolution.link().networkId(),
                     GlobalPos.of(player.serverLevel().dimension(), linkResolution.link().getBlockPos()));

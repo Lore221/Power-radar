@@ -36,6 +36,7 @@ class RadarNetworkSavedDataMigrationTest {
         assertEquals(List.of("Alice", "Bob"), List.copyOf(record.whitelistedPlayerNames()));
         assertTrue(record.whitelistedSableNames().isEmpty());
         assertEquals(0, record.autotargetFilterMask());
+        assertTrue(record.controlConsumersAllowed());
         assertTrue(data.isDirty());
 
         CompoundTag saved = data.save(new CompoundTag(), RegistryAccess.EMPTY);
@@ -44,6 +45,7 @@ class RadarNetworkSavedDataMigrationTest {
         assertTrue(migrated.contains("ControllerBindings", Tag.TAG_LIST));
         assertTrue(migrated.contains("WhitelistedSable", Tag.TAG_LIST));
         assertTrue(migrated.contains("AutotargetFilterMask", Tag.TAG_INT));
+        assertTrue(migrated.contains("ControlConsumersAllowed", Tag.TAG_BYTE));
     }
 
     @Test
@@ -59,6 +61,7 @@ class RadarNetworkSavedDataMigrationTest {
         assertTrue(record.linkNodes().isEmpty());
         assertTrue(record.controllerBindings().isEmpty());
         assertNull(record.selectedTargetUuid());
+        assertTrue(record.controlConsumersAllowed());
         assertTrue(data.isDirty());
     }
 
@@ -109,6 +112,7 @@ class RadarNetworkSavedDataMigrationTest {
         record.whitelistedSableNames().add("Sable Alpha");
         record.setSelectedTargetUuid(targetId);
         record.setAutotargetFilterMask(0x35);
+        record.setControlConsumersAllowed(false);
 
         RadarNetworkSavedData restored = RadarNetworkSavedData.load(
                 original.save(new CompoundTag(), RegistryAccess.EMPTY),
@@ -122,6 +126,7 @@ class RadarNetworkSavedDataMigrationTest {
         assertEquals(record.whitelistedSableNames(), restoredRecord.whitelistedSableNames());
         assertEquals(targetId, restoredRecord.selectedTargetUuid());
         assertEquals(0x35, restoredRecord.autotargetFilterMask());
+        assertFalse(restoredRecord.controlConsumersAllowed());
         assertFalse(restored.isDirty());
     }
 

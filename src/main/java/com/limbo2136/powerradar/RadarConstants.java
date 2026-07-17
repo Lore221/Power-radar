@@ -26,6 +26,8 @@ public final class RadarConstants {
     public static final int RADAR_LINK_OUTLINE_PULSE_HALF_PERIOD_TICKS = 8;
     public static final int RADAR_LINK_OUTLINE_COLOR_A = 0x58BDEB;
     public static final int RADAR_LINK_OUTLINE_COLOR_B = 0x8ADFFF;
+    public static final int INTERCEPTION_NETWORK_OUTLINE_COLOR_A = 0xF28C28;
+    public static final int INTERCEPTION_NETWORK_OUTLINE_COLOR_B = 0xFFB347;
     public static final int RADAR_DISPLAY_LINK_REFRESH_INTERVAL_TICKS = 5;
 
     public static final float RADAR_DISPLAY_CONTENT_SCALE = 0.88F;
