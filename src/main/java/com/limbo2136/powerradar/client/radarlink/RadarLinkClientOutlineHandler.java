@@ -4,8 +4,12 @@ import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
+import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
+import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
+import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
+import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.UUID;
 import net.createmod.catnip.animation.AnimationTickHolder;
@@ -35,18 +39,25 @@ public final class RadarLinkClientOutlineHandler {
         if (player == null || level == null) {
             if (lastLevel != null) {
                 RadarLinkClientCache.clear();
+                InterceptionNetworkClientCache.clear();
                 lastLevel = null;
             }
             return;
         }
         if (lastLevel != level) {
             RadarLinkClientCache.clear();
+            InterceptionNetworkClientCache.clear();
             lastLevel = level;
         }
 
         ItemStack stack = player.getMainHandItem();
+        if (stack.getItem() instanceof InterceptionControllerBlockItem) {
+            outlineInterceptionNetwork(player, level, stack);
+            return;
+        }
         if (!(stack.getItem() instanceof RadarLinkBlockItem)
-                && !(stack.getItem() instanceof ShellAlarmBlockItem)) {
+                && !(stack.getItem() instanceof ShellAlarmBlockItem)
+                && !(stack.getItem() instanceof OnboardComputerBlockItem)) {
             return;
         }
         UUID networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
@@ -66,6 +77,8 @@ public final class RadarLinkClientOutlineHandler {
                 nodeNetworkId = link.networkId();
             } else if (level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
                 nodeNetworkId = alarm.networkId();
+            } else if (level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
+                nodeNetworkId = computer.networkId();
             } else {
                 RadarLinkClientCache.unregister(level, pos);
                 continue;
@@ -81,13 +94,69 @@ public final class RadarLinkClientOutlineHandler {
         }
     }
 
+    private static void outlineInterceptionNetwork(
+            LocalPlayer player,
+            ClientLevel level,
+            ItemStack stack
+    ) {
+        UUID networkId = stack.get(ModDataComponents.INTERCEPTION_NETWORK_ID.get());
+        if (networkId == null) {
+            return;
+        }
+        int color = interceptionPulseColor();
+        for (BlockPos pos : InterceptionNetworkClientCache.getNodes(level, networkId)) {
+            if (!level.isLoaded(pos)) {
+                InterceptionNetworkClientCache.unregister(level, pos);
+                continue;
+            }
+            UUID nodeNetworkId = interceptionNetworkId(level, pos);
+            if (nodeNetworkId == null) {
+                InterceptionNetworkClientCache.unregister(level, pos);
+                continue;
+            }
+            if (!networkId.equals(nodeNetworkId)) {
+                InterceptionNetworkClientCache.registerOrUpdate(level, pos, nodeNetworkId);
+                continue;
+            }
+            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > outlineRangeSquared()) {
+                continue;
+            }
+            AABB outline = level.getBlockState(pos).getShape(level, pos).bounds().move(pos);
+            CatnipOutlinerAdapter.showRadarLinkOutline(
+                    new OutlineKey(
+                            "interception",
+                            level.dimension().location().toString(),
+                            networkId,
+                            pos.immutable()),
+                    outline,
+                    color);
+        }
+    }
+
+    private static UUID interceptionNetworkId(ClientLevel level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
+            return alarm.interceptionNetworkId();
+        }
+        if (level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
+            return computer.interceptionNetworkId();
+        }
+        if (level.getBlockEntity(pos) instanceof InterceptionControllerBlockEntity controller) {
+            return controller.interceptionNetworkId();
+        }
+        return null;
+    }
+
     private static int outlineLink(ClientLevel level, BlockPos pos, UUID networkId, int color) {
         BlockState state = level.getBlockState(pos);
         AABB outline = state.hasProperty(RadarLinkBlock.FACING)
                 ? outlineBoxFor(state.getValue(RadarLinkBlock.FACING)).move(pos)
                 : state.getShape(level, pos).bounds().move(pos);
         CatnipOutlinerAdapter.showRadarLinkOutline(
-                new OutlineKey(level.dimension().location().toString(), networkId, pos.immutable()),
+                new OutlineKey(
+                        "radar",
+                        level.dimension().location().toString(),
+                        networkId,
+                        pos.immutable()),
                 outline,
                 color
         );
@@ -114,10 +183,17 @@ public final class RadarLinkClientOutlineHandler {
                 : RadarConstants.RADAR_LINK_OUTLINE_COLOR_B;
     }
 
+    private static int interceptionPulseColor() {
+        int phase = AnimationTickHolder.getTicks() % RadarConstants.RADAR_LINK_OUTLINE_PULSE_PERIOD_TICKS;
+        return phase < RadarConstants.RADAR_LINK_OUTLINE_PULSE_HALF_PERIOD_TICKS
+                ? RadarConstants.INTERCEPTION_NETWORK_OUTLINE_COLOR_A
+                : RadarConstants.INTERCEPTION_NETWORK_OUTLINE_COLOR_B;
+    }
+
     private static double outlineRangeSquared() {
         return RadarConstants.RADAR_LINK_OUTLINE_RANGE_BLOCKS * RadarConstants.RADAR_LINK_OUTLINE_RANGE_BLOCKS;
     }
 
-    private record OutlineKey(String dimension, UUID networkId, BlockPos pos) {
+    private record OutlineKey(String kind, String dimension, UUID networkId, BlockPos pos) {
     }
 }

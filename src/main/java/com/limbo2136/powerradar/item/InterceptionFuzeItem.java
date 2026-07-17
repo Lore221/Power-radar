@@ -8,6 +8,7 @@ import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnaps
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -24,6 +25,11 @@ public class InterceptionFuzeItem extends FuzeItem {
     private static final double HALF_CONE_ANGLE_DEGREES = 30.0;
     private static final double MIN_DIRECTION_LENGTH_SQR = 1.0E-6;
     private static final int MIN_ARMING_TICKS = 2;
+    private static final String MANUAL_MODE_TAG = "PowerRadarManualInterceptionFuze";
+    private static final String TRAVELLED_DISTANCE_TAG = "PowerRadarInterceptionFuzeTravelled";
+    private static final String LAST_X_TAG = "PowerRadarInterceptionFuzeLastX";
+    private static final String LAST_Y_TAG = "PowerRadarInterceptionFuzeLastY";
+    private static final String LAST_Z_TAG = "PowerRadarInterceptionFuzeLastZ";
 
     public InterceptionFuzeItem(Item.Properties properties) {
         super(properties);
@@ -31,19 +37,32 @@ public class InterceptionFuzeItem extends FuzeItem {
 
     @Override
     public boolean onProjectileTick(ItemStack stack, AbstractCannonProjectile projectile) {
-        if (!(projectile.level() instanceof ServerLevel level) || projectile.tickCount < MIN_ARMING_TICKS) {
+        if (!(projectile.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        double travelledDistance = updateTravelledDistance(projectile);
+        if (projectile.tickCount < MIN_ARMING_TICKS) {
             return false;
         }
         UUID interceptorUuid = projectile.getUUID();
+        CompoundTag projectileData = projectile.getPersistentData();
+        if (projectileData.getBoolean(MANUAL_MODE_TAG)) {
+            return tickManualAirburst(level, projectile, travelledDistance);
+        }
         UUID targetUuid = InterceptionCoordinator.interceptorTarget(level, interceptorUuid);
         if (targetUuid == null) {
             targetUuid = InterceptionCoordinator.bindInterceptor(level, interceptorUuid, projectile.position());
         }
         if (targetUuid == null) {
+            projectileData.putBoolean(MANUAL_MODE_TAG, true);
             if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
                 PowerRadar.LOGGER.info(
-                        "[PowerRadar BugReport][Interception][Fuze] interceptor={} pos={} state=unassigned velocity={}",
-                        interceptorUuid, shortVec(projectile.position()), shortVec(projectile.getDeltaMovement()));
+                        "[PowerRadar BugReport][Interception][Fuze] interceptor={} pos={} state=manual-armed velocity={} travelledDistance={} airburstDistance={}",
+                        interceptorUuid,
+                        shortVec(projectile.position()),
+                        shortVec(projectile.getDeltaMovement()),
+                        round(travelledDistance),
+                        round(PowerRadarServerConfig.manualInterceptionFuzeDistanceBlocks()));
             }
             return false;
         }
@@ -91,6 +110,68 @@ public class InterceptionFuzeItem extends FuzeItem {
         return true;
     }
 
+    private static boolean tickManualAirburst(
+            ServerLevel level,
+            AbstractCannonProjectile projectile,
+            double travelledDistance
+    ) {
+        double airburstDistance = PowerRadarServerConfig.manualInterceptionFuzeDistanceBlocks();
+        if (travelledDistance < airburstDistance) {
+            return false;
+        }
+        double minimumDot = Math.cos(Math.toRadians(HALF_CONE_ANGLE_DEGREES));
+        int candidates = destroyLiveThreatsInCone(level, projectile, minimumDot);
+        if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
+            PowerRadar.LOGGER.info(
+                    "[PowerRadar BugReport][Interception][Fuze] interceptor={} state=manual-detonated pos={} velocity={} travelledDistance={} airburstDistance={} coneCandidates={}",
+                    projectile.getUUID(),
+                    shortVec(projectile.position()),
+                    shortVec(projectile.getDeltaMovement()),
+                    round(travelledDistance),
+                    round(airburstDistance),
+                    candidates);
+        }
+        InterceptionCoordinator.clearInterceptor(level.getServer(), projectile.getUUID());
+        return true;
+    }
+
+    private static int destroyLiveThreatsInCone(
+            ServerLevel level,
+            AbstractCannonProjectile projectile,
+            double minimumDot
+    ) {
+        Vec3 forward = forward(projectile);
+        if (forward.lengthSqr() < MIN_DIRECTION_LENGTH_SQR) {
+            return 0;
+        }
+        Vec3 normalizedForward = forward.normalize();
+        int candidates = 0;
+        for (AbstractBigCannonProjectile threat : level.getEntitiesOfClass(
+                AbstractBigCannonProjectile.class,
+                projectile.getBoundingBox().inflate(DETECTION_RANGE_BLOCKS),
+                entity -> entity != projectile && entity.isAlive())) {
+            Vec3 toThreat = threat.position().subtract(projectile.position());
+            double distanceSqr = toThreat.lengthSqr();
+            if (!isInsideCone(distanceSqr, normalizedForward, toThreat, minimumDot)) {
+                continue;
+            }
+            candidates++;
+            InterceptionCoordinator.DestructionRoll destruction =
+                    attemptThreatDestruction(level, threat.getUUID(), threat);
+            logFuze(
+                    projectile,
+                    threat.getUUID(),
+                    threat,
+                    destruction.destroyed() ? "manual-destroyed" : "manual-shell-survived",
+                    Math.sqrt(distanceSqr),
+                    normalizedForward.dot(toThreat.normalize()),
+                    destruction.probability(),
+                    destruction.roll(),
+                    destruction.nextProbability());
+        }
+        return candidates;
+    }
+
     private static InterceptionCoordinator.DestructionRoll attemptThreatDestruction(
             ServerLevel level,
             UUID threatUuid,
@@ -114,10 +195,7 @@ public class InterceptionFuzeItem extends FuzeItem {
             UUID primaryTargetUuid,
             double minimumDot
     ) {
-        Vec3 forward = projectile.getDeltaMovement();
-        if (forward.lengthSqr() < MIN_DIRECTION_LENGTH_SQR) {
-            forward = projectile.getOrientation();
-        }
+        Vec3 forward = forward(projectile);
         if (forward.lengthSqr() < MIN_DIRECTION_LENGTH_SQR) {
             return;
         }
@@ -135,14 +213,10 @@ public class InterceptionFuzeItem extends FuzeItem {
             }
             Vec3 toThreat = threat.position().subtract(projectile.position());
             double distanceSqr = toThreat.lengthSqr();
-            if (distanceSqr > DETECTION_RANGE_BLOCKS * DETECTION_RANGE_BLOCKS
-                    || distanceSqr < MIN_DIRECTION_LENGTH_SQR) {
+            if (!isInsideCone(distanceSqr, normalizedForward, toThreat, minimumDot)) {
                 continue;
             }
             double directionDot = normalizedForward.dot(toThreat.normalize());
-            if (directionDot < minimumDot) {
-                continue;
-            }
             InterceptionCoordinator.DestructionRoll destruction =
                     attemptThreatDestruction(level, threatUuid, threat);
             logFuze(
@@ -156,6 +230,42 @@ public class InterceptionFuzeItem extends FuzeItem {
                     destruction.roll(),
                     destruction.nextProbability());
         }
+    }
+
+    private static Vec3 forward(AbstractCannonProjectile projectile) {
+        Vec3 forward = projectile.getDeltaMovement();
+        return forward.lengthSqr() < MIN_DIRECTION_LENGTH_SQR
+                ? projectile.getOrientation()
+                : forward;
+    }
+
+    private static boolean isInsideCone(
+            double distanceSqr,
+            Vec3 normalizedForward,
+            Vec3 toThreat,
+            double minimumDot
+    ) {
+        return distanceSqr <= DETECTION_RANGE_BLOCKS * DETECTION_RANGE_BLOCKS
+                && distanceSqr >= MIN_DIRECTION_LENGTH_SQR
+                && normalizedForward.dot(toThreat.normalize()) >= minimumDot;
+    }
+
+    private static double updateTravelledDistance(AbstractCannonProjectile projectile) {
+        CompoundTag data = projectile.getPersistentData();
+        Vec3 current = projectile.position();
+        Vec3 previous = data.contains(LAST_X_TAG)
+                ? new Vec3(data.getDouble(LAST_X_TAG), data.getDouble(LAST_Y_TAG), data.getDouble(LAST_Z_TAG))
+                : new Vec3(projectile.xo, projectile.yo, projectile.zo);
+        double travelled = data.getDouble(TRAVELLED_DISTANCE_TAG);
+        double segment = current.distanceTo(previous);
+        if (Double.isFinite(segment)) {
+            travelled += segment;
+        }
+        data.putDouble(TRAVELLED_DISTANCE_TAG, travelled);
+        data.putDouble(LAST_X_TAG, current.x);
+        data.putDouble(LAST_Y_TAG, current.y);
+        data.putDouble(LAST_Z_TAG, current.z);
+        return travelled;
     }
 
     private static void logFuze(

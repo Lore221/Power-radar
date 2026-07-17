@@ -7,31 +7,34 @@ import com.limbo2136.powerradar.api.radar.RadarDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
-import com.limbo2136.powerradar.compat.create.InterceptionFrequencyKey;
-import com.limbo2136.powerradar.compat.create.CachedFrequencyLinkBehaviour;
-import com.limbo2136.powerradar.compat.create.PowerRadarFrequencySlot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.bridge.ShellAlarmIconBridge;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
+import com.limbo2136.powerradar.interception.MovingProtectedZone;
+import com.limbo2136.powerradar.interception.MovingProtectedZoneTracker;
+import com.limbo2136.powerradar.interception.ProtectedZoneThreatEvaluator;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
-import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
+import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
 import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBoxTransform;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBehaviour.ValueSettings;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBoard;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsFormatter;
-import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollValueBehaviour;
-import com.simibubi.create.content.redstone.link.LinkBehaviour;
-import com.simibubi.create.foundation.blockEntity.behaviour.ValueBoxTransform;
+import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.INamedIconOptions;
+import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollOptionBehaviour;
+import com.simibubi.create.foundation.gui.AllIcons;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.apache.commons.lang3.tuple.Pair;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -59,8 +61,12 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
-    private final Map<UUID, Evaluation> evaluations = new HashMap<>();
-    private ShellAlarmSideBehaviour protectionSide;
+    private static final BehaviourType<ShellAlarmDimensionsBehaviour> DIMENSIONS_BEHAVIOUR_TYPE = new BehaviourType<>();
+    private final Map<UUID, ThreatEvaluation> evaluations = new HashMap<>();
+    private final MovingProtectedZoneTracker protectedZoneTracker = new MovingProtectedZoneTracker();
+    private ShellAlarmDimensionsBehaviour protectionDimensions;
+    private MovingProtectedZone protectedZone;
+    private boolean sableProtectionMode;
     private boolean networkConnected;
     private boolean alarmActive;
     private int trackedShellCount;
@@ -74,7 +80,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     private boolean runtimeRegisteredLoaded;
     private boolean needsRuntimeRegister;
     private int startupSafetyTicks;
-    private UUID cachedInterceptionChannelId;
+    private UUID interceptionNetworkId;
 
     public ShellAlarmBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SHELL_ALARM.get(), pos, state);
@@ -82,34 +88,17 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
 
     @Override
     public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
-        CenteredSideValueBoxTransform transform = new CenteredSideValueBoxTransform(
-                (state, direction) -> direction == state.getValue(
-                        com.limbo2136.powerradar.block.ShellAlarmBlock.FACING).getOpposite()) {
-            @Override
-            public float getScale() {
-                return 0.75F;
-            }
-        };
-        this.protectionSide = new ShellAlarmSideBehaviour(
-                Component.translatable("message.power_radar.shell_alarm.side"), this, transform);
-        this.protectionSide.between(0, sideStepCount() - 1);
-        this.protectionSide.value = sideToIndex(PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SIDE_BLOCKS);
-        this.protectionSide.withCallback(ignored -> {
-            this.evaluations.clear();
-            this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
-            setChanged();
-        });
-        behaviours.add(this.protectionSide);
+        this.protectionDimensions = new ShellAlarmDimensionsBehaviour(
+                Component.translatable("message.power_radar.shell_alarm.dimensions"),
+                this,
+                new ShellAlarmDimensionsTransform());
+        behaviours.add(this.protectionDimensions);
     }
 
-    @Override
-    public void addBehavioursDeferred(List<BlockEntityBehaviour> behaviours) {
-        Pair<ValueBoxTransform, ValueBoxTransform> slots =
-                ValueBoxTransform.Dual.makeSlots(first ->
-                        new PowerRadarFrequencySlot(first, PowerRadarFrequencySlot.Face.FRONT));
-        LinkBehaviour interceptionFrequency = new CachedFrequencyLinkBehaviour(
-                this, slots, frequency -> this.cachedInterceptionChannelId = InterceptionFrequencyKey.from(frequency));
-        behaviours.add(interceptionFrequency);
+    private void onProtectionZoneSettingsChanged() {
+        this.evaluations.clear();
+        this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
+        setChanged();
     }
 
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state,
@@ -121,6 +110,22 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private void tickServer(ServerLevel level, BlockState state) {
+        if (this.protectedZone == null) {
+            this.protectedZone = this.protectedZoneTracker.broadPhaseZone(
+                    level,
+                    this.worldPosition,
+                    configuredGroundBounds(),
+                    sableProtectionMarginPercent());
+        }
+        boolean nextSableProtectionMode = this.protectedZoneTracker.onSable();
+        if (nextSableProtectionMode != this.sableProtectionMode) {
+            this.sableProtectionMode = nextSableProtectionMode;
+            setChanged();
+            sendData();
+        }
+        if (this.interceptionNetworkId == null) {
+            createInterceptionNetwork();
+        }
         if (this.startupSafetyTicks > 0) {
             this.startupSafetyTicks--;
         } else if (this.networkId != null && (this.needsRuntimeRegister || !this.runtimeRegisteredLoaded)) {
@@ -145,7 +150,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         logStatus(level, powered, connectedNetworkId, controller);
         syncRadarStructureEntityState(level, powered && this.networkConnected);
 
-        if (controller == null) {
+        if (controller == null || this.protectedZone == null) {
             this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
             clearInactiveState(level, state);
             return;
@@ -157,71 +162,107 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
         this.lastProcessedRadarScanGameTime = radarScanGameTime;
 
+        this.protectedZone = this.protectedZoneTracker.broadPhaseZone(
+                level,
+                this.worldPosition,
+                configuredGroundBounds(),
+                sableProtectionMarginPercent());
+        if (this.protectedZone == null) {
+            clearInactiveState(level, state);
+            return;
+        }
+
         RadarDataSource radarController = controller;
-        final int[] count = {0};
+        ServerLevel projectileLevel = authoritativeLevel(level);
+        List<TrackedTargetView> tracks = new ArrayList<>();
         radarController.forEachTrackedTargetBySource(TargetSourceType.CBC_BIG_CANNON_PROJECTILE, track -> {
-            if (track.targetUuid() == null) {
-                return;
-            }
-            count[0]++;
-            UUID uuid = track.targetUuid();
-            present.add(uuid);
-            Evaluation evaluation = this.evaluations.get(uuid);
-            if (evaluation == null) {
-                ThreatEvaluation threatEvaluation = trajectoryThreatens(level, track);
-                this.evaluations.put(uuid, new Evaluation(
-                        gameTime,
-                        track.lastSeenGameTime(),
-                        false,
-                        threatEvaluation.dangerous(),
-                        threatEvaluation.ballistics(),
-                        threatEvaluation.upperCrossing(),
-                        threatEvaluation.lowerCrossing()));
-            } else if (!evaluation.refined()
-                    && track.lastSeenGameTime() > evaluation.trackGameTime()) {
-                ThreatEvaluation threatEvaluation = trajectoryThreatens(level, track);
-                this.evaluations.put(uuid, new Evaluation(
-                        evaluation.firstEvaluationGameTime(),
-                        track.lastSeenGameTime(),
-                        true,
-                        threatEvaluation.dangerous(),
-                        threatEvaluation.ballistics(),
-                        threatEvaluation.upperCrossing(),
-                        threatEvaluation.lowerCrossing()));
+            if (track.targetUuid() != null) {
+                tracks.add(track);
             }
         });
-        shellCount = count[0];
+        shellCount = tracks.size();
+        MovingProtectedZone zone = this.protectedZone;
+        MovingProtectedZone initialZone = zone;
+        List<TrackedTargetView> candidateTracks = tracks.stream()
+                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
+                        projectileLevel,
+                        initialZone,
+                        track,
+                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
+                .toList();
+        if (!candidateTracks.isEmpty()) {
+            zone = this.protectedZoneTracker.refreshGeometryIfDue(
+                    level, zone, sableProtectionMarginPercent());
+            this.protectedZone = zone;
+        }
+        if (zone == null) {
+            clearInactiveState(level, state);
+            return;
+        }
+        if (!candidateTracks.isEmpty()) {
+            zone = this.protectedZoneTracker.sampleVelocity(level, zone);
+            this.protectedZone = zone;
+        }
+        if (zone == null) {
+            clearInactiveState(level, state);
+            return;
+        }
+        MovingProtectedZone sampledZone = zone;
+        candidateTracks = candidateTracks.stream()
+                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
+                        projectileLevel,
+                        sampledZone,
+                        track,
+                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
+                .toList();
+        if (!candidateTracks.isEmpty()) {
+            zone = this.protectedZoneTracker.completeMotionSample(zone);
+            this.protectedZone = zone;
+        }
+        if (zone == null) {
+            clearInactiveState(level, state);
+            return;
+        }
+        for (TrackedTargetView track : candidateTracks) {
+            UUID uuid = track.targetUuid();
+            present.add(uuid);
+            this.evaluations.put(uuid, trajectoryThreatens(projectileLevel, track, zone));
+        }
 
-        Iterator<Map.Entry<UUID, Evaluation>> iterator = this.evaluations.entrySet().iterator();
+        Iterator<Map.Entry<UUID, ThreatEvaluation>> iterator = this.evaluations.entrySet().iterator();
         while (iterator.hasNext()) {
             if (!present.contains(iterator.next().getKey())) {
                 iterator.remove();
             }
         }
         this.trackedShellCount = shellCount;
-        UUID interceptionChannelId = this.cachedInterceptionChannelId;
+        UUID interceptionChannelId = this.interceptionNetworkId;
         if (powered && this.networkConnected && connectedNetworkId != null && interceptionChannelId != null) {
             Set<UUID> dangerousShells = new HashSet<>();
             List<ThreatSnapshot> threatSnapshots = new ArrayList<>();
-            for (Map.Entry<UUID, Evaluation> entry : this.evaluations.entrySet()) {
+            for (Map.Entry<UUID, ThreatEvaluation> entry : this.evaluations.entrySet()) {
                 if (entry.getValue().dangerous()) {
                     UUID threatUuid = entry.getKey();
                     dangerousShells.add(threatUuid);
                     TrackedTargetView track = radarController.findTrackedTarget(threatUuid);
                     if (track != null && track.targetUuid() != null) {
-                        Evaluation evaluation = entry.getValue();
+                        ThreatEvaluation evaluation = entry.getValue();
+                        MovingProtectedZone snapshotZone = this.protectedZone;
                         threatSnapshots.add(new ThreatSnapshot(
                                 threatUuid,
                                 level.dimension(),
-                                track.position(),
-                                track.velocity(),
+                                evaluation.projectilePosition(),
+                                evaluation.projectileVelocity(),
                                 track.lastSeenGameTime(),
                                 evaluation.ballistics().gravity(),
                                 evaluation.ballistics().drag(),
                                 evaluation.ballistics().quadraticDrag(),
-                                this.worldPosition.immutable(),
-                                evaluation.upperCrossing(),
-                                evaluation.lowerCrossing()));
+                                snapshotZone.referencePosition(),
+                                snapshotZone.velocity(),
+                                snapshotZone.acceleration(),
+                                snapshotZone.sampleGameTime(),
+                                null,
+                                null));
                     }
                 }
             }
@@ -234,17 +275,19 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                             radarScanIntervalTicks(radarScanGameTime, previousRadarScanGameTime)));
             if (PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
                 PowerRadar.LOGGER.info(
-                        "[PowerRadar BugReport][ShellAlarm][Scan] alarm={} network={} scanTick={} side={} trackedShells={} dangerousShells={}",
+                        "[PowerRadar BugReport][ShellAlarm][Scan] alarm={} network={} scanTick={} width={} height={} depth={} trackedShells={} dangerousShells={}",
                         this.worldPosition,
                         interceptionChannelId,
                         radarScanGameTime,
-                        protectionSideBlocks(),
+                        protectionWidthBlocks(),
+                        protectionHeightBlocks(),
+                        protectionDepthBlocks(),
                         shellCount,
                         dangerousShells.size());
             }
         }
         boolean nextActive = powered && this.networkConnected
-                && this.evaluations.values().stream().anyMatch(Evaluation::dangerous);
+                && this.evaluations.values().stream().anyMatch(ThreatEvaluation::dangerous);
         if (nextActive != this.alarmActive) {
             this.alarmActive = nextActive;
             notifyRedstone(level, state);
@@ -295,50 +338,36 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
-    private ThreatEvaluation trajectoryThreatens(ServerLevel level, TrackedTargetView track) {
-        Vec3 position = track.position();
-        Vec3 velocity = track.velocity();
-        ShellAlarmCbcCompat.Ballistics fallbackBallistics = ShellAlarmCbcCompat.ballistics(null);
-        if (!track.hasVelocity() || velocity.lengthSqr() < 1.0E-6) {
-            return trajectoryResult(track, position, velocity, null, null,
-                    "no-velocity", false, fallbackBallistics);
-        }
-        Entity entity = track.targetUuid() == null ? null : level.getEntity(track.targetUuid());
-        ShellAlarmCbcCompat.Ballistics ballistics = entity == null
-                ? fallbackBallistics
-                : ShellAlarmCbcCompat.ballistics(entity);
+    private ThreatEvaluation trajectoryThreatens(
+            ServerLevel level,
+            TrackedTargetView track,
+            MovingProtectedZone zone
+    ) {
+        ProtectedZoneThreatEvaluator.Evaluation evaluation = ProtectedZoneThreatEvaluator.evaluate(
+                level,
+                zone,
+                track,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
+        return trajectoryResult(
+                track,
+                evaluation.projectilePosition(),
+                evaluation.projectileVelocity(),
+                evaluation.dangerous() ? "protected-aabb-hit" : "protected-aabb-miss",
+                evaluation);
+    }
+
+    private AABB configuredGroundBounds() {
         Vec3 center = Vec3.atCenterOf(this.worldPosition);
-        double halfSide = protectionSideBlocks() * 0.5;
-        double minX = center.x - halfSide;
-        double maxX = center.x + halfSide;
-        double minZ = center.z - halfSide;
-        double maxZ = center.z + halfSide;
-        double lowerPlaneY = center.y - PowerRadarCeeConstants.SHELL_ALARM_VERTICAL_MARGIN_BLOCKS;
-        double upperPlaneY = center.y + PowerRadarCeeConstants.SHELL_ALARM_VERTICAL_MARGIN_BLOCKS;
-        AABB protectedSquare = new AABB(minX, 0.0, minZ, maxX, 1.0, maxZ);
-
-        ThreatEvaluation analytic = analyticTrajectoryThreatens(
-                track,
-                position,
-                velocity,
-                ballistics,
-                upperPlaneY,
-                lowerPlaneY,
-                protectedSquare);
-        if (analytic != null) {
-            return analytic;
-        }
-
-        return simulatedTrajectoryThreatens(
-                track,
-                position,
-                velocity,
-                ballistics,
-                center,
-                halfSide,
-                upperPlaneY,
-                lowerPlaneY,
-                protectedSquare);
+        double halfWidth = protectionWidthBlocks() * 0.5D;
+        double halfHeight = protectionHeightBlocks() * 0.5D;
+        double halfDepth = protectionDepthBlocks() * 0.5D;
+        return new AABB(
+                center.x - halfWidth,
+                center.y - halfHeight,
+                center.z - halfDepth,
+                center.x + halfWidth,
+                center.y + halfHeight,
+                center.z + halfDepth);
     }
 
     private static long radarScanIntervalTicks(long scanGameTime, long previousScanGameTime) {
@@ -348,112 +377,16 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return scanGameTime - previousScanGameTime;
     }
 
-    private ThreatEvaluation analyticTrajectoryThreatens(
-            TrackedTargetView track,
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            double upperPlaneY,
-            double lowerPlaneY,
-            AABB protectedSquare
-    ) {
-        if (ballistics.quadraticDrag() || !LinearDragTrajectory.supported(ballistics.drag())) {
-            return null;
-        }
-        LinearDragTrajectory.DescendingPlaneCrossings crossings =
-                LinearDragTrajectory.descendingPlaneCrossings(
-                        position,
-                        velocity,
-                        ballistics.gravity(),
-                        ballistics.drag(),
-                        upperPlaneY,
-                        lowerPlaneY,
-                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-        if (crossings == null) {
-            return null;
-        }
-        Vec3 upperCrossing = crossings.upper().position();
-        Vec3 lowerCrossing = crossings.lower().position();
-        AABB trajectoryBounds = horizontalBounds(upperCrossing, lowerCrossing);
-        boolean dangerous = horizontalIntersects(trajectoryBounds, protectedSquare);
-        return trajectoryResult(
-                track,
-                lowerCrossing,
-                crossings.lower().velocity(),
-                upperCrossing,
-                lowerCrossing,
-                dangerous ? "analytic-protected-zone-hit" : "analytic-protected-zone-miss",
-                dangerous,
-                ballistics);
-    }
-
-    private ThreatEvaluation simulatedTrajectoryThreatens(
-            TrackedTargetView track,
-            Vec3 position,
-            Vec3 velocity,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            Vec3 center,
-            double halfSide,
-            double upperPlaneY,
-            double lowerPlaneY,
-            AABB protectedSquare
-    ) {
-        Vec3 upperCrossing = null;
-
-        for (int tick = 0; tick < PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS; tick++) {
-            int substeps = Mth.clamp((int) Math.ceil(velocity.length() / 4.0), 1, 16);
-            double dt = 1.0 / substeps;
-            double dragFactor = dragFactor(ballistics, velocity.length(), dt);
-            for (int step = 0; step < substeps; step++) {
-                Vec3 previousPosition = position;
-                position = position.add(velocity.scale(dt));
-
-                Vec3 crossedUpper = descendingPlaneCrossing(previousPosition, position, upperPlaneY);
-                if (crossedUpper != null) {
-                    upperCrossing = crossedUpper;
-                }
-                    Vec3 lowerCrossing = descendingPlaneCrossing(previousPosition, position, lowerPlaneY);
-                if (lowerCrossing != null) {
-                    if (upperCrossing == null) {
-                        return trajectoryResult(track, position, velocity, null, lowerCrossing,
-                                "lower-crossing-without-upper", false, ballistics);
-                    }
-                    AABB trajectoryBounds = horizontalBounds(upperCrossing, lowerCrossing);
-                    boolean dangerous = horizontalIntersects(trajectoryBounds, protectedSquare);
-                    return trajectoryResult(track, position, velocity, upperCrossing, lowerCrossing,
-                            dangerous ? "protected-zone-hit" : "protected-zone-miss", dangerous, ballistics);
-                }
-                velocity = velocity.scale(dragFactor)
-                        .add(0.0, -ballistics.gravity() * dt, 0.0);
-            }
-            if (position.y < lowerPlaneY && velocity.y <= 0.0) {
-                return trajectoryResult(track, position, velocity, upperCrossing, null,
-                        "passed-below-protected-layer", false, ballistics);
-            }
-            double maxUsefulDistance = halfSide + 2048.0;
-            if (position.distanceToSqr(center) > maxUsefulDistance * maxUsefulDistance
-                    && position.subtract(center).dot(velocity) > 0.0) {
-                return trajectoryResult(track, position, velocity, upperCrossing, null,
-                        "moving-away-outside-limit", false, ballistics);
-            }
-        }
-        return trajectoryResult(track, position, velocity, upperCrossing, null,
-                "simulation-limit", false, ballistics);
-    }
-
     private ThreatEvaluation trajectoryResult(
             TrackedTargetView track,
             Vec3 simulatedPosition,
             Vec3 simulatedVelocity,
-            Vec3 upperCrossing,
-            Vec3 lowerCrossing,
             String reason,
-            boolean dangerous,
-            ShellAlarmCbcCompat.Ballistics ballistics
+            ProtectedZoneThreatEvaluator.Evaluation evaluation
     ) {
         if (PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
             PowerRadar.LOGGER.info(
-                    "[PowerRadar BugReport][ShellAlarm][Trajectory] alarm={} target={} entityType={} source={} trackTick={} trackPos={} trackVelocity={} simulatedPos={} simulatedVelocity={} upperCrossing={} lowerCrossing={} side={} verticalMargin={} result={} dangerous={}",
+                    "[PowerRadar BugReport][ShellAlarm][Trajectory] alarm={} target={} entityType={} source={} trackTick={} trackPos={} trackVelocity={} simulatedPos={} simulatedVelocity={} width={} height={} depth={} result={} dangerous={}",
                     this.worldPosition,
                     track.targetUuid(),
                     track.entityTypeId(),
@@ -463,14 +396,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                     shortVec(track.velocity()),
                     shortVec(simulatedPosition),
                     shortVec(simulatedVelocity),
-                    upperCrossing == null ? "none" : shortVec(upperCrossing),
-                    lowerCrossing == null ? "none" : shortVec(lowerCrossing),
-                    protectionSideBlocks(),
-                    PowerRadarCeeConstants.SHELL_ALARM_VERTICAL_MARGIN_BLOCKS,
+                    protectionWidthBlocks(),
+                    protectionHeightBlocks(),
+                    protectionDepthBlocks(),
                     reason,
-                    dangerous);
+                    evaluation.dangerous());
         }
-        return new ThreatEvaluation(dangerous, ballistics, upperCrossing, lowerCrossing);
+        return new ThreatEvaluation(evaluation);
     }
 
     private static String shortVec(Vec3 vec) {
@@ -481,35 +413,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return Double.isFinite(value) ? Math.round(value * 1000.0) / 1000.0 : value;
     }
 
-    private static Vec3 descendingPlaneCrossing(Vec3 start, Vec3 end, double planeY) {
-        if (start.y < planeY || end.y > planeY || end.y >= start.y) {
-            return null;
-        }
-        double verticalDelta = end.y - start.y;
-        if (Math.abs(verticalDelta) < 1.0E-9) {
-            return null;
-        }
-        double t = (planeY - start.y) / verticalDelta;
-        return start.add(end.subtract(start).scale(Mth.clamp(t, 0.0, 1.0)));
-    }
-
-    private static AABB horizontalBounds(Vec3 first, Vec3 second) {
-        double minX = Math.min(first.x, second.x);
-        double maxX = Math.max(first.x, second.x);
-        double minZ = Math.min(first.z, second.z);
-        double maxZ = Math.max(first.z, second.z);
-        return new AABB(minX, 0.0, minZ, maxX, 1.0, maxZ);
-    }
-
-    private static boolean horizontalIntersects(AABB first, AABB second) {
-        return first.maxX >= second.minX && first.minX <= second.maxX
-                && first.maxZ >= second.minZ && first.minZ <= second.maxZ;
-    }
-
-    private static double dragFactor(ShellAlarmCbcCompat.Ballistics ballistics, double speed, double dt) {
-        double drag = ballistics.quadraticDrag() ? ballistics.drag() * speed : ballistics.drag();
-        return Math.max(0.0, 1.0 - drag * dt);
-    }
 
     private void notifyRedstone(ServerLevel level, BlockState state) {
         Block block = state.getBlock();
@@ -517,11 +420,49 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         level.updateNeighbourForOutputSignal(this.worldPosition, block);
     }
 
-    public int protectionSideBlocks() {
-        int index = this.protectionSide == null
-                ? sideToIndex(PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SIDE_BLOCKS)
-                : this.protectionSide.getValue();
-        return indexToSide(index);
+    public int protectionWidthBlocks() {
+        return this.protectionDimensions == null
+                ? PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS
+                : this.protectionDimensions.width();
+    }
+
+    public int protectionHeightBlocks() {
+        return this.protectionDimensions == null
+                ? PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS
+                : this.protectionDimensions.height();
+    }
+
+    public int protectionDepthBlocks() {
+        return this.protectionDimensions == null
+                ? PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS
+                : this.protectionDimensions.depth();
+    }
+
+    public int sableProtectionMarginPercent() {
+        return this.protectionDimensions == null
+                ? PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SABLE_MARGIN_PERCENT
+                : this.protectionDimensions.sableMarginPercent();
+    }
+
+    public boolean sableProtectionMode() {
+        return this.sableProtectionMode;
+    }
+
+    public AABB displayProtectionBounds() {
+        MovingProtectedZone zone = this.protectedZone;
+        if (zone == null) {
+            return configuredGroundBounds();
+        }
+        double margin = zone.safetyMarginPerSide();
+        return zone.bounds().inflate(
+                zone.bounds().getXsize() * margin,
+                zone.bounds().getYsize() * margin,
+                zone.bounds().getZsize() * margin);
+    }
+
+    private static ServerLevel authoritativeLevel(ServerLevel level) {
+        ServerLevel worldLevel = level.getServer().getLevel(level.dimension());
+        return worldLevel == null ? level : worldLevel;
     }
 
     private void syncRadarStructureEntityState(ServerLevel level, boolean active) {
@@ -604,6 +545,26 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return this.networkId;
     }
 
+    public UUID ensureInterceptionNetworkId() {
+        if (this.interceptionNetworkId == null && this.level instanceof ServerLevel) {
+            createInterceptionNetwork();
+        }
+        return this.interceptionNetworkId;
+    }
+
+    public UUID interceptionNetworkId() {
+        return this.interceptionNetworkId;
+    }
+
+    private void createInterceptionNetwork() {
+        UUID oldId = this.interceptionNetworkId;
+        this.interceptionNetworkId = UUID.randomUUID();
+        InterceptionNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldId, this.interceptionNetworkId);
+        setChanged();
+        sendData();
+    }
+
     public void destroyNetworkMembership() {
         if (this.level instanceof ServerLevel serverLevel && this.networkId != null) {
             RadarNetworkManager.get(serverLevel.getServer()).removePersistentLink(this.networkId, globalPos());
@@ -620,6 +581,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+            InterceptionNetworkNodeClientCacheBridge.onLoaded(
+                    this.level, this.worldPosition, this.interceptionNetworkId);
         }
     }
 
@@ -628,6 +591,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         super.onLoad();
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+            InterceptionNetworkNodeClientCacheBridge.onLoaded(
+                    this.level, this.worldPosition, this.interceptionNetworkId);
         }
     }
 
@@ -636,6 +601,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         unloadNetworkRuntime();
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+            InterceptionNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         }
         super.remove();
     }
@@ -645,6 +611,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         unloadNetworkRuntime();
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+            InterceptionNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         }
         super.onChunkUnloaded();
     }
@@ -709,12 +676,19 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (this.networkId != null) {
             tag.putUUID("PowerRadarNetworkId", this.networkId);
         }
+        if (this.interceptionNetworkId != null) {
+            tag.putUUID("InterceptionNetworkId", this.interceptionNetworkId);
+        }
+        if (clientPacket) {
+            tag.putBoolean("SableProtectionMode", this.sableProtectionMode);
+        }
     }
 
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
         UUID oldNetworkId = this.networkId;
+        UUID oldInterceptionNetworkId = this.interceptionNetworkId;
         PowerRadarCeeState state;
         try {
             state = PowerRadarCeeState.valueOf(tag.getString("ElectricalState"));
@@ -734,17 +708,36 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 ? tag.getUUID("RadarStructureEntity") : null;
         this.networkId = tag.hasUUID("PowerRadarNetworkId")
                 ? tag.getUUID("PowerRadarNetworkId") : null;
+        this.interceptionNetworkId = tag.hasUUID("InterceptionNetworkId")
+                ? tag.getUUID("InterceptionNetworkId") : null;
+        if (clientPacket) {
+            this.sableProtectionMode = tag.getBoolean("SableProtectionMode");
+        }
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onNetworkChanged(
                     this.level, this.worldPosition, oldNetworkId, this.networkId);
+            InterceptionNetworkNodeClientCacheBridge.onNetworkChanged(
+                    this.level,
+                    this.worldPosition,
+                    oldInterceptionNetworkId,
+                    this.interceptionNetworkId);
         }
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
-        if (tag.contains("ProtectionRadius") && this.protectionSide != null) {
-            this.protectionSide.value = sideToIndex(tag.getInt("ProtectionRadius"));
+        if (tag.contains("ProtectionRadius")) {
+            int legacySide = Mth.clamp(
+                    tag.getInt("ProtectionRadius"),
+                    PowerRadarCeeConstants.SHELL_ALARM_MIN_DIMENSION_BLOCKS,
+                    PowerRadarCeeConstants.SHELL_ALARM_MAX_DIMENSION_BLOCKS);
+            if (this.protectionDimensions != null) {
+                this.protectionDimensions.setDimensions(
+                        legacySide,
+                        legacySide,
+                        PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS);
+            }
         }
     }
 
@@ -783,12 +776,15 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         tooltip.add(Component.translatable("power_radar.electrical.power",
                 PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts()))
                 .withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.side",
-                        protectionSideBlocks(), protectionSideBlocks())
-                .withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.height",
-                        PowerRadarCeeConstants.SHELL_ALARM_VERTICAL_MARGIN_BLOCKS)
-                .withStyle(ChatFormatting.DARK_GRAY));
+        if (this.sableProtectionMode) {
+            tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.sable_margin",
+                            sableProtectionMarginPercent())
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        } else {
+            tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.zone",
+                            protectionWidthBlocks(), protectionHeightBlocks(), protectionDepthBlocks())
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        }
         tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.shells", this.trackedShellCount)
                 .withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.translatable(this.alarmActive
@@ -798,60 +794,181 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return true;
     }
 
-    private record Evaluation(
-            long firstEvaluationGameTime,
-            long trackGameTime,
-            boolean refined,
-            boolean dangerous,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            Vec3 upperCrossing,
-            Vec3 lowerCrossing
-    ) {
-    }
-
     private record ThreatEvaluation(
-            boolean dangerous,
-            ShellAlarmCbcCompat.Ballistics ballistics,
-            Vec3 upperCrossing,
-            Vec3 lowerCrossing
+            ProtectedZoneThreatEvaluator.Evaluation evaluation
     ) {
+        boolean dangerous() {
+            return this.evaluation.dangerous();
+        }
+
+        ShellAlarmCbcCompat.Ballistics ballistics() {
+            return this.evaluation.ballistics();
+        }
+
+        Vec3 projectilePosition() {
+            return this.evaluation.projectilePosition();
+        }
+
+        Vec3 projectileVelocity() {
+            return this.evaluation.projectileVelocity();
+        }
     }
 
-    private static int sideStepCount() {
-        return (PowerRadarCeeConstants.SHELL_ALARM_MAX_SIDE_BLOCKS
-                - PowerRadarCeeConstants.SHELL_ALARM_MIN_SIDE_BLOCKS)
-                / PowerRadarCeeConstants.SHELL_ALARM_SIDE_STEP_BLOCKS + 1;
-    }
+    private static class ShellAlarmDimensionsBehaviour extends ScrollOptionBehaviour<ShellAlarmSettingsOption> {
+        private int width = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS;
+        private int depth = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS;
+        private int height = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS;
+        private int sableMarginPercent = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SABLE_MARGIN_PERCENT;
 
-    private static int sideToIndex(int side) {
-        int clamped = Mth.clamp(side, PowerRadarCeeConstants.SHELL_ALARM_MIN_SIDE_BLOCKS,
-                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIDE_BLOCKS);
-        return Math.round((float) (clamped - PowerRadarCeeConstants.SHELL_ALARM_MIN_SIDE_BLOCKS)
-                / PowerRadarCeeConstants.SHELL_ALARM_SIDE_STEP_BLOCKS);
-    }
+        private ShellAlarmDimensionsBehaviour(
+                Component label,
+                SmartBlockEntity blockEntity,
+                CenteredSideValueBoxTransform transform
+        ) {
+            super(ShellAlarmSettingsOption.class, label, blockEntity, transform);
+        }
 
-    private static int indexToSide(int index) {
-        int clamped = Mth.clamp(index, 0, sideStepCount() - 1);
-        return PowerRadarCeeConstants.SHELL_ALARM_MIN_SIDE_BLOCKS
-                + clamped * PowerRadarCeeConstants.SHELL_ALARM_SIDE_STEP_BLOCKS;
-    }
+        @Override
+        public BehaviourType<?> getType() {
+            return DIMENSIONS_BEHAVIOUR_TYPE;
+        }
 
-    private static class ShellAlarmSideBehaviour extends ScrollValueBehaviour {
-        private ShellAlarmSideBehaviour(Component label, SmartBlockEntity blockEntity,
-                                        CenteredSideValueBoxTransform transform) {
-            super(label, blockEntity, transform);
-            withFormatter(value -> Integer.toString(indexToSide(value)));
+        @Override
+        public void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+            tag.putInt("ProtectionWidth", this.width);
+            tag.putInt("ProtectionDepth", this.depth);
+            tag.putInt("ProtectionHeight", this.height);
+            tag.putInt("SableProtectionMarginPercent", this.sableMarginPercent);
+        }
+
+        @Override
+        public void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+            this.width = readDimension(
+                    tag, "ProtectionWidth", PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS);
+            this.depth = readDimension(
+                    tag, "ProtectionDepth", PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS);
+            this.height = readDimension(
+                    tag, "ProtectionHeight", PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS);
+            this.sableMarginPercent = Mth.clamp(
+                    tag.contains("SableProtectionMarginPercent")
+                            ? tag.getInt("SableProtectionMarginPercent")
+                            : PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_SABLE_MARGIN_PERCENT,
+                    0,
+                    PowerRadarCeeConstants.SHELL_ALARM_MAX_SABLE_MARGIN_PERCENT);
         }
 
         @Override
         public ValueSettingsBoard createBoard(Player player, BlockHitResult hitResult) {
+            if (this.blockEntity instanceof ShellAlarmBlockEntity alarm && alarm.sableProtectionMode()) {
+                return new ValueSettingsBoard(
+                        this.label,
+                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SABLE_MARGIN_PERCENT,
+                        10,
+                        ImmutableList.of(Component.translatable(
+                                "message.power_radar.shell_alarm.sable_margin")),
+                        new ValueSettingsFormatter(settings ->
+                                Component.translatable("power_radar.unit.percent", settings.value())));
+            }
             return new ValueSettingsBoard(
                     this.label,
-                    sideStepCount() - 1,
-                    4,
-                    ImmutableList.of(Component.translatable("message.power_radar.shell_alarm.side_row")),
+                    PowerRadarCeeConstants.SHELL_ALARM_MAX_DIMENSION_BLOCKS,
+                    10,
+                    ImmutableList.of(
+                            Component.translatable("message.power_radar.shell_alarm.width"),
+                            Component.translatable("message.power_radar.shell_alarm.depth"),
+                            Component.translatable("message.power_radar.shell_alarm.height")),
                     new ValueSettingsFormatter(settings ->
-                            Component.translatable("power_radar.unit.blocks", indexToSide(settings.value()))));
+                            Component.translatable("power_radar.unit.blocks", settings.value())));
+        }
+
+        @Override
+        public void setValueSettings(Player player, ValueSettings settings, boolean ctrlHeld) {
+            if (this.blockEntity instanceof ShellAlarmBlockEntity alarm && alarm.sableProtectionMode()) {
+                this.sableMarginPercent = Mth.clamp(
+                        settings.value(), 0, PowerRadarCeeConstants.SHELL_ALARM_MAX_SABLE_MARGIN_PERCENT);
+            } else {
+                int dimension = clampDimension(settings.value());
+                switch (Mth.clamp(settings.row(), 0, 2)) {
+                    case 0 -> this.width = dimension;
+                    case 1 -> this.depth = dimension;
+                    case 2 -> this.height = dimension;
+                    default -> {
+                    }
+                }
+            }
+            if (this.blockEntity instanceof ShellAlarmBlockEntity alarm) {
+                alarm.onProtectionZoneSettingsChanged();
+                alarm.sendData();
+            }
+            playFeedbackSound(this);
+        }
+
+        @Override
+        public ValueSettings getValueSettings() {
+            if (this.blockEntity instanceof ShellAlarmBlockEntity alarm && alarm.sableProtectionMode()) {
+                return new ValueSettings(0, this.sableMarginPercent);
+            }
+            return new ValueSettings(0, this.width);
+        }
+
+        int width() {
+            return clampDimension(this.width);
+        }
+
+        int depth() {
+            return clampDimension(this.depth);
+        }
+
+        int height() {
+            return clampDimension(this.height);
+        }
+
+        int sableMarginPercent() {
+            return Mth.clamp(this.sableMarginPercent, 0,
+                    PowerRadarCeeConstants.SHELL_ALARM_MAX_SABLE_MARGIN_PERCENT);
+        }
+
+        void setDimensions(int width, int depth, int height) {
+            this.width = clampDimension(width);
+            this.depth = clampDimension(depth);
+            this.height = clampDimension(height);
+        }
+
+        private static int readDimension(CompoundTag tag, String key, int fallback) {
+            return tag.contains(key) ? clampDimension(tag.getInt(key)) : fallback;
+        }
+
+        private static int clampDimension(int value) {
+            return Mth.clamp(
+                    value,
+                    PowerRadarCeeConstants.SHELL_ALARM_MIN_DIMENSION_BLOCKS,
+                    PowerRadarCeeConstants.SHELL_ALARM_MAX_DIMENSION_BLOCKS);
+        }
+    }
+
+    private enum ShellAlarmSettingsOption implements INamedIconOptions {
+        DIMENSIONS;
+
+        @Override
+        public AllIcons getIcon() {
+            return ShellAlarmIconBridge.dimensions();
+        }
+
+        @Override
+        public String getTranslationKey() {
+            return "message.power_radar.shell_alarm.dimensions";
+        }
+    }
+
+    private static class ShellAlarmDimensionsTransform extends CenteredSideValueBoxTransform {
+        private ShellAlarmDimensionsTransform() {
+            super((state, direction) -> direction == state.getValue(
+                    com.limbo2136.powerradar.block.ShellAlarmBlock.FACING));
+        }
+
+        @Override
+        public float getScale() {
+            return 0.55F;
         }
     }
 }

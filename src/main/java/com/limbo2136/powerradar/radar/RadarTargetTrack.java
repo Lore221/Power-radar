@@ -10,6 +10,7 @@ import net.minecraft.world.phys.Vec3;
 
 public class RadarTargetTrack implements TrackedTargetView {
     private static final double ACCELERATION_SMOOTHING = 0.35;
+    private static final double SABLE_ACCELERATION_SMOOTHING = 0.65;
     private static final double MAX_TRACK_ACCELERATION_BLOCKS_PER_TICK_SQUARED = 0.25;
 
     private final TargetKey key;
@@ -38,6 +39,8 @@ public class RadarTargetTrack implements TrackedTargetView {
     private long lastConfirmedAliveGameTime;
     private double boundingHeight;
     private double approximateSize;
+    private float structureHeadingDegrees;
+    private int silhouetteVersion;
 
     public RadarTargetTrack(
             TargetKey key,
@@ -96,6 +99,8 @@ public class RadarTargetTrack implements TrackedTargetView {
         copy.hasAcceleration = this.hasAcceleration;
         copy.lastSeenGameTime = this.lastSeenGameTime;
         copy.lastConfirmedAliveGameTime = this.lastConfirmedAliveGameTime;
+        copy.structureHeadingDegrees = this.structureHeadingDegrees;
+        copy.silhouetteVersion = this.silhouetteVersion;
         return copy;
     }
 
@@ -258,6 +263,19 @@ public class RadarTargetTrack implements TrackedTargetView {
         return this.approximateSize;
     }
 
+    public float structureHeadingDegrees() {
+        return this.structureHeadingDegrees;
+    }
+
+    public int silhouetteVersion() {
+        return this.silhouetteVersion;
+    }
+
+    public void updateSablePresentation(float headingDegrees, int silhouetteVersion) {
+        this.structureHeadingDegrees = headingDegrees;
+        this.silhouetteVersion = Math.max(0, silhouetteVersion);
+    }
+
     private void updateAcceleration(
             RadarTargetCategory category,
             double nextVelocityX,
@@ -279,9 +297,12 @@ public class RadarTargetTrack implements TrackedTargetView {
             this.accelerationY = rawY;
             this.accelerationZ = rawZ;
         } else {
-            this.accelerationX = lerp(this.accelerationX, rawX, ACCELERATION_SMOOTHING);
-            this.accelerationY = lerp(this.accelerationY, rawY, ACCELERATION_SMOOTHING);
-            this.accelerationZ = lerp(this.accelerationZ, rawZ, ACCELERATION_SMOOTHING);
+            double smoothing = category == RadarTargetCategory.SABLE_STRUCTURE
+                    ? SABLE_ACCELERATION_SMOOTHING
+                    : ACCELERATION_SMOOTHING;
+            this.accelerationX = lerp(this.accelerationX, rawX, smoothing);
+            this.accelerationY = lerp(this.accelerationY, rawY, smoothing);
+            this.accelerationZ = lerp(this.accelerationZ, rawZ, smoothing);
         }
         this.hasAcceleration = true;
     }

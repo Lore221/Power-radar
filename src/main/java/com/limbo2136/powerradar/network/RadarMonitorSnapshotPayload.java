@@ -73,7 +73,7 @@ public record RadarMonitorSnapshotPayload(
      * Increment when the encoded snapshot bytes change intentionally. The value also versions the
      * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
      */
-    public static final int WIRE_SCHEMA_VERSION = 3;
+    public static final int WIRE_SCHEMA_VERSION = 5;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
@@ -278,7 +278,9 @@ public record RadarMonitorSnapshotPayload(
             buffer.writeDouble(zone.centerX());
             buffer.writeDouble(zone.centerY());
             buffer.writeDouble(zone.centerZ());
-            buffer.writeVarInt(zone.sideBlocks());
+            buffer.writeVarInt(zone.widthBlocks());
+            buffer.writeVarInt(zone.heightBlocks());
+            buffer.writeVarInt(zone.depthBlocks());
         }
         buffer.writeVarInt(this.targets.size());
         for (RadarDisplayTarget target : this.targets) {
@@ -322,7 +324,8 @@ public record RadarMonitorSnapshotPayload(
         ArrayList<ShellAlarmDisplayZone> zones = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             zones.add(new ShellAlarmDisplayZone(buffer.readResourceLocation(), buffer.readDouble(),
-                    buffer.readDouble(), buffer.readDouble(), buffer.readVarInt()));
+                    buffer.readDouble(), buffer.readDouble(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt()));
         }
         return List.copyOf(zones);
     }
@@ -393,6 +396,8 @@ public record RadarMonitorSnapshotPayload(
                 buffer.readDouble(),
                 buffer.readDouble(),
                 buffer.readBoolean(),
+                buffer.readFloat(),
+                buffer.readVarInt(),
                 buffer.readVarInt()
         );
     }
@@ -412,6 +417,8 @@ public record RadarMonitorSnapshotPayload(
         buffer.writeDouble(target.velocityY());
         buffer.writeDouble(target.velocityZ());
         buffer.writeBoolean(target.hasVelocity());
+        buffer.writeFloat(target.structureHeadingDegrees());
+        buffer.writeVarInt(target.silhouetteVersion());
         buffer.writeVarInt(target.displayAgeTicks());
     }
 
@@ -549,7 +556,10 @@ public record RadarMonitorSnapshotPayload(
         }
         size += varIntBytes(this.shellAlarmZones.size());
         for (ShellAlarmDisplayZone zone : this.shellAlarmZones) {
-            size += resourceLocationBytes(zone.dimensionId()) + 24 + varIntBytes(zone.sideBlocks());
+            size += resourceLocationBytes(zone.dimensionId()) + 24
+                    + varIntBytes(zone.widthBlocks())
+                    + varIntBytes(zone.heightBlocks())
+                    + varIntBytes(zone.depthBlocks());
         }
         size += varIntBytes(this.targets.size());
         for (RadarDisplayTarget target : this.targets) {
@@ -586,6 +596,8 @@ public record RadarMonitorSnapshotPayload(
                 + resourceLocationBytes(target.dimensionId())
                 + 48
                 + 1
+                + 4
+                + varIntBytes(target.silhouetteVersion())
                 + varIntBytes(target.displayAgeTicks());
         return size;
     }

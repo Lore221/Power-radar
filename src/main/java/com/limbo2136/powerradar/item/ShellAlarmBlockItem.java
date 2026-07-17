@@ -35,13 +35,10 @@ public final class ShellAlarmBlockItem extends PowerRadarElectricalBlockItem {
         Player player = context.getPlayer();
         Level level = context.getLevel();
         if (player != null && !player.isShiftKeyDown()
-                && (level.getBlockEntity(context.getClickedPos()) instanceof RadarLinkBlockEntity
-                || level.getBlockEntity(context.getClickedPos()) instanceof ShellAlarmBlockEntity)) {
+                && RadarNetworkTuning.isSourceAt(level, context.getClickedPos())) {
             ItemStack stack = context.getItemInHand();
             if (!level.isClientSide()) {
-                UUID targetNetworkId = level.getBlockEntity(context.getClickedPos()) instanceof RadarLinkBlockEntity targetLink
-                        ? targetLink.ensureNetworkId()
-                        : ((ShellAlarmBlockEntity) level.getBlockEntity(context.getClickedPos())).ensureNetworkId();
+                UUID targetNetworkId = RadarNetworkTuning.ensureNetworkAt(level, context.getClickedPos());
                 UUID currentNetworkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
                 if (targetNetworkId.equals(currentNetworkId)) {
                     player.displayClientMessage(Component.translatable(
@@ -80,21 +77,22 @@ public final class ShellAlarmBlockItem extends PowerRadarElectricalBlockItem {
             BlockState state
     ) {
         boolean result = super.updateCustomBlockEntityTag(pos, level, player, stack, state);
-        if (level instanceof ServerLevel
+        if (level instanceof ServerLevel serverLevel
                 && level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
-            UUID networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
-            if (networkId != null) {
-                alarm.initializeNetwork(networkId);
-                if (player != null) {
-                    RadarNetworkConnectionStatus status = RadarNetworkManager.get(
-                                    ((ServerLevel) level).getServer())
-                            .resolveControllersForConsumer(networkId,
-                                    GlobalPos.of(level.dimension(), pos)).status();
-                    player.displayClientMessage(status == RadarNetworkConnectionStatus.OUT_OF_RANGE
-                            ? Component.translatable("message.power_radar.network.link_out_of_range")
-                                    .withStyle(ChatFormatting.RED)
-                            : Component.translatable("message.power_radar.network.item_tuned"), true);
-                }
+            UUID stackNetworkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+            boolean tuned = stackNetworkId != null;
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            UUID networkId = tuned ? stackNetworkId : manager.createNetwork();
+            alarm.initializeNetwork(networkId);
+            if (player != null) {
+                RadarNetworkConnectionStatus status = manager.resolveControllersForConsumer(
+                        networkId, GlobalPos.of(level.dimension(), pos)).status();
+                player.displayClientMessage(status == RadarNetworkConnectionStatus.OUT_OF_RANGE
+                        ? Component.translatable("message.power_radar.network.link_out_of_range")
+                                .withStyle(ChatFormatting.RED)
+                        : Component.translatable(tuned
+                                ? "message.power_radar.network.item_tuned"
+                                : "message.power_radar.network.created"), true);
             }
         }
         return result;

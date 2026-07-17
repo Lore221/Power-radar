@@ -80,6 +80,11 @@ public final class RadarTargetCache {
                 continue;
             }
 
+            if (track.sourceKind() == RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE) {
+                track.confirmAlive(gameTime);
+                continue;
+            }
+
             staleValidated++;
             Entity entity = resolveKnownEntity(level, track);
             if (entity == null || !entity.isAlive()) {

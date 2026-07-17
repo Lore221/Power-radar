@@ -5,7 +5,10 @@ import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
+import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
+import com.limbo2136.powerradar.item.NameCardItem;
+import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
@@ -28,6 +31,10 @@ public final class ModItems {
             () -> new PowerRadarElectricalBlockItem(ModBlocks.SURFACE_RADAR_CONTROLLER.get(), new Item.Properties(),
                     PowerRadarElectricalBlockItem.TooltipKind.RADAR_CONTROLLER));
     public static final DeferredItem<BlockItem> COMPUTING_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.COMPUTING_BLOCK);
+    public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = ITEMS.register(
+            "onboard_computer", () -> new OnboardComputerBlockItem(ModBlocks.ONBOARD_COMPUTER.get(), new Item.Properties()));
+    public static final DeferredItem<NameCardItem> NAME_CARD = ITEMS.register(
+            "name_card", () -> new NameCardItem(new Item.Properties().stacksTo(1)));
     public static final DeferredItem<RadarFilterCardItem> TARGETING_CARD = ITEMS.register(
             "targeting_card", () -> new RadarFilterCardItem(RadarFilterCardItem.Kind.TARGETING,
                     new Item.Properties().stacksTo(1)));
@@ -63,12 +70,11 @@ public final class ModItems {
     public static final DeferredItem<ShellAlarmBlockItem> SHELL_ALARM = ITEMS.register(
             "shell_alarm",
             () -> new ShellAlarmBlockItem(ModBlocks.SHELL_ALARM.get(), new Item.Properties()));
-    public static final DeferredItem<BlockItem> INTERCEPTION_CONTROLLER = ITEMS.register(
+    public static final DeferredItem<InterceptionControllerBlockItem> INTERCEPTION_CONTROLLER = ITEMS.register(
             "interception_controller",
-            () -> new PowerRadarElectricalBlockItem(
+            () -> new InterceptionControllerBlockItem(
                     ModBlocks.INTERCEPTION_CONTROLLER.get(),
-                    new Item.Properties(),
-                    PowerRadarElectricalBlockItem.TooltipKind.INTERCEPTION_CONTROLLER));
+                    new Item.Properties()));
     public static final DeferredItem<InterceptionFuzeItem> INTERCEPTION_FUZE = ITEMS.register(
             "interception_fuze",
             () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(16)));

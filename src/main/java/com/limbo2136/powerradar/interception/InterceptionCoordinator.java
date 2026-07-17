@@ -1,6 +1,6 @@
 package com.limbo2136.powerradar.interception;
 
-import com.limbo2136.powerradar.compat.create.PowerRadarLinkRange;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -12,7 +12,6 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.GlobalPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -55,7 +54,10 @@ public final class InterceptionCoordinator {
                         0.05,
                         0.0,
                         false,
-                        alarmPos.immutable(),
+                        Vec3.atCenterOf(alarmPos),
+                        Vec3.ZERO,
+                        Vec3.ZERO,
+                        level.getGameTime(),
                         null,
                         null))
                 .toList();
@@ -82,12 +84,17 @@ public final class InterceptionCoordinator {
         long expiresAt = gameTime + sanitizeThreatTtl(threatTtlTicks);
         NetworkState network = network(level.getServer(), networkId);
         boolean changed = false;
+        Set<UUID> publishedThreats = new HashSet<>();
         for (ThreatSnapshot snapshot : threatSnapshots) {
             UUID threatUuid = snapshot.threatUuid();
+            publishedThreats.add(threatUuid);
             Threat previous = network.threats.put(threatUuid,
                     new Threat(
                             snapshot.dimension(),
-                            snapshot.alarmPos().immutable(),
+                            snapshot.referencePosition(),
+                            snapshot.referenceVelocity(),
+                            snapshot.referenceAcceleration(),
+                            snapshot.referenceGameTime(),
                             snapshot.position(),
                             snapshot.velocity(),
                             snapshot.lastSeenGameTime(),
@@ -100,13 +107,49 @@ public final class InterceptionCoordinator {
             if (previous == null) {
                 network.threatRevision++;
                 changed = true;
-                observeIncomingDirection(level, network, alarmPos, threatUuid, gameTime);
+                observeIncomingDirection(
+                        authoritativeLevel(level), network, snapshot.referencePosition(), threatUuid, gameTime);
             }
         }
-        cleanup(network, gameTime);
-        if (changed || (!threatSnapshots.isEmpty() && network.assignments.isEmpty())) {
-            rebuildAssignments(level, network);
+        if (retainOnlyPublishedThreats(network.threats, publishedThreats)) {
+            network.threatRevision++;
+            changed = true;
         }
+        cleanup(network, gameTime);
+        if (changed || (!publishedThreats.isEmpty() && network.assignments.isEmpty())) {
+            rebuildAssignments(authoritativeLevel(level), network);
+        }
+    }
+
+    static boolean retainOnlyPublishedThreats(Map<UUID, ?> threats, Set<UUID> publishedThreats) {
+        return threats.keySet().removeIf(threatUuid -> !publishedThreats.contains(threatUuid));
+    }
+
+    public static synchronized void clearPublishedThreats(
+            MinecraftServer server,
+            UUID networkId,
+            long gameTime
+    ) {
+        ServerState state = SERVERS.get(server);
+        if (state == null) {
+            return;
+        }
+        NetworkState network = state.networks.get(networkId);
+        if (network == null || network.threats.isEmpty()) {
+            return;
+        }
+        network.threats.clear();
+        network.threatRevision++;
+        cleanup(network, gameTime);
+    }
+
+    public static synchronized void removeNetwork(MinecraftServer server, UUID networkId) {
+        ServerState state = SERVERS.get(server);
+        if (state == null) {
+            return;
+        }
+        state.networks.remove(networkId);
+        state.interceptorTargets.values().removeIf(assignment -> assignment.networkId.equals(networkId));
     }
 
     public static long threatTtlTicksForScanInterval(long scanIntervalTicks) {
@@ -137,14 +180,14 @@ public final class InterceptionCoordinator {
         long gameTime = level.getGameTime();
         NetworkState network = network(level.getServer(), networkId);
         cleanup(network, gameTime);
-        GlobalPos immutableControllerPos = controllerKey(level, controllerPos);
+        InterceptionControllerKey immutableControllerPos = controllerKey(level, controllerPos);
         ControllerState previous = network.controllers.get(immutableControllerPos);
         network.controllers.put(immutableControllerPos,
                 new ControllerState(snapshot, gameTime + CONTROLLER_SNAPSHOT_TTL_TICKS));
         if (previous != null && assignmentEquivalent(previous.snapshot, snapshot)) {
             return;
         }
-        rebuildAssignments(level, network);
+        rebuildAssignments(authoritativeLevel(level), network);
     }
 
     @Nullable
@@ -168,7 +211,7 @@ public final class InterceptionCoordinator {
         NetworkState network = network(server, networkId);
         cleanup(network, gameTime);
         Threat threat = network.threats.get(threatUuid);
-        return threat == null ? null : Vec3.atCenterOf(threat.alarmPos);
+        return threat == null ? null : projectedReference(threat, gameTime);
     }
 
     @Nullable
@@ -195,12 +238,12 @@ public final class InterceptionCoordinator {
         }
         long gameTime = level.getGameTime();
         NetworkState network = network(level.getServer(), networkId);
-        GlobalPos controllerKey = controllerKey(level, controllerPos);
+        InterceptionControllerKey controllerKey = controllerKey(level, controllerPos);
         network.rejections.put(
                 new ControllerThreat(controllerKey, threatUuid),
                 gameTime + REJECTED_ASSIGNMENT_TTL_TICKS);
         network.assignments.remove(controllerKey);
-        rebuildAssignments(level, network);
+        rebuildAssignments(authoritativeLevel(level), network);
     }
 
     public static synchronized void unregisterController(
@@ -209,7 +252,7 @@ public final class InterceptionCoordinator {
             BlockPos controllerPos
     ) {
         NetworkState network = network(level.getServer(), networkId);
-        GlobalPos controllerKey = controllerKey(level, controllerPos);
+        InterceptionControllerKey controllerKey = controllerKey(level, controllerPos);
         network.controllers.remove(controllerKey);
         network.assignments.remove(controllerKey);
         network.rejections.keySet().removeIf(key -> key.controllerPos.equals(controllerKey));
@@ -320,7 +363,7 @@ public final class InterceptionCoordinator {
         for (Map.Entry<UUID, NetworkState> networkEntry : server.networks.entrySet()) {
             NetworkState network = networkEntry.getValue();
             cleanup(network, gameTime);
-            for (Map.Entry<GlobalPos, PendingLaunch> entry : network.pendingLaunches.entrySet()) {
+            for (Map.Entry<InterceptionControllerKey, PendingLaunch> entry : network.pendingLaunches.entrySet()) {
                 PendingLaunch launch = entry.getValue();
                 if (entry.getKey().dimension() != level.dimension() || launch.expiresAt < gameTime) {
                     continue;
@@ -437,7 +480,7 @@ public final class InterceptionCoordinator {
 
     private static void releaseOwnedReservation(
             NetworkState network,
-            GlobalPos controllerPos,
+            InterceptionControllerKey controllerPos,
             @Nullable UUID threatUuid
     ) {
         if (threatUuid == null) {
@@ -459,7 +502,10 @@ public final class InterceptionCoordinator {
                 threat.gravity,
                 threat.drag,
                 threat.quadraticDrag,
-                threat.alarmPos,
+                threat.referencePosition,
+                threat.referenceVelocity,
+                threat.referenceAcceleration,
+                threat.referenceGameTime,
                 threat.upperCrossing,
                 threat.lowerCrossing);
     }
@@ -498,8 +544,8 @@ public final class InterceptionCoordinator {
         if (threats.isEmpty()) {
             return;
         }
-        List<GlobalPos> availableControllers = new ArrayList<>();
-        for (Map.Entry<GlobalPos, ControllerState> entry : network.controllers.entrySet()) {
+        List<InterceptionControllerKey> availableControllers = new ArrayList<>();
+        for (Map.Entry<InterceptionControllerKey, ControllerState> entry : network.controllers.entrySet()) {
             if (entry.getKey().dimension() == level.dimension() && entry.getValue().snapshot.available) {
                 availableControllers.add(entry.getKey());
             }
@@ -514,17 +560,17 @@ public final class InterceptionCoordinator {
             slots.add(threats.get(index % threats.size()).getKey());
         }
 
-        Set<GlobalPos> assignedControllers = new HashSet<>();
+        Set<InterceptionControllerKey> assignedControllers = new HashSet<>();
         for (UUID threatUuid : slots) {
-            GlobalPos bestController = null;
+            InterceptionControllerKey bestController = null;
             double bestCost = Double.MAX_VALUE;
-            for (GlobalPos controllerPos : availableControllers) {
+            for (InterceptionControllerKey controllerPos : availableControllers) {
                 if (assignedControllers.contains(controllerPos)
                         || network.rejections.containsKey(new ControllerThreat(controllerPos, threatUuid))) {
                     continue;
                 }
                 Threat threat = network.threats.get(threatUuid);
-                if (threat == null || !PowerRadarLinkRange.withinRange(controllerPos.pos(), threat.alarmPos)) {
+                if (threat == null) {
                     continue;
                 }
                 ControllerSnapshot snapshot = network.controllers.get(controllerPos).snapshot;
@@ -546,8 +592,11 @@ public final class InterceptionCoordinator {
         if (entity == null || !entity.isAlive()) {
             return Double.MAX_VALUE;
         }
-        double speed = Math.max(0.05, entity.getDeltaMovement().length());
-        return entity.position().distanceTo(Vec3.atCenterOf(threat.alarmPos)) / speed;
+        double elapsedTicks = Math.max(0L, level.getGameTime() - threat.referenceGameTime);
+        Vec3 referenceVelocity = threat.referenceVelocity.add(
+                threat.referenceAcceleration.scale(elapsedTicks));
+        double speed = Math.max(0.05, entity.getDeltaMovement().subtract(referenceVelocity).length());
+        return entity.position().distanceTo(projectedReference(threat, level.getGameTime())) / speed;
     }
 
     private static double roughEngagementCost(
@@ -593,18 +642,35 @@ public final class InterceptionCoordinator {
         return wrapped < 0.0F ? wrapped + 360.0F : wrapped;
     }
 
-    private static GlobalPos controllerKey(ServerLevel level, BlockPos controllerPos) {
-        return controllerKey(level.dimension(), controllerPos);
+    private static InterceptionControllerKey controllerKey(ServerLevel level, BlockPos controllerPos) {
+        UUID structureUuid = SableRadarIntegration.containingStructureUuid(level, controllerPos).orElse(null);
+        return controllerKey(level.dimension(), structureUuid, controllerPos);
     }
 
-    static GlobalPos controllerKey(ResourceKey<Level> dimension, BlockPos controllerPos) {
-        return GlobalPos.of(dimension, controllerPos);
+    static InterceptionControllerKey controllerKey(
+            ResourceKey<Level> dimension,
+            @Nullable UUID structureUuid,
+            BlockPos controllerPos
+    ) {
+        return new InterceptionControllerKey(dimension, structureUuid, controllerPos);
+    }
+
+    private static ServerLevel authoritativeLevel(ServerLevel level) {
+        ServerLevel worldLevel = level.getServer().getLevel(level.dimension());
+        return worldLevel == null ? level : worldLevel;
+    }
+
+    private static Vec3 projectedReference(Threat threat, long gameTime) {
+        double elapsedTicks = Math.max(0L, gameTime - threat.referenceGameTime);
+        return threat.referencePosition
+                .add(threat.referenceVelocity.scale(elapsedTicks))
+                .add(threat.referenceAcceleration.scale(0.5D * elapsedTicks * elapsedTicks));
     }
 
     private static void observeIncomingDirection(
             ServerLevel level,
             NetworkState network,
-            BlockPos alarmPos,
+            Vec3 referencePosition,
             UUID threatUuid,
             long gameTime
     ) {
@@ -616,7 +682,7 @@ public final class InterceptionCoordinator {
         if (entity == null || !entity.isAlive()) {
             return;
         }
-        Vec3 delta = entity.position().subtract(Vec3.atCenterOf(alarmPos));
+        Vec3 delta = entity.position().subtract(referencePosition);
         if (delta.x * delta.x + delta.z * delta.z < 1.0E-6) {
             return;
         }
@@ -650,9 +716,9 @@ public final class InterceptionCoordinator {
     private static final class NetworkState {
         private final Map<UUID, Threat> threats = new HashMap<>();
         private final Map<UUID, Reservation> reservations = new HashMap<>();
-        private final Map<GlobalPos, PendingLaunch> pendingLaunches = new HashMap<>();
-        private final Map<GlobalPos, ControllerState> controllers = new HashMap<>();
-        private final Map<GlobalPos, UUID> assignments = new HashMap<>();
+        private final Map<InterceptionControllerKey, PendingLaunch> pendingLaunches = new HashMap<>();
+        private final Map<InterceptionControllerKey, ControllerState> controllers = new HashMap<>();
+        private final Map<InterceptionControllerKey, UUID> assignments = new HashMap<>();
         private final Map<ControllerThreat, Long> rejections = new HashMap<>();
         private final Map<UUID, Long> observedDirections = new HashMap<>();
         private double incomingDirectionX;
@@ -662,7 +728,10 @@ public final class InterceptionCoordinator {
 
     private record Threat(
             ResourceKey<Level> dimension,
-            BlockPos alarmPos,
+            Vec3 referencePosition,
+            Vec3 referenceVelocity,
+            Vec3 referenceAcceleration,
+            long referenceGameTime,
             Vec3 position,
             Vec3 velocity,
             long lastSeenGameTime,
@@ -675,7 +744,7 @@ public final class InterceptionCoordinator {
     ) {
     }
 
-    private record Reservation(GlobalPos controllerPos, double engagementTicks, long expiresAt) {
+    private record Reservation(InterceptionControllerKey controllerPos, double engagementTicks, long expiresAt) {
     }
 
     private record InterceptorAssignment(UUID networkId, UUID targetUuid, long expiresAt) {
@@ -718,16 +787,25 @@ public final class InterceptionCoordinator {
             double gravity,
             double drag,
             boolean quadraticDrag,
-            BlockPos alarmPos,
+            Vec3 referencePosition,
+            Vec3 referenceVelocity,
+            Vec3 referenceAcceleration,
+            long referenceGameTime,
             @Nullable Vec3 upperCrossing,
             @Nullable Vec3 lowerCrossing
     ) {
+        public Vec3 referencePositionAt(long gameTime) {
+            double elapsedTicks = Math.max(0L, gameTime - referenceGameTime);
+            return referencePosition
+                    .add(referenceVelocity.scale(elapsedTicks))
+                    .add(referenceAcceleration.scale(0.5D * elapsedTicks * elapsedTicks));
+        }
     }
 
     private record ControllerState(ControllerSnapshot snapshot, long expiresAt) {
     }
 
-    private record ControllerThreat(GlobalPos controllerPos, UUID threatUuid) {
+    private record ControllerThreat(InterceptionControllerKey controllerPos, UUID threatUuid) {
     }
 
     private record PendingLaunch(
@@ -741,7 +819,7 @@ public final class InterceptionCoordinator {
     private record PendingCandidate(
             UUID networkId,
             NetworkState network,
-            GlobalPos controllerPos,
+            InterceptionControllerKey controllerPos,
             PendingLaunch launch,
             double distanceSqr
     ) {

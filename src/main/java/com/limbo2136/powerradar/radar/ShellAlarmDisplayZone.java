@@ -7,6 +7,8 @@ public record ShellAlarmDisplayZone(
         double centerX,
         double centerY,
         double centerZ,
-        int sideBlocks
+        int widthBlocks,
+        int heightBlocks,
+        int depthBlocks
 ) {
 }

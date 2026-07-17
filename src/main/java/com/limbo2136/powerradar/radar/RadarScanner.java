@@ -1,24 +1,28 @@
 package com.limbo2136.powerradar.radar;
 
-import com.limbo2136.powerradar.PowerRadar;
-import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.limbo2136.powerradar.compat.createbigcannons.RadarCbcProjectileCompat;
+import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -32,108 +36,6 @@ import net.minecraft.world.phys.Vec3;
 
 public final class RadarScanner {
     private RadarScanner() {
-    }
-
-    public static RadarScanResult scan(RadarScanProfile profile, RadarScanContext context, RadarTargetCache targetCache) {
-        return scanBucket(profile, context, targetCache, 1, 0, true);
-    }
-
-    public static RadarScanResult scanBucket(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            int scanWindowTicks,
-            int scanBucket,
-            boolean validateStale
-    ) {
-        return scanBucket(profile, context, targetCache, scanWindowTicks, scanBucket, validateStale, new HashSet<>());
-    }
-
-    public static RadarScanResult scanBucket(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            int scanWindowTicks,
-            int scanBucket,
-            boolean validateStale,
-            Set<TargetKey> seenScratch
-    ) {
-        return scanBucket(
-                profile,
-                context,
-                targetCache,
-                scanWindowTicks,
-                scanBucket,
-                validateStale,
-                seenScratch,
-                buildSlicePlan(profile, context));
-    }
-
-    public static RadarScanResult scanBucket(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            int scanWindowTicks,
-            int scanBucket,
-            boolean validateStale,
-            Set<TargetKey> seenScratch,
-            RadarScanSlicePlan slicePlan
-    ) {
-        boolean measurePerf = PowerRadarDebugOptions.scanOptimizationLogging();
-        long totalStart = measurePerf ? System.nanoTime() : 0L;
-        if (profile.range() <= 0) {
-            return validateStale ? housekeeping(context, targetCache, totalStart) : emptyScanResult(context, targetCache, totalStart);
-        }
-
-        AABB searchBox = slicePlan.searchBox();
-
-        CandidateScanResult candidateResult = scanCandidates(
-                profile,
-                context,
-                targetCache,
-                slicePlan,
-                measurePerf,
-                Math.max(1, scanWindowTicks),
-                Math.floorMod(scanBucket, Math.max(1, scanWindowTicks)),
-                seenScratch
-        );
-        seenScratch.clear();
-
-        long staleValidationStart = measurePerf ? System.nanoTime() : 0L;
-        RadarStaleValidationResult staleValidationResult = validateStale
-                ? targetCache.validateStaleTracks(context.level(), context.gameTime())
-                : new RadarStaleValidationResult(0, 0, 0);
-        long staleValidationDuration = measurePerf ? System.nanoTime() - staleValidationStart : 0L;
-
-        long totalDuration = measurePerf ? System.nanoTime() - totalStart : 0L;
-        RadarScanResult result = new RadarScanResult(
-                true,
-                0,
-                profile.range(),
-                context.assemblyFacing(),
-                candidateResult.candidateCount(),
-                candidateResult.acceptedCount(),
-                candidateResult.updatedTrackCount(),
-                candidateResult.addedTrackCount(),
-                candidateResult.ignoredItemCount(),
-                candidateResult.ignoredCategoryCount(),
-                staleValidationResult.staleValidatedCount(),
-                staleValidationResult.removedDeadOrMissingCount(),
-                staleValidationResult.removedExpiredCount(),
-                searchBox.getXsize(),
-                searchBox.getYsize(),
-                searchBox.getZsize(),
-                candidateResult.sliceCount(),
-                candidateResult.broadQueryCount(),
-                candidateResult.typedQueryCount(),
-                targetCache.size(),
-                candidateResult.getEntitiesDurationNanos(),
-                candidateResult.filteringDurationNanos(),
-                staleValidationDuration,
-                totalDuration
-        );
-        logOptimizationDebug(context, result);
-        return result;
     }
 
     public static RadarScanSlicePlan buildSlicePlan(RadarScanProfile profile, RadarScanContext context) {
@@ -158,8 +60,8 @@ public final class RadarScanner {
         return new RadarScanSlicePlan(searchBox, List.copyOf(slices));
     }
 
-    public static RadarScanResult housekeeping(RadarScanContext context, RadarTargetCache targetCache) {
-        return housekeeping(context, targetCache, PowerRadarDebugOptions.scanOptimizationLogging() ? System.nanoTime() : 0L);
+    public static void housekeeping(RadarScanContext context, RadarTargetCache targetCache) {
+        targetCache.validateStaleTracks(context.level(), context.gameTime());
     }
 
     /** Refreshes acquired tracks directly, without another spatial entity query. */
@@ -193,299 +95,137 @@ public final class RadarScanner {
                 : context.level().getEntity(track.targetId());
     }
 
-    private static RadarScanResult housekeeping(RadarScanContext context, RadarTargetCache targetCache, long totalStart) {
-        boolean measurePerf = PowerRadarDebugOptions.scanOptimizationLogging();
-        long staleValidationStart = measurePerf ? System.nanoTime() : 0L;
-        RadarStaleValidationResult staleValidationResult = targetCache.validateStaleTracks(context.level(), context.gameTime());
-        long staleValidationDuration = measurePerf ? System.nanoTime() - staleValidationStart : 0L;
-        long totalDuration = measurePerf ? System.nanoTime() - totalStart : 0L;
-        return new RadarScanResult(
-                false,
-                0,
-                0,
-                context.assemblyFacing(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                staleValidationResult.staleValidatedCount(),
-                staleValidationResult.removedDeadOrMissingCount(),
-                staleValidationResult.removedExpiredCount(),
-                0.0,
-                0.0,
-                0.0,
-                0,
-                0,
-                0,
-                targetCache.size(),
-                0L,
-                0L,
-                staleValidationDuration,
-                totalDuration
-        );
+    static List<Entity> queryCandidates(
+            ServerLevel level,
+            AABB searchBox,
+            Collection<RadarScanProfile> profiles
+    ) {
+        boolean players = profiles.stream().anyMatch(RadarScanProfile::detectPlayers);
+        boolean projectiles = profiles.stream().anyMatch(RadarScanProfile::detectProjectiles);
+        boolean mobs = profiles.stream().anyMatch(profile -> profile.detectPassiveMobs() || profile.detectHostileMobs());
+        boolean unknown = profiles.stream().anyMatch(RadarScanProfile::detectUnknown);
+        int typedQueries = (players ? 1 : 0) + (projectiles ? 1 : 0) + (mobs ? 1 : 0) + (unknown ? 1 : 0);
+        if (typedQueries >= 3) {
+            return level.getEntities((Entity) null, searchBox, Entity::isAlive);
+        }
+
+        Map<UUID, Entity> candidates = new LinkedHashMap<>();
+        if (players) {
+            level.getEntities(EntityTypeTest.forClass(Player.class), searchBox, Entity::isAlive)
+                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+        }
+        if (projectiles) {
+            level.getEntities(EntityTypeTest.forClass(Projectile.class), searchBox, Entity::isAlive)
+                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+            RadarCbcProjectileCompat.projectileClass().ifPresent(type ->
+                    level.getEntities(EntityTypeTest.forClass(type), searchBox, Entity::isAlive)
+                            .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity)));
+        }
+        if (mobs) {
+            level.getEntities(EntityTypeTest.forClass(Mob.class), searchBox, Entity::isAlive)
+                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+        }
+        if (unknown) {
+            level.getEntities(EntityTypeTest.forClass(AbstractContraptionEntity.class), searchBox, Entity::isAlive)
+                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+            level.getEntities(EntityTypeTest.forClass(RadarStructureEntity.class), searchBox, Entity::isAlive)
+                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+        }
+        return List.copyOf(candidates.values());
     }
 
-    private static RadarScanResult emptyScanResult(RadarScanContext context, RadarTargetCache targetCache, long totalStart) {
-        boolean measurePerf = PowerRadarDebugOptions.scanOptimizationLogging();
-        long totalDuration = measurePerf ? System.nanoTime() - totalStart : 0L;
-        return new RadarScanResult(
-                false,
-                0,
-                0,
-                context.assemblyFacing(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0.0,
-                0.0,
-                0.0,
-                0,
-                0,
-                0,
-                targetCache.size(),
-                0L,
-                0L,
-                0L,
-                totalDuration
-        );
-    }
-
-    private static CandidateScanResult scanCandidates(
+    static boolean processSharedCandidate(
             RadarScanProfile profile,
             RadarScanContext context,
             RadarTargetCache targetCache,
-            RadarScanSlicePlan slicePlan,
-            boolean measurePerf,
-            int scanWindowTicks,
-            int scanBucket,
+            Entity entity,
             Set<TargetKey> seen
     ) {
-        CandidateScanStats stats = new CandidateScanStats();
-        seen.clear();
-        boolean broadQuery = shouldUseBroadQuery(profile);
-        Optional<Class<? extends Entity>> cbcProjectileClass = RadarCbcProjectileCompat.projectileClass();
-
-        int sliceIndex = 0;
-        for (AABB slice : slicePlan.slices()) {
-            int currentSliceIndex = sliceIndex++;
-            stats.sliceCount++;
-            if (scanWindowTicks > 1 && currentSliceIndex % scanWindowTicks != scanBucket) {
-                continue;
-            }
-            if (broadQuery) {
-                stats.broadQueryCount++;
-                long queryStart = measurePerf ? System.nanoTime() : 0L;
-                List<Entity> entities = context.level().getEntities((Entity) null, slice, Entity::isAlive);
-                stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-                addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-                continue;
-            }
-
-            stats.typedQueryCount += collectTypedCandidates(
-                    profile,
-                    context,
-                    targetCache,
-                    slice,
-                    seen,
-                    stats,
-                    measurePerf,
-                    cbcProjectileClass
-            );
+        TargetKey key = TargetKey.entity(context.dimensionId(), entity.getUUID(), entity.getId());
+        if (!seen.add(key) || entity instanceof ItemEntity) {
+            return false;
         }
-
-        return new CandidateScanResult(
-                stats.candidateCount,
-                stats.acceptedCount,
-                stats.updatedTrackCount,
-                stats.addedTrackCount,
-                stats.ignoredItemCount,
-                stats.ignoredCategoryCount,
-                stats.sliceCount,
-                stats.broadQueryCount,
-                stats.typedQueryCount,
-                stats.getEntitiesDurationNanos,
-                stats.filteringDurationNanos
-        );
-    }
-
-    private static boolean shouldUseBroadQuery(RadarScanProfile profile) {
-        int typedQueries = 0;
-        if (profile.detectPlayers()) {
-            typedQueries++;
-        }
-        if (profile.detectProjectiles()) {
-            typedQueries++;
-        }
-        if (profile.detectPassiveMobs() || profile.detectHostileMobs()) {
-            typedQueries++;
-        }
-        if (profile.detectUnknown()) {
-            typedQueries++;
-        }
-        return typedQueries >= 3;
-    }
-
-    private static void logOptimizationDebug(RadarScanContext context, RadarScanResult result) {
-        if (!optimizationDebugEnabled()) {
-            return;
-        }
-        PowerRadar.LOGGER.info(
-                "[PowerRadar BugReport][RadarScan] radarId={} tick={} range={} box={}x{}x{} slices={} broadQueries={} typedQueries={} candidates={} accepted={} cache={} getEntitiesUs={} filteringUs={} staleValidationUs={}",
-                context.radarId(),
-                context.gameTime(),
-                result.range(),
-                formatOneDecimal(result.aabbSizeX()),
-                formatOneDecimal(result.aabbSizeY()),
-                formatOneDecimal(result.aabbSizeZ()),
-                result.aabbSliceCount(),
-                result.broadQueryCount(),
-                result.typedQueryCount(),
-                result.candidateCount(),
-                result.acceptedCount(),
-                result.cacheSizeAfter(),
-                result.getEntitiesDurationNanos() / 1_000L,
-                result.filteringDurationNanos() / 1_000L,
-                result.staleValidationDurationNanos() / 1_000L
-        );
-    }
-
-    private static boolean optimizationDebugEnabled() {
-        return PowerRadarDebugOptions.scanOptimizationLogging();
-    }
-
-    private static String formatOneDecimal(double value) {
-        return String.format(java.util.Locale.ROOT, "%.1f", value);
-    }
-
-    private static int collectTypedCandidates(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            AABB slice,
-            Set<TargetKey> seen,
-            CandidateScanStats stats,
-            boolean measurePerf,
-            Optional<Class<? extends Entity>> cbcProjectileClass
-    ) {
-        int queryCount = 0;
-        if (profile.detectPlayers()) {
-            queryCount++;
-            long queryStart = measurePerf ? System.nanoTime() : 0L;
-            List<Player> entities = context.level().getEntities(EntityTypeTest.forClass(Player.class), slice, Entity::isAlive);
-            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-        }
-
-        if (profile.detectProjectiles()) {
-            queryCount++;
-            long vanillaProjectileQueryStart = measurePerf ? System.nanoTime() : 0L;
-            List<Projectile> entities = context.level().getEntities(EntityTypeTest.forClass(Projectile.class), slice, Entity::isAlive);
-            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - vanillaProjectileQueryStart : 0L;
-            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-
-            if (cbcProjectileClass.isPresent()) {
-                queryCount++;
-                long cbcProjectileQueryStart = measurePerf ? System.nanoTime() : 0L;
-                List<? extends Entity> cbcProjectiles = context.level().getEntities(
-                        EntityTypeTest.forClass(cbcProjectileClass.get()),
-                        slice,
-                        Entity::isAlive);
-                stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - cbcProjectileQueryStart : 0L;
-                addDeduplicatedCandidates(profile, context, targetCache, seen, stats, cbcProjectiles, measurePerf);
-            }
-        }
-
-        if (profile.detectPassiveMobs() || profile.detectHostileMobs()) {
-            queryCount++;
-            long queryStart = measurePerf ? System.nanoTime() : 0L;
-            List<Mob> entities = context.level().getEntities(EntityTypeTest.forClass(Mob.class), slice,
-                    entity -> entity.isAlive() && isDetectedMobCategory(RadarTargetClassifier.classify(entity, profile)));
-            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-        }
-        if (profile.detectUnknown()) {
-            queryCount++;
-            long queryStart = measurePerf ? System.nanoTime() : 0L;
-            List<AbstractContraptionEntity> entities = context.level().getEntities(
-                    EntityTypeTest.forClass(AbstractContraptionEntity.class), slice, Entity::isAlive);
-            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, entities, measurePerf);
-
-            queryCount++;
-            queryStart = measurePerf ? System.nanoTime() : 0L;
-            List<RadarStructureEntity> radarStructures = context.level().getEntities(
-                    EntityTypeTest.forClass(RadarStructureEntity.class), slice, Entity::isAlive);
-            stats.getEntitiesDurationNanos += measurePerf ? System.nanoTime() - queryStart : 0L;
-            addDeduplicatedCandidates(profile, context, targetCache, seen, stats, radarStructures, measurePerf);
-        }
-        return queryCount;
-    }
-
-    private static boolean isDetectedMobCategory(RadarTargetCategory category) {
-        return category == RadarTargetCategory.PASSIVE_MOB || category == RadarTargetCategory.HOSTILE_MOB;
-    }
-
-    private static void addDeduplicatedCandidates(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            Set<TargetKey> seen,
-            CandidateScanStats stats,
-            Iterable<? extends Entity> queriedEntities,
-            boolean measurePerf
-    ) {
-        for (Entity entity : queriedEntities) {
-            TargetKey key = TargetKey.entity(context.dimensionId(), entity.getUUID(), entity.getId());
-            if (seen.add(key)) {
-                stats.candidateCount++;
-                long filteringStart = measurePerf ? System.nanoTime() : 0L;
-                processCandidate(profile, context, targetCache, stats, entity, key);
-                stats.filteringDurationNanos += measurePerf ? System.nanoTime() - filteringStart : 0L;
-            }
-        }
-    }
-
-    private static void processCandidate(
-            RadarScanProfile profile,
-            RadarScanContext context,
-            RadarTargetCache targetCache,
-            CandidateScanStats stats,
-            Entity entity,
-            TargetKey key
-    ) {
-        if (entity == null || !entity.isAlive()) {
-            return;
-        }
-        if (entity instanceof ItemEntity) {
-            stats.ignoredItemCount++;
-            return;
-        }
-
         RadarTargetCategory category = RadarTargetClassifier.classify(entity, profile);
-        if (category == null) {
-            stats.ignoredCategoryCount++;
-            return;
+        if (category == null || !RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
+            return false;
         }
-        if (!RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
-            return;
-        }
+        updateTrack(context, targetCache, key, entity, category, targetCache.get(key));
+        return true;
+    }
 
-        RadarTargetTrack existingTrack = targetCache.get(key);
-        updateTrack(context, targetCache, key, entity, category, existingTrack);
-        stats.acceptedCount++;
-        if (existingTrack != null) {
-            stats.updatedTrackCount++;
-        } else {
-            stats.addedTrackCount++;
+    static boolean processSableCandidate(
+            RadarScanProfile profile,
+            RadarScanContext context,
+            RadarTargetCache targetCache,
+            SableStructureObservation structure,
+            Set<TargetKey> seen
+    ) {
+        TargetKey key = TargetKey.entity(context.dimensionId(), structure.structureUuid(), -1);
+        Vec3 coveragePoint = closestPoint(structure.worldBounds(), context);
+        if (!seen.add(key)) {
+            return false;
         }
+        if (!RadarCoverageFilter.isPointInCoverage(profile, context, coveragePoint)) {
+            return false;
+        }
+        RadarTargetTrack track = targetCache.get(key);
+        Vec3 velocity = structure.velocity();
+        double height = structure.worldBounds().getYsize();
+        double size = Math.max(structure.worldBounds().getXsize(), structure.worldBounds().getZsize());
+        if (track == null) {
+            targetCache.put(key, new RadarTargetTrack(
+                    key,
+                    structure.structureUuid(),
+                    -1,
+                    ResourceLocation.fromNamespaceAndPath("sable", "sublevel"),
+                    RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE,
+                    structure.displayName(),
+                    RadarTargetCategory.SABLE_STRUCTURE,
+                    context.dimensionId(),
+                    structure.worldOrigin().x,
+                    structure.worldOrigin().y,
+                    structure.worldOrigin().z,
+                    velocity.x,
+                    velocity.y,
+                    velocity.z,
+                    true,
+                    height,
+                    size,
+                    context.gameTime()));
+        } else {
+            track.update(
+                    RadarTargetCategory.SABLE_STRUCTURE,
+                    structure.displayName(),
+                    context.dimensionId(),
+                    structure.worldOrigin().x,
+                    structure.worldOrigin().y,
+                    structure.worldOrigin().z,
+                    velocity.x,
+                    velocity.y,
+                    velocity.z,
+                    true,
+                    height,
+                    size,
+                    context.gameTime());
+        }
+        SableRadarIntegration.markDetected(context.level(), structure, context.gameTime());
+        int silhouetteVersion = SableRadarIntegration.silhouetteSnapshot(
+                        context.level().getServer(), context.dimensionId(), structure.structureUuid())
+                .map(snapshot -> snapshot.version())
+                .orElse(0);
+        targetCache.get(key).updateSablePresentation(structure.headingDegrees(), silhouetteVersion);
+        return true;
+    }
+
+    private static Vec3 closestPoint(AABB bounds, RadarScanContext context) {
+        return new Vec3(
+                clamp(context.radarOriginX(), bounds.minX, bounds.maxX),
+                clamp(context.radarOriginY(), bounds.minY, bounds.maxY),
+                clamp(context.radarOriginZ(), bounds.minZ, bounds.maxZ));
+    }
+
+    private static double clamp(double value, double minimum, double maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
     }
 
     public static RadarStructure validateStructure(ServerLevel level, BlockPos controllerPos) {
@@ -711,32 +451,4 @@ public final class RadarScanner {
         return null;
     }
 
-    private static final class CandidateScanStats {
-        private int candidateCount;
-        private int acceptedCount;
-        private int updatedTrackCount;
-        private int addedTrackCount;
-        private int ignoredItemCount;
-        private int ignoredCategoryCount;
-        private int sliceCount;
-        private int broadQueryCount;
-        private int typedQueryCount;
-        private long getEntitiesDurationNanos;
-        private long filteringDurationNanos;
-    }
-
-    private record CandidateScanResult(
-            int candidateCount,
-            int acceptedCount,
-            int updatedTrackCount,
-            int addedTrackCount,
-            int ignoredItemCount,
-            int ignoredCategoryCount,
-            int sliceCount,
-            int broadQueryCount,
-            int typedQueryCount,
-            long getEntitiesDurationNanos,
-            long filteringDurationNanos
-    ) {
-    }
 }

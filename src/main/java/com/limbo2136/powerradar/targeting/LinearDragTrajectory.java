@@ -32,6 +32,41 @@ public final class LinearDragTrajectory {
         return (1.0 - Math.pow(retention(drag), ticks)) / drag;
     }
 
+    /**
+     * Continuous analytic coefficients for one axis of CBC's discrete trajectory.
+     * The acceleration is signed in axis units per tick squared (gravity is negative Y).
+     */
+    public static AxisTrajectory axisTrajectory(
+            double initialPosition,
+            double initialVelocity,
+            double constantAcceleration,
+            double drag
+    ) {
+        if (drag <= 1.0E-6) {
+            return new AxisTrajectory(
+                    initialPosition,
+                    initialPosition,
+                    initialVelocity,
+                    constantAcceleration * 0.5,
+                    0.0,
+                    0.0);
+        }
+        if (!supported(drag)) {
+            throw new IllegalArgumentException("Unsupported linear drag: " + drag);
+        }
+        double inverseDrag = 1.0 / drag;
+        double scale = stepScale(drag);
+        double transientTerm = initialVelocity * inverseDrag
+                - constantAcceleration * inverseDrag * inverseDrag;
+        return new AxisTrajectory(
+                initialPosition,
+                initialPosition + scale * transientTerm,
+                scale * constantAcceleration * inverseDrag + constantAcceleration * 0.5,
+                0.0,
+                -scale * transientTerm,
+                Math.log1p(-drag));
+    }
+
     public static Vec3 positionAfterTicks(
             Vec3 initialPosition,
             Vec3 initialVelocity,
@@ -279,6 +314,60 @@ public final class LinearDragTrajectory {
     }
 
     public record TrajectoryState(Vec3 position, Vec3 velocity) {
+    }
+
+    /** Position = constant + linear*t + quadratic*t^2 + exponential*exp(logarithm*t). */
+    public record AxisTrajectory(
+            double initial,
+            double constant,
+            double linear,
+            double quadratic,
+            double exponential,
+            double logarithm
+    ) {
+        public double position(double ticks) {
+            return this.initial
+                    + this.linear * ticks
+                    + this.quadratic * ticks * ticks
+                    + exponentialDelta(ticks);
+        }
+
+        public double firstDerivative(double ticks) {
+            return this.linear
+                    + 2.0 * this.quadratic * ticks
+                    + this.logarithm * exponentialValue(ticks);
+        }
+
+        public double secondDerivative(double ticks) {
+            return 2.0 * this.quadratic
+                    + this.logarithm * this.logarithm * exponentialValue(ticks);
+        }
+
+        public AxisTrajectory relativeTo(
+                double referencePosition,
+                double referenceVelocity,
+                double referenceAcceleration
+        ) {
+            return new AxisTrajectory(
+                    this.initial - referencePosition,
+                    this.constant - referencePosition,
+                    this.linear - referenceVelocity,
+                    this.quadratic - referenceAcceleration * 0.5,
+                    this.exponential,
+                    this.logarithm);
+        }
+
+        private double exponentialValue(double ticks) {
+            return this.exponential == 0.0
+                    ? 0.0
+                    : this.exponential * Math.exp(this.logarithm * ticks);
+        }
+
+        private double exponentialDelta(double ticks) {
+            return this.exponential == 0.0
+                    ? 0.0
+                    : this.exponential * Math.expm1(this.logarithm * ticks);
+        }
     }
 
     public record DescendingPlaneCrossings(PlaneCrossing upper, PlaneCrossing lower) {

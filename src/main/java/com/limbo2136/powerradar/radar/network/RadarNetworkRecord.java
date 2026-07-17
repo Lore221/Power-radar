@@ -6,7 +6,7 @@ import java.util.UUID;
 import net.minecraft.core.GlobalPos;
 
 public class RadarNetworkRecord {
-    public static final int SCHEMA_VERSION = 3;
+    public static final int SCHEMA_VERSION = 4;
 
     private final UUID id;
     private final int schemaVersion;
@@ -16,6 +16,7 @@ public class RadarNetworkRecord {
     private final Set<String> whitelistedSableNames = new LinkedHashSet<>();
     private UUID selectedTargetUuid;
     private int autotargetFilterMask;
+    private boolean controlConsumersAllowed = true;
 
     public RadarNetworkRecord(UUID id) {
         this(id, SCHEMA_VERSION);
@@ -64,5 +65,13 @@ public class RadarNetworkRecord {
 
     public void setAutotargetFilterMask(int autotargetFilterMask) {
         this.autotargetFilterMask = autotargetFilterMask;
+    }
+
+    public boolean controlConsumersAllowed() {
+        return this.controlConsumersAllowed;
+    }
+
+    public void setControlConsumersAllowed(boolean controlConsumersAllowed) {
+        this.controlConsumersAllowed = controlConsumersAllowed;
     }
 }

@@ -7,6 +7,8 @@ import com.limbo2136.powerradar.api.radar.RadarCoverage;
 import com.limbo2136.powerradar.api.radar.RadarTargetingDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
@@ -19,6 +21,8 @@ import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarModuleConstants;
 import com.limbo2136.powerradar.radar.RadarOrientationState;
 import com.limbo2136.powerradar.radar.RadarScanContext;
+import com.limbo2136.powerradar.radar.RadarScanCoordinator;
+import com.limbo2136.powerradar.radar.RadarScanRequest;
 import com.limbo2136.powerradar.radar.RadarScanSlicePlan;
 import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarScanProfile;
@@ -27,7 +31,6 @@ import com.limbo2136.powerradar.radar.RadarStructure;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCache;
 import com.limbo2136.powerradar.radar.RadarTargetTrack;
-import com.limbo2136.powerradar.radar.TargetKey;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
@@ -35,9 +38,8 @@ import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
@@ -82,12 +84,11 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     private double cachedElectricalPowerWatts;
     private double cachedElectricalResistanceOhms = PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
     private RadarScanProfile activeScanProfile;
-    private RadarScanProfile activeProjectileScanProfile;
+    private RadarScanProfile activeFrequentScanProfile;
     private RadarScanContext activeScanContext;
     private RadarScanSlicePlan activeScanSlicePlan;
     private ScanSlicePlanKey activeScanSlicePlanKey;
     private boolean activeScanPowered;
-    private final Set<TargetKey> scanSeenScratch = new HashSet<>();
     private long displayRevision;
     private UUID radarStructureEntityUuid;
     private boolean radarStructureEntitySyncPending = true;
@@ -163,47 +164,56 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
         boolean scanSliceTick = bucket < scanSliceTicks;
         boolean publishTick = bucket == updateIntervalTicks - 1;
+        RadarScanProfile discoveryProfile = null;
+        List<AABB> discoverySlices = List.of();
         if (this.activeScanPowered && this.activeScanProfile != null) {
             RadarScanContext tickContext = scanContextAt(level.getGameTime());
             if (scanSliceTick) {
-                if (this.activeScanSlicePlan == null) {
+                ScanSlicePlanKey tickSlicePlanKey = scanSlicePlanKey(this.activeScanProfile, tickContext);
+                if (this.activeScanSlicePlan == null || !tickSlicePlanKey.equals(this.activeScanSlicePlanKey)) {
                     this.activeScanSlicePlan = RadarScanner.buildSlicePlan(this.activeScanProfile, tickContext);
-                    this.activeScanSlicePlanKey = scanSlicePlanKey(this.activeScanProfile, tickContext);
+                    this.activeScanSlicePlanKey = tickSlicePlanKey;
                 }
-                RadarScanProfile discoveryProfile = isRegularDiscoveryWindow(
+                discoveryProfile = isRegularDiscoveryWindow(
                         level.getGameTime(), updateIntervalTicks)
                         ? this.activeScanProfile
-                        : this.activeProjectileScanProfile;
+                        : this.activeFrequentScanProfile;
                 if (hasDiscoveryTargets(discoveryProfile)) {
-                    RadarScanner.scanBucket(
-                            discoveryProfile,
-                            tickContext,
-                            this.targetCache,
-                            scanSliceTicks,
-                            bucket,
-                            false,
-                            this.scanSeenScratch,
-                            this.activeScanSlicePlan);
+                    ArrayList<AABB> selected = new ArrayList<>();
+                    List<AABB> slices = this.activeScanSlicePlan.slices();
+                    for (int index = 0; index < slices.size(); index++) {
+                        if (index % scanSliceTicks == bucket) {
+                            selected.add(slices.get(index));
+                        }
+                    }
+                    discoverySlices = List.copyOf(selected);
                 }
             }
-            if (publishTick) {
-                RadarScanner.refreshTrackedEntities(this.activeScanProfile, tickContext, this.targetCache);
-                RadarScanner.housekeeping(tickContext, this.targetCache);
+            if (!discoverySlices.isEmpty() || publishTick) {
+                RadarScanCoordinator.submit(level, new RadarScanRequest(
+                        this.radarId(),
+                        discoverySlices.isEmpty() ? null : discoveryProfile,
+                        publishTick ? this.activeScanProfile : null,
+                        tickContext,
+                        this.targetCache,
+                        discoverySlices,
+                        publishTick,
+                        publishTick ? () -> this.lastScanGameTime = tickContext.gameTime() : null));
             }
         } else if (publishTick && this.activeScanContext != null) {
-            RadarScanner.housekeeping(scanContextAt(level.getGameTime()), this.targetCache);
-        }
-        if (publishTick) {
-            this.lastScanGameTime = level.getGameTime();
+            RadarScanContext tickContext = scanContextAt(level.getGameTime());
+            RadarScanCoordinator.submit(level, new RadarScanRequest(
+                    this.radarId(), null, null, tickContext, this.targetCache, List.of(), true,
+                    () -> this.lastScanGameTime = tickContext.gameTime()));
         }
     }
 
     private int scanBucket(long gameTime, int scanWindowTicks) {
-        return Math.floorMod((int) gameTime - scanPhase(scanWindowTicks), scanWindowTicks);
+        return Math.floorMod((int) gameTime, scanWindowTicks);
     }
 
     private boolean isRegularDiscoveryWindow(long gameTime, int scanWindowTicks) {
-        long window = Math.floorDiv(gameTime - scanPhase(scanWindowTicks), scanWindowTicks);
+        long window = Math.floorDiv(gameTime, scanWindowTicks);
         return Math.floorMod(window, REGULAR_DISCOVERY_WINDOW_MULTIPLIER) == 0;
     }
 
@@ -216,25 +226,20 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 || profile.detectUnknown();
     }
 
-    private int scanPhase(int scanWindowTicks) {
-        BlockPos pos = this.worldPosition;
-        int hash = pos.getX() * 73428767 ^ pos.getY() * 912931 ^ pos.getZ() * 42317861;
-        return Math.floorMod(hash, scanWindowTicks);
-    }
-
     private RadarScanContext scanContextAt(long gameTime) {
         if (this.activeScanContext == null) {
             return null;
         }
+        RadarWorldPose worldPose = worldPoseAt(gameTime);
         return new RadarScanContext(
                 this.activeScanContext.level(),
                 this.activeScanContext.dimensionId(),
                 this.activeScanContext.radarId(),
-                this.activeScanContext.radarOriginX(),
-                this.activeScanContext.radarOriginY(),
-                this.activeScanContext.radarOriginZ(),
+                worldPose.origin().x,
+                worldPose.origin().y,
+                worldPose.origin().z,
                 this.activeScanContext.assemblyFacing(),
-                this.activeScanContext.radarYawDegrees(),
+                worldPose.yawDegrees(),
                 gameTime
         );
     }
@@ -257,7 +262,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             this.detectionFilterMask = networkDisplayMask;
             this.targetCache.clear();
             this.activeScanProfile = null;
-            this.activeProjectileScanProfile = null;
+            this.activeFrequentScanProfile = null;
             this.activeScanContext = null;
             this.activeScanSlicePlan = null;
             this.activeScanSlicePlanKey = null;
@@ -302,13 +307,13 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 nextRange = (int) Math.floor(nextBaseRange * PowerRadarCeeConstants.radarRangeMultiplier(this.cachedElectricalVoltageVolts));
                 logOptimizationScanDecision(level, structureValid, nextStructureType, nextBasicPanelCount, nextOverviewModuleCount,
                         nextBaseRange, nextRange, nextElectricalState, "scan");
-                RadarScanProfile nextScanProfile = this.buildScanProfile(nextRange);
+                RadarScanProfile nextScanProfile = this.buildScanProfile(nextRange, level);
                 ScanSlicePlanKey nextSlicePlanKey = scanSlicePlanKey(nextScanProfile, context);
                 RadarScanSlicePlan nextSlicePlan = nextSlicePlanKey.equals(this.activeScanSlicePlanKey)
                         ? this.activeScanSlicePlan
                         : RadarScanner.buildSlicePlan(nextScanProfile, context);
                 this.activeScanProfile = nextScanProfile;
-                this.activeProjectileScanProfile = nextScanProfile.projectilesOnly();
+                this.activeFrequentScanProfile = nextScanProfile.frequentDiscoveryOnly();
                 this.activeScanContext = context;
                 this.activeScanSlicePlan = nextSlicePlan;
                 this.activeScanSlicePlanKey = nextSlicePlanKey;
@@ -317,7 +322,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 logOptimizationScanDecision(level, structureValid, nextStructureType, nextBasicPanelCount, nextOverviewModuleCount,
                         nextBaseRange, 0, nextElectricalState, "housekeeping-power");
                 this.activeScanProfile = null;
-                this.activeProjectileScanProfile = null;
+                this.activeFrequentScanProfile = null;
                 this.activeScanContext = context;
                 this.activeScanSlicePlan = null;
                 this.activeScanSlicePlanKey = null;
@@ -332,7 +337,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             logOptimizationScanDecision(level, structureValid, nextStructureType, nextBasicPanelCount, nextOverviewModuleCount,
                     0, 0, nextElectricalState, "housekeeping-structure");
             this.activeScanProfile = null;
-            this.activeProjectileScanProfile = null;
+            this.activeFrequentScanProfile = null;
             this.activeScanContext = context;
             this.activeScanSlicePlan = null;
             this.activeScanSlicePlanKey = null;
@@ -427,6 +432,13 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         }
     }
 
+    private RadarScanProfile buildScanProfile(int range, ServerLevel level) {
+        RadarScanProfile profile = buildScanProfile(range);
+        return RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)
+                ? profile.withFullHorizontalCoverage()
+                : profile;
+    }
+
     private RadarScanProfile buildScanProfile(int range) {
         RadarScanProfile profile = this.orientationState.structureType() == RadarStructureType.OVERVIEW
                 ? RadarScanProfile.overviewController(this.scanMode, range)
@@ -439,18 +451,46 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             Direction assemblyFacing,
             RadarOrientationState orientationState
     ) {
+        RadarWorldPose worldPose = RadarWorldPoseResolver.resolve(
+                level,
+                this.worldPosition,
+                new Vec3(this.radarOriginX, this.radarOriginY, this.radarOriginZ),
+                orientationState.yawAt(level.getGameTime())
+        );
         RadarScanContext context = new RadarScanContext(
                 level,
                 level.dimension().location(),
                 this.radarId,
-                this.radarOriginX,
-                this.radarOriginY,
-                this.radarOriginZ,
+                worldPose.origin().x,
+                worldPose.origin().y,
+                worldPose.origin().z,
                 assemblyFacing,
-                orientationState.yawAt(level.getGameTime()),
+                worldPose.yawDegrees(),
                 level.getGameTime()
         );
         return context;
+    }
+
+    public RadarWorldPose worldPoseAt(long gameTime) {
+        Vec3 localOrigin = new Vec3(this.radarOriginX, this.radarOriginY, this.radarOriginZ);
+        float localYaw = this.orientationState.yawAt(gameTime);
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return new RadarWorldPose(localOrigin, localYaw, false);
+        }
+        return RadarWorldPoseResolver.resolve(serverLevel, this.worldPosition, localOrigin, localYaw);
+    }
+
+    public BlockPos worldControllerPos() {
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return this.worldPosition;
+        }
+        RadarWorldPose pose = RadarWorldPoseResolver.resolve(
+                serverLevel,
+                this.worldPosition,
+                Vec3.atCenterOf(this.worldPosition),
+                RadarGeometry.yawDegrees(this.radarFacing)
+        );
+        return BlockPos.containing(pose.origin());
     }
 
     private void ensureRadarId(ServerLevel level) {
@@ -662,7 +702,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     @Override
     public RadarCoverage coverage() {
-        RadarScanProfile profile = this.buildScanProfile(this.currentRange);
+        RadarScanProfile profile = this.activeScanProfile != null
+                ? this.activeScanProfile
+                : this.buildScanProfile(this.currentRange);
         return new RadarCoverage(
                 new Vec3(this.radarOriginX, this.radarOriginY, this.radarOriginZ),
                 this.currentRange,

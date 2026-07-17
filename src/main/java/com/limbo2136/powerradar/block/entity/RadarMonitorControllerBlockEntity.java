@@ -11,9 +11,14 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.network.RadarMonitorBlockStaticPayload;
 import com.limbo2136.powerradar.network.RadarMonitorBlockTargetsPayload;
+import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.RadarGeometry;
+import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
@@ -41,6 +46,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -88,16 +94,21 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private long cachedSnapshotResolutionGameTime = Long.MIN_VALUE;
     private long nearbyPlayersCacheGameTime = Long.MIN_VALUE;
     private List<ServerPlayer> cachedNearbyPlayers = List.of();
+    private boolean dynamicSnapshotResolution;
 
     public RadarMonitorControllerBlockEntity(BlockPos pos, BlockState blockState) {
-        super(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), pos, blockState);
+        this(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), pos, blockState);
+    }
+
+    protected RadarMonitorControllerBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
+        super(type, pos, blockState);
         this.activeFacing = facingFromState(blockState);
     }
 
     @Override
     public void onLoad() {
         super.onLoad();
-        this.needsStructureReconcile = !hasDisplayStructureCache();
+        this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
         this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
@@ -109,7 +120,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     @Override
     public void clearRemoved() {
         super.clearRemoved();
-        this.needsStructureReconcile = !hasDisplayStructureCache();
+        this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
         this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
@@ -154,15 +165,57 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         }
 
         blockEntity.ticksSinceSync++;
-        if (!blockEntity.shouldPollSnapshot(serverLevel)) {
+        if (blockEntity.shouldPollSnapshot(serverLevel)) {
+            RadarMonitorSnapshotPayload snapshot = getOrCreateSnapshotPayload(serverLevel, pos);
+            if (blockEntity.shouldSendBlockSnapshot(snapshot)) {
+                blockEntity.ticksSinceSync = 0;
+                blockEntity.lastSentBlockSnapshotRevision = snapshot.revision();
+                blockEntity.lastSentBlockSnapshotScanGameTime = snapshot.lastScanGameTime();
+                blockEntity.sendBlockSnapshotToNearby(serverLevel, snapshot);
+            }
+        }
+        // The pose delta is deliberately last. On scan ticks it must supersede the
+        // coverage pose embedded in the lower-frequency static snapshot.
+        blockEntity.sendMovingPoses(serverLevel, pos);
+    }
+
+    private void sendMovingPoses(ServerLevel serverLevel, BlockPos monitorPos) {
+        refreshCachedSnapshotResolutionIfNeeded(serverLevel, monitorPos);
+        List<RadarMonitorBlockPosePayload.RadarPose> poses = new ArrayList<>();
+        long gameTime = serverLevel.getGameTime();
+        RadarWorldPose monitorWorldPose = RadarWorldPoseResolver.resolve(
+                serverLevel,
+                monitorPos,
+                net.minecraft.world.phys.Vec3.atCenterOf(monitorPos),
+                RadarGeometry.yawDegrees(facingFromState(getBlockState()).getOpposite()));
+        RadarMonitorBlockPosePayload.MonitorPose monitorPose = monitorWorldPose.onSableStructure()
+                ? new RadarMonitorBlockPosePayload.MonitorPose(
+                        monitorWorldPose.origin().x, monitorWorldPose.origin().y, monitorWorldPose.origin().z,
+                        monitorWorldPose.yawDegrees())
+                : null;
+        for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
+            RadarWorldPose pose = controller.worldPoseAt(gameTime);
+            if (!pose.onSableStructure()) {
+                continue;
+            }
+            poses.add(new RadarMonitorBlockPosePayload.RadarPose(
+                    controller.radarId(),
+                    pose.origin().x, pose.origin().y, pose.origin().z,
+                    controller.orientationState().structureType() == RadarStructureType.OVERVIEW
+                            ? 0.0F
+                            : pose.yawDegrees()));
+        }
+        if (monitorPose == null && poses.isEmpty()) {
             return;
         }
-        RadarMonitorSnapshotPayload snapshot = getOrCreateSnapshotPayload(serverLevel, pos);
-        if (blockEntity.shouldSendBlockSnapshot(snapshot)) {
-            blockEntity.ticksSinceSync = 0;
-            blockEntity.lastSentBlockSnapshotRevision = snapshot.revision();
-            blockEntity.lastSentBlockSnapshotScanGameTime = snapshot.lastScanGameTime();
-            blockEntity.sendBlockSnapshotToNearby(serverLevel, snapshot);
+        List<ServerPlayer> players = nearbyPlayers(serverLevel);
+        if (players.isEmpty()) {
+            return;
+        }
+        RadarMonitorBlockPosePayload payload = new RadarMonitorBlockPosePayload(
+                monitorPos, gameTime, monitorPose, List.copyOf(poses));
+        for (ServerPlayer player : players) {
+            PacketDistributor.sendToPlayer(player, payload);
         }
     }
 
@@ -219,7 +272,10 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     private List<ServerPlayer> nearbyPlayers(ServerLevel serverLevel) {
         long gameTime = serverLevel.getGameTime();
-        if (this.nearbyPlayersCacheGameTime != Long.MIN_VALUE
+        RadarWorldPose monitorPose = RadarWorldPoseResolver.resolve(
+                serverLevel, this.worldPosition, net.minecraft.world.phys.Vec3.atCenterOf(this.worldPosition), 0.0F);
+        if (!monitorPose.onSableStructure()
+                && this.nearbyPlayersCacheGameTime != Long.MIN_VALUE
                 && gameTime - this.nearbyPlayersCacheGameTime < NEARBY_PLAYERS_CACHE_TICKS) {
             return this.cachedNearbyPlayers;
         }
@@ -228,9 +284,9 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         List<ServerPlayer> nearbyPlayers = new ArrayList<>();
         for (ServerPlayer player : serverLevel.players()) {
             if (player.distanceToSqr(
-                    this.worldPosition.getX() + 0.5,
-                    this.worldPosition.getY() + 0.5,
-                    this.worldPosition.getZ() + 0.5) <= rangeSqr) {
+                    monitorPose.origin().x,
+                    monitorPose.origin().y,
+                    monitorPose.origin().z) <= rangeSqr) {
                 nearbyPlayers.add(player);
             }
         }
@@ -425,9 +481,27 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     private void refreshCachedSnapshotResolutionIfNeeded(ServerLevel level, BlockPos controllerPos) {
         long gameTime = level.getGameTime();
-        if (this.cachedSnapshotResolutionGameTime != Long.MIN_VALUE
+        boolean monitorOnSable = RadarWorldPoseResolver.isOnSableStructure(level, controllerPos);
+        if (!monitorOnSable
+                && !this.dynamicSnapshotResolution
+                && this.cachedSnapshotResolutionGameTime != Long.MIN_VALUE
                 && gameTime - this.cachedSnapshotResolutionGameTime < 20L
                 && !hasRemovedCachedSnapshotController()) {
+            return;
+        }
+        UUID directNetworkId = directNetworkId();
+        if (directNetworkId != null) {
+            RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
+            GlobalPos consumerPos = GlobalPos.of(level.dimension(), controllerPos);
+            RadarNetworkManager.ControllersResolution resolution = networkManager
+                    .resolveControllersForConsumer(directNetworkId, consumerPos);
+            this.cachedSnapshotNetworkId = directNetworkId;
+            this.cachedSnapshotLinkPos = consumerPos;
+            this.cachedSnapshotControllers = resolution.controllers();
+            this.cachedSnapshotConnectionStatus = resolution.status();
+            this.cachedSnapshotResolutionGameTime = gameTime;
+            this.dynamicSnapshotResolution = monitorOnSable || this.cachedSnapshotControllers.stream()
+                    .anyMatch(controller -> controller.worldPoseAt(gameTime).onSableStructure());
             return;
         }
         RadarLinkConnectionResolver.Resolution linkResolution =
@@ -451,7 +525,20 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.cachedSnapshotLinkPos = consumerLinkPos;
             this.cachedSnapshotControllers = controllerResolution.controllers();
             this.cachedSnapshotConnectionStatus = controllerResolution.status();
+            if (monitorOnSable || this.cachedSnapshotControllers.stream()
+                    .anyMatch(controller -> controller.worldPoseAt(gameTime).onSableStructure())) {
+                this.dynamicSnapshotResolution = true;
+            }
         }
+    }
+
+    @Nullable
+    protected UUID directNetworkId() { return null; }
+
+    protected boolean usesDisplayStructureResolver() { return true; }
+
+    protected List<RadarControllerBlockEntity> resolvedRadarControllers() {
+        return this.cachedSnapshotControllers;
     }
 
     private boolean hasRemovedCachedSnapshotController() {
@@ -657,7 +744,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         return canHoldLeaseNow();
     }
 
-    private boolean hasValidDisplayStructure() {
+    protected boolean hasValidDisplayStructure() {
         return this.structureStatus == RadarDisplayStructureResolver.StructureStatus.ACTIVE && this.activeSize > 0;
     }
 

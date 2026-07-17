@@ -57,7 +57,7 @@ public record RadarScanProfile(
                 mode == RadarScanMode.GROUND,
                 mode == RadarScanMode.GROUND,
                 mode == RadarScanMode.SKY || mode == RadarScanMode.GROUND,
-                mode == RadarScanMode.SKY || mode == RadarScanMode.SURFACE_SCANNER,
+                true,
                 true
         );
     }
@@ -84,7 +84,7 @@ public record RadarScanProfile(
         );
     }
 
-    public RadarScanProfile projectilesOnly() {
+    public RadarScanProfile frequentDiscoveryOnly() {
         return new RadarScanProfile(
                 this.radarType,
                 this.structureType,
@@ -101,8 +101,30 @@ public record RadarScanProfile(
                 false,
                 false,
                 this.detectProjectiles,
-                false,
+                this.detectSableStructures,
                 false
+        );
+    }
+
+    public RadarScanProfile withFullHorizontalCoverage() {
+        return new RadarScanProfile(
+                this.radarType,
+                this.structureType,
+                this.scanMode,
+                this.range,
+                this.verticalScanHeight,
+                this.verticalMinOffset,
+                this.verticalMaxOffset,
+                RadarCoverageShape.CIRCLE_360,
+                false,
+                360,
+                this.ignoreItems,
+                this.detectPlayers,
+                this.detectHostileMobs,
+                this.detectPassiveMobs,
+                this.detectProjectiles,
+                this.detectSableStructures,
+                this.detectUnknown
         );
     }
 }

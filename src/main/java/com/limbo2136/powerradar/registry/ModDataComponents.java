@@ -21,6 +21,12 @@ public final class ModDataComponents {
                     .networkSynchronized(UUIDUtil.STREAM_CODEC)
                     .build());
 
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<UUID>> INTERCEPTION_NETWORK_ID =
+            DATA_COMPONENTS.register("interception_network_id", () -> DataComponentType.<UUID>builder()
+                    .persistent(UUIDUtil.CODEC)
+                    .networkSynchronized(UUIDUtil.STREAM_CODEC)
+                    .build());
+
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Integer>> RADAR_FILTER_MASK =
             DATA_COMPONENTS.register("radar_filter_mask", () -> DataComponentType.<Integer>builder()
                     .persistent(Codec.INT)
@@ -43,6 +49,12 @@ public final class ModDataComponents {
             DATA_COMPONENTS.register("allowlist_sable_mode", () -> DataComponentType.<Boolean>builder()
                     .persistent(Codec.BOOL)
                     .networkSynchronized(ByteBufCodecs.BOOL)
+                    .build());
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<String>> NAME_CARD_NAME =
+            DATA_COMPONENTS.register("name_card_name", () -> DataComponentType.<String>builder()
+                    .persistent(Codec.STRING)
+                    .networkSynchronized(ByteBufCodecs.STRING_UTF8)
                     .build());
 
     private ModDataComponents() {

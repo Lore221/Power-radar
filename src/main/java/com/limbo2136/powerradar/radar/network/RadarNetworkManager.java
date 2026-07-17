@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
@@ -64,6 +65,12 @@ public class RadarNetworkManager {
         return id;
     }
 
+    public UUID createOnboardNetwork() {
+        UUID id = createNetwork();
+        setControlConsumersAllowed(id, false);
+        return id;
+    }
+
     public boolean networkExists(UUID id) {
         return this.savedData.get(id).isPresent();
     }
@@ -72,6 +79,26 @@ public class RadarNetworkManager {
         RadarNetworkRecord record = this.savedData.ensure(id);
         this.runtimeNetworks.computeIfAbsent(id, ignored -> new RadarNetworkRuntime());
         return record;
+    }
+
+    public boolean controlConsumersAllowed(UUID id) {
+        return this.savedData.get(id)
+                .map(RadarNetworkRecord::controlConsumersAllowed)
+                .orElse(true);
+    }
+
+    public void setControlConsumersAllowed(UUID id, boolean allowed) {
+        RadarNetworkRecord record = ensureNetwork(id);
+        if (record.controlConsumersAllowed() == allowed) {
+            return;
+        }
+        record.setControlConsumersAllowed(allowed);
+        if (!allowed) {
+            record.setSelectedTargetUuid(null);
+            runtime(id).setSelectedTargetUuid(null);
+        }
+        invalidateComputingCache(id);
+        this.savedData.setDirty();
     }
 
     public void addPersistentLink(UUID id, GlobalPos linkPos) {
@@ -231,6 +258,9 @@ public class RadarNetworkManager {
     }
 
     public void setSelectedTargetUuid(UUID id, UUID targetUuid) {
+        if (targetUuid != null && !controlConsumersAllowed(id)) {
+            return;
+        }
         RadarNetworkRecord record = this.ensureNetwork(id);
         if (!Objects.equals(record.selectedTargetUuid(), targetUuid)) {
             record.setSelectedTargetUuid(targetUuid);
@@ -286,6 +316,7 @@ public class RadarNetworkManager {
         int displayMask = policy.displayMask();
         int targetingMask = policy.targetingMask();
         List<String> allowlistedPlayers = policy.allowlistedPlayers();
+        List<String> allowlistedSables = policy.allowlistedSables();
         long revision = displaySnapshotRevision(runtime, controllers, onlinePlayersHash);
         RadarNetworkRuntime.DisplaySnapshotCacheEntry cached = runtime.displaySnapshot();
         RadarMonitorDisplayData baseData;
@@ -307,7 +338,7 @@ public class RadarNetworkManager {
                     runtime.selectedTargetUuid().orElse(null),
                     onlinePlayerNames,
                     allowlistedPlayers,
-                    List.of());
+                    allowlistedSables);
             baseData = baseData.withTargets(baseData.targets().stream()
                     .filter(target -> RadarDetectionFilters.enabled(displayMask, target.category()))
                     .toList());
@@ -335,10 +366,13 @@ public class RadarNetworkManager {
                     || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)) {
                 continue;
             }
-            BlockPos pos = linkPos.pos();
+            net.minecraft.world.phys.AABB bounds = alarm.displayProtectionBounds();
+            net.minecraft.world.phys.Vec3 center = bounds.getCenter();
             zones.add(new ShellAlarmDisplayZone(
-                    linkPos.dimension().location(), pos.getX() + 0.5D, pos.getY() + 0.5D,
-                    pos.getZ() + 0.5D, alarm.protectionSideBlocks()));
+                    linkPos.dimension().location(), center.x, center.y, center.z,
+                    (int) Math.ceil(bounds.getXsize()),
+                    (int) Math.ceil(bounds.getYsize()),
+                    (int) Math.ceil(bounds.getZsize())));
         }
         return List.copyOf(zones);
     }
@@ -368,19 +402,27 @@ public class RadarNetworkManager {
 
     public boolean hasForcedAutotargetEntries(UUID id) {
         ComputingPolicy policy = cachedComputingPolicy(id);
-        return policy.powered() && !policy.allowlistIsWhitelist() && !policy.allowlistNames().isEmpty();
+        return policy.powered() && !policy.allowlistIsWhitelist()
+                && (!policy.playerNames().isEmpty() || !policy.sableUuids().isEmpty()
+                || !policy.unresolvedSableNames().isEmpty());
     }
 
-    public boolean isAutotargetExcluded(UUID id, String name, boolean sable) {
+    public boolean isAutotargetExcluded(UUID id, UUID targetUuid, String name, boolean sable) {
         ComputingPolicy policy = cachedComputingPolicy(id);
-        if (!policy.powered() || !policy.allowlistIsWhitelist() || policy.allowlistTargetsSable() != sable) return false;
-        return policy.allowlistNames().stream().anyMatch(name::equalsIgnoreCase);
+        return policy.powered() && policy.allowlistIsWhitelist()
+                && matchesAllowlist(policy, targetUuid, name, sable);
     }
 
-    public boolean isAutotargetForced(UUID id, String name, boolean sable) {
+    public boolean isAutotargetForced(UUID id, UUID targetUuid, String name, boolean sable) {
         ComputingPolicy policy = cachedComputingPolicy(id);
-        if (!policy.powered() || policy.allowlistIsWhitelist() || policy.allowlistTargetsSable() != sable) return false;
-        return policy.allowlistNames().stream().anyMatch(name::equalsIgnoreCase);
+        return policy.powered() && !policy.allowlistIsWhitelist()
+                && matchesAllowlist(policy, targetUuid, name, sable);
+    }
+
+    private static boolean matchesAllowlist(ComputingPolicy policy, UUID targetUuid, String name, boolean sable) {
+        if (!sable) return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
+        return targetUuid != null && policy.sableUuids().contains(targetUuid)
+                || policy.unresolvedSableNames().stream().anyMatch(name::equalsIgnoreCase);
     }
 
     private ComputingResolution cachedComputingResolution(UUID id) {
@@ -393,8 +435,9 @@ public class RadarNetworkManager {
             ComputingBlockEntity computer = resolution.active();
             if (computer == null || !computer.isElectricallyOperational()) return ComputingPolicy.EMPTY;
             return new ComputingPolicy(true, true, computer.targetingMask(), computer.displayMask(),
-                    computer.allowlistIsWhitelist(), computer.allowlistTargetsSable(),
-                    computer.allowlistNames(), computer.allowlistedPlayers());
+                    computer.allowlistIsWhitelist(), computer.allowlistPlayerNames(),
+                    computer.allowlistSableUuids(), computer.unresolvedSableNames(),
+                    computer.allowlistedPlayers(), computer.allowlistedSableNames());
         });
     }
 
@@ -402,10 +445,13 @@ public class RadarNetworkManager {
         if (id == null) return;
         this.computingResolutionCache.remove(id);
         this.computingPolicyCache.remove(id);
-        this.runtime(id).invalidateDisplaySnapshots();
+        this.runtime(id).markSettingsChanged();
     }
 
     public ComputingResolution resolveComputingBlock(UUID id) {
+        if (!controlConsumersAllowed(id)) {
+            return new ComputingResolution(null, false);
+        }
         List<ComputingBlockEntity> computers = new ArrayList<>();
         this.runtime(id).loadedLinks().stream()
                 .sorted(java.util.Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
@@ -432,27 +478,32 @@ public class RadarNetworkManager {
     }
 
     private record ComputingPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
-                                   boolean allowlistIsWhitelist, boolean allowlistTargetsSable,
-                                   List<String> allowlistNames, List<String> allowlistedPlayers) {
+                                   boolean allowlistIsWhitelist, List<String> playerNames,
+                                   List<UUID> sableUuids, List<String> unresolvedSableNames,
+                                   List<String> allowlistedPlayers, List<String> allowlistedSables) {
         private static final ComputingPolicy EMPTY = new ComputingPolicy(false, false, 0,
-                RadarDetectionFilters.DEFAULT_MASK, true, false, List.of(), List.of());
+                RadarDetectionFilters.DEFAULT_MASK, true, List.of(), List.of(), List.of(), List.of(), List.of());
 
         private ComputingPolicy {
-            allowlistNames = List.copyOf(allowlistNames);
+            playerNames = List.copyOf(playerNames);
+            sableUuids = List.copyOf(sableUuids);
+            unresolvedSableNames = List.copyOf(unresolvedSableNames);
             allowlistedPlayers = List.copyOf(allowlistedPlayers);
+            allowlistedSables = List.copyOf(allowlistedSables);
         }
     }
 
     public void cleanupEmptyNetwork(UUID id) {
-        this.savedData.get(id).ifPresent(record -> {
-            if (record.linkNodes().isEmpty()) {
-                this.removeAllTickets(id);
-                this.savedData.remove(id);
-                this.runtimeNetworks.remove(id);
-                this.computingResolutionCache.remove(id);
-                this.computingPolicyCache.remove(id);
-            }
-        });
+        if (this.savedData.get(id).filter(record -> record.linkNodes().isEmpty()).isEmpty()) {
+            return;
+        }
+        this.removeAllTickets(id);
+        if (!this.savedData.removeIfNoLinks(id)) {
+            return;
+        }
+        this.runtimeNetworks.remove(id);
+        this.computingResolutionCache.remove(id);
+        this.computingPolicyCache.remove(id);
     }
 
     private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
@@ -546,6 +597,11 @@ public class RadarNetworkManager {
         if (eligibleBinding == null) {
             return LeaseDecision.release(id, consumerLinkPos, "no-eligible-radar");
         }
+        ServerLevel radarLevel = this.server.getLevel(eligibleBinding.radarLinkPos().dimension());
+        if (radarLevel != null && RadarWorldPoseResolver.isOnSableStructure(
+                radarLevel, eligibleBinding.radarLinkPos().pos())) {
+            return LeaseDecision.release(id, consumerLinkPos, "sable-sublevel-manages-chunks");
+        }
         return LeaseDecision.keep(id, consumerLinkPos, eligibleBinding.radarLinkPos());
     }
 
@@ -599,11 +655,15 @@ public class RadarNetworkManager {
     private void applyTicketsIfNeeded(UUID id, GlobalPos radarLinkPos) {
         RadarNetworkRuntime runtime = this.runtime(id);
         RadarNetworkChunkLoadState state = runtime.chunkLoadState();
+        ServerLevel level = this.server.getLevel(radarLinkPos.dimension());
+        if (level != null && RadarWorldPoseResolver.isOnSableStructure(level, radarLinkPos.pos())) {
+            this.removeAllTickets(id);
+            return;
+        }
         if (state.radarLinkPos().filter(radarLinkPos::equals).isPresent() && state.ticketsApplied()) {
             return;
         }
         this.removeAllTickets(id);
-        ServerLevel level = this.server.getLevel(radarLinkPos.dimension());
         if (level == null || runtime.chunkLoadState().activeConsumerLeaseLinks().isEmpty()) {
             return;
         }
@@ -643,15 +703,20 @@ public class RadarNetworkManager {
         return chunks;
     }
 
-    private static boolean isWithinLinkRange(GlobalPos consumerLinkPos, GlobalPos radarLinkPos) {
+    private boolean isWithinLinkRange(GlobalPos consumerLinkPos, GlobalPos radarLinkPos) {
         if (!consumerLinkPos.dimension().equals(radarLinkPos.dimension())) {
             return false;
         }
-        long dx = consumerLinkPos.pos().getX() - radarLinkPos.pos().getX();
-        long dy = consumerLinkPos.pos().getY() - radarLinkPos.pos().getY();
-        long dz = consumerLinkPos.pos().getZ() - radarLinkPos.pos().getZ();
+        ServerLevel level = this.server.getLevel(consumerLinkPos.dimension());
+        if (level == null) {
+            return false;
+        }
+        net.minecraft.world.phys.Vec3 consumerWorldPos = RadarWorldPoseResolver.worldPosition(
+                level, consumerLinkPos.pos());
+        net.minecraft.world.phys.Vec3 radarWorldPos = RadarWorldPoseResolver.worldPosition(
+                level, radarLinkPos.pos());
         long max = RadarConstants.radarLinkMaxConnectionDistanceBlocks();
-        return dx * dx + dy * dy + dz * dz <= max * max;
+        return consumerWorldPos.distanceToSqr(radarWorldPos) <= (double) max * max;
     }
 
     private RadarNetworkRuntime runtime(UUID id) {

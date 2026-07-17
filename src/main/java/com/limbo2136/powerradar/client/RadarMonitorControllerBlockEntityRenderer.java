@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.client;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.network.RadarMonitorSilhouettePayload;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarDisplayCoverage;
 import com.limbo2136.powerradar.radar.RadarDisplayProjection;
@@ -54,6 +55,10 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final float HORIZONTAL_GRID_FACE_OFFSET = 0.0072F;
     private static final float COVERAGE_FACE_OFFSET = BASE_FACE_OFFSET + 0.002F;
     private static final float COVERAGE_FACE_OFFSET_STEP = 0.00005F;
+    private static final float SILHOUETTE_FILL_FACE_OFFSET = 0.010F;
+    private static final float SILHOUETTE_LINE_FACE_OFFSET = 0.011F;
+    private static final float SILHOUETTE_LINE_HALF_WIDTH = 0.0025F;
+    private static final float SABLE_FRAME_PADDING = 4.0F / 128.0F;
     private static final int MAX_COVERAGE_DEPTH_LAYERS = 64;
     private static final float BLIP_FACE_OFFSET = 0.012F;
     private static final float BLIP_FACE_OFFSET_STEP = 0.0001F;
@@ -66,8 +71,10 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final int GRID_ALPHA = 48;
     private static final int COVERAGE_ALPHA = 255;
     private static final int SHELL_ALARM_ZONE_ALPHA = 32;
+    private static final int SABLE_SILHOUETTE_FILL_ALPHA = 144;
     private final Map<BlockPos, InWorldBlipCache> blipCaches = new HashMap<>();
     private Level cachedLevel;
+    private boolean renderWithoutFrameInset;
 
     public RadarMonitorControllerBlockEntityRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -81,6 +88,46 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             int packedLight,
             int packedOverlay
     ) {
+        render(controller, partialTick, poseStack, bufferSource, packedLight, packedOverlay, 0, false);
+    }
+
+    public void renderWithFixedMapSize(
+            RadarMonitorControllerBlockEntity controller,
+            float partialTick,
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            int packedLight,
+            int packedOverlay,
+            int fixedMapSizeBlocks
+    ) {
+        render(controller, partialTick, poseStack, bufferSource, packedLight, packedOverlay,
+                Math.max(1, fixedMapSizeBlocks), false);
+    }
+
+    public void renderFullSurfaceWithFixedMapSize(
+            RadarMonitorControllerBlockEntity controller,
+            float partialTick,
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            int packedLight,
+            int packedOverlay,
+            int fixedMapSizeBlocks
+    ) {
+        render(controller, partialTick, poseStack, bufferSource, packedLight, packedOverlay,
+                Math.max(1, fixedMapSizeBlocks), true);
+    }
+
+    private void render(
+            RadarMonitorControllerBlockEntity controller,
+            float partialTick,
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            int packedLight,
+            int packedOverlay,
+            int fixedMapSizeBlocks,
+            boolean withoutFrameInset
+    ) {
+        this.renderWithoutFrameInset = withoutFrameInset;
         if (controller.getLevel() != this.cachedLevel) {
             this.blipCaches.clear();
             this.cachedLevel = controller.getLevel();
@@ -101,7 +148,9 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         }
 
         int screenLight = Math.max(packedLight, SCREEN_LIGHT);
-        int mapSizeBlocks = RadarDisplayProjector.recommendedMapSizeBlocks(displayData);
+        int mapSizeBlocks = fixedMapSizeBlocks > 0
+                ? fixedMapSizeBlocks
+                : RadarDisplayProjector.recommendedMapSizeBlocks(displayData);
         int mapRadiusBlocks = Math.max(1, mapSizeBlocks / 2);
         float backgroundMin = screenBackgroundMin(size);
         float backgroundMax = screenBackgroundMax(size);
@@ -115,7 +164,12 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         }
 
         double ticksSinceSnapshot = ticksSinceSnapshot(clientState, partialTick);
-        float viewYawDegrees = RadarMonitorViewOrientation.viewYawDegrees(displayData);
+        var monitorPose = clientState.interpolatedMonitorPose(partialTick);
+        float viewYawDegrees = RadarMonitorViewOrientation.viewYawDegrees(displayData, monitorPose);
+        double monitorOffsetX = monitorPose == null ? 0.0D
+                : monitorPose.originX() - (displayData.monitorPos().getX() + 0.5D);
+        double monitorOffsetZ = monitorPose == null ? 0.0D
+                : monitorPose.originZ() - (displayData.monitorPos().getZ() + 0.5D);
         List<RadarDisplayCoverage> coverages = displayData.coverages().isEmpty()
                 ? List.of(legacyCoverage(displayData))
                 : displayData.coverages();
@@ -124,25 +178,41 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         for (ShellAlarmDisplayZone zone : displayData.shellAlarmZones()) {
             RadarDisplayProjection zoneProjection = RadarDisplayProjector.projectWorldPointUnclipped(
                     displayData, zone.dimensionId(), zone.centerX(), zone.centerY(), zone.centerZ(),
-                    viewYawDegrees, mapRadiusBlocks, 0.0D, 0.0D);
+                    viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ);
             if (!zoneProjection.visible()) {
                 continue;
             }
-            float halfSide = (float) (projectionRadius * zone.sideBlocks() / (2.0D * mapRadiusBlocks));
             ScreenPoint center = new ScreenPoint(
                     SCREEN_CENTER + (float) zoneProjection.x() * projectionRadius,
                     SCREEN_CENTER + (float) zoneProjection.y() * projectionRadius);
-            drawClippedRotatedMatrixQuad(poseStack, bufferSource, RadarBlipSprite.ATLAS, facing,
-                    relativeOrigin, size, center.u() - halfSide, center.v() - halfSide,
-                    center.u() + halfSide, center.v() + halfSide,
-                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V,
-                    center, 0.0F,
+            double unitsPerBlock = projectionRadius / mapRadiusBlocks;
+            float halfWidth = zone.widthBlocks() * 0.5F;
+            float halfDepth = zone.depthBlocks() * 0.5F;
+            SableSilhouetteProjection.Point first = SableSilhouetteProjection.projectOffset(
+                    -halfWidth, -halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
+            SableSilhouetteProjection.Point second = SableSilhouetteProjection.projectOffset(
+                    halfWidth, -halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
+            SableSilhouetteProjection.Point third = SableSilhouetteProjection.projectOffset(
+                    halfWidth, halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
+            SableSilhouetteProjection.Point fourth = SableSilhouetteProjection.projectOffset(
+                    -halfWidth, halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
+            drawClippedSilhouetteQuad(
+                    poseStack,
+                    bufferSource,
+                    facing,
+                    relativeOrigin,
+                    size,
+                    new ScreenPoint(center.u() + first.x(), center.v() + first.y()),
+                    new ScreenPoint(center.u() + second.x(), center.v() + second.y()),
+                    new ScreenPoint(center.u() + third.x(), center.v() + third.y()),
+                    new ScreenPoint(center.u() + fourth.x(), center.v() + fourth.y()),
                     palette.red(palette.shellAlarmZone()), palette.green(palette.shellAlarmZone()),
                     palette.blue(palette.shellAlarmZone()), SHELL_ALARM_ZONE_ALPHA, screenLight,
-                    COVERAGE_FACE_OFFSET, true);
+                    COVERAGE_FACE_OFFSET);
         }
         for (int coverageIndex = 0; coverageIndex < coverages.size(); coverageIndex++) {
-            RadarDisplayCoverage coverageData = coverages.get(coverageIndex);
+            RadarDisplayCoverage coverageData = clientState.interpolatedCoverage(
+                    coverages.get(coverageIndex), partialTick);
             float coverageFaceOffset = COVERAGE_FACE_OFFSET
                     + Math.min(coverageIndex, MAX_COVERAGE_DEPTH_LAYERS) * COVERAGE_FACE_OFFSET_STEP;
             RadarCoverageSprite coverageSprite = RadarCoverageSprite.forCoverage(coverageData);
@@ -154,8 +224,8 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                     coverageData.originZ(),
                     viewYawDegrees,
                     mapRadiusBlocks,
-                    0.0D,
-                    0.0D);
+                    monitorOffsetX,
+                    monitorOffsetZ);
             if (radarProjection.visible() && coverageData.currentRange() > 0) {
                 float coverageRadius = (float) (projectionRadius
                         * coverageData.currentRange()
@@ -177,8 +247,172 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             }
         }
 
+        drawSableSilhouettes(
+                poseStack, bufferSource, facing, relativeOrigin, size, screenLight, displayData,
+                ticksSinceSnapshot, viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ,
+                palette.sableSilhouette(), palette.selectedFrame());
+
         drawBlips(poseStack, bufferSource, facing, relativeOrigin, size, screenLight, displayData,
-                ticksSinceSnapshot, viewYawDegrees, mapRadiusBlocks, clientState.updateVersion(), palette);
+                ticksSinceSnapshot, viewYawDegrees, mapRadiusBlocks, clientState.updateVersion(),
+                monitorOffsetX, monitorOffsetZ, palette);
+    }
+
+    private void drawSableSilhouettes(
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            Direction facing,
+            BlockPos relativeOrigin,
+            int size,
+            int packedLight,
+            RadarMonitorDisplayData displayData,
+            double ticksSinceSnapshot,
+            float viewYawDegrees,
+            int mapRadiusBlocks,
+            double monitorOffsetX,
+            double monitorOffsetZ,
+            int color,
+            int selectedFrameColor
+    ) {
+        float projectionRadius = screenProjectionRadius(size);
+        double unitsPerBlock = projectionRadius / Math.max(1, mapRadiusBlocks);
+        int red = color >> 16 & 0xFF;
+        int green = color >> 8 & 0xFF;
+        int blue = color & 0xFF;
+        for (RadarDisplayTarget target : displayData.targets()) {
+            if (target.category() != RadarTargetCategory.SABLE_STRUCTURE) {
+                continue;
+            }
+            RadarMonitorSilhouettePayload silhouette = SableSilhouetteClientCache.get(target);
+            if (silhouette == null) {
+                continue;
+            }
+            RadarDisplayProjection centerProjection = RadarDisplayProjector.projectWorldPointUnclipped(
+                    displayData, target.dimensionId(), target.x(), target.y(), target.z(),
+                    viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ);
+            if (!centerProjection.visible()) {
+                continue;
+            }
+            ScreenPoint center = new ScreenPoint(
+                    SCREEN_CENTER + (float) centerProjection.x() * projectionRadius,
+                    SCREEN_CENTER + (float) centerProjection.y() * projectionRadius);
+            int fadeAlpha = blipAlpha(target.displayAgeTicks(), ticksSinceSnapshot);
+            if (fadeAlpha <= 0) {
+                continue;
+            }
+            int fillAlpha = fadeAlpha * SABLE_SILHOUETTE_FILL_ALPHA / 255;
+            for (RadarMonitorSilhouettePayload.Fill fill : silhouette.fills()) {
+                drawClippedSilhouetteQuad(
+                        poseStack, bufferSource, facing, relativeOrigin, size,
+                        silhouettePoint(center, fill.minX(), fill.minZ(), target, viewYawDegrees, unitsPerBlock),
+                        silhouettePoint(center, fill.maxX(), fill.minZ(), target, viewYawDegrees, unitsPerBlock),
+                        silhouettePoint(center, fill.maxX(), fill.maxZ(), target, viewYawDegrees, unitsPerBlock),
+                        silhouettePoint(center, fill.minX(), fill.maxZ(), target, viewYawDegrees, unitsPerBlock),
+                        red, green, blue, fillAlpha, packedLight, SILHOUETTE_FILL_FACE_OFFSET);
+            }
+            for (RadarMonitorSilhouettePayload.Line line : silhouette.lines()) {
+                ScreenPoint start = silhouettePoint(
+                        center, line.x1(), line.z1(), target, viewYawDegrees, unitsPerBlock);
+                ScreenPoint end = silhouettePoint(
+                        center, line.x2(), line.z2(), target, viewYawDegrees, unitsPerBlock);
+                ScreenPoint[] quad = silhouetteLineQuad(start, end);
+                if (quad != null) {
+                    drawClippedSilhouetteQuad(
+                            poseStack, bufferSource, facing, relativeOrigin, size,
+                            quad[0], quad[1], quad[2], quad[3],
+                            red, green, blue, fadeAlpha, packedLight, SILHOUETTE_LINE_FACE_OFFSET);
+                }
+            }
+            if (target.targetUuid() != null && target.targetUuid().equals(displayData.manualTargetUuid())) {
+                SableSilhouetteProjection.Bounds bounds = SableSilhouetteProjection.projectBounds(
+                        silhouette, target.structureHeadingDegrees(), viewYawDegrees, unitsPerBlock);
+                if (!bounds.empty()) {
+                    float standardFrameSize = SCREEN_SIZE * (RadarBlipSprite.CELL_SIZE / 128.0F)
+                            * RadarConstants.RADAR_BLIP_RENDER_SCALE * STRUCTURE_BLIP_SCALE_MULTIPLIER
+                            * RadarDisplayProjector.MINIMUM_RADAR_REFERENCE_MAP_SIZE_BLOCKS
+                            / Math.max(1.0F, mapRadiusBlocks * 2.0F);
+                    float frameSize = Math.max(standardFrameSize, bounds.squareSize() + SABLE_FRAME_PADDING);
+                    float halfFrame = frameSize * 0.5F;
+                    ScreenPoint frameCenter = new ScreenPoint(
+                            center.u() + bounds.centerX(), center.v() + bounds.centerY());
+                    drawClippedRotatedMatrixQuad(
+                            poseStack, bufferSource, RadarBlipSprite.ATLAS, facing, relativeOrigin, size,
+                            frameCenter.u() - halfFrame, frameCenter.v() - halfFrame,
+                            frameCenter.u() + halfFrame, frameCenter.v() + halfFrame,
+                            RadarBlipSprite.SELECTED_FRAME.minU(), RadarBlipSprite.SELECTED_FRAME.minV(),
+                            RadarBlipSprite.SELECTED_FRAME.maxU(), RadarBlipSprite.SELECTED_FRAME.maxV(),
+                            frameCenter, 0.0F,
+                            selectedFrameColor >> 16 & 0xFF,
+                            selectedFrameColor >> 8 & 0xFF,
+                            selectedFrameColor & 0xFF,
+                            fadeAlpha, packedLight, BLIP_FACE_OFFSET + SELECTED_FRAME_OFFSET, false);
+                }
+            }
+        }
+    }
+
+    private static ScreenPoint silhouettePoint(
+            ScreenPoint center,
+            float localX,
+            float localZ,
+            RadarDisplayTarget target,
+            float viewYawDegrees,
+            double unitsPerBlock
+    ) {
+        SableSilhouetteProjection.Point offset = SableSilhouetteProjection.projectOffset(
+                localX, localZ, target.structureHeadingDegrees(), viewYawDegrees, unitsPerBlock);
+        return new ScreenPoint(center.u() + offset.x(), center.v() + offset.y());
+    }
+
+    private static ScreenPoint[] silhouetteLineQuad(ScreenPoint start, ScreenPoint end) {
+        float dx = end.u() - start.u();
+        float dy = end.v() - start.v();
+        float length = (float) Math.sqrt(dx * dx + dy * dy);
+        if (length < 0.000001F) {
+            return null;
+        }
+        float normalX = -dy / length * SILHOUETTE_LINE_HALF_WIDTH;
+        float normalY = dx / length * SILHOUETTE_LINE_HALF_WIDTH;
+        return new ScreenPoint[] {
+                new ScreenPoint(start.u() + normalX, start.v() + normalY),
+                new ScreenPoint(end.u() + normalX, end.v() + normalY),
+                new ScreenPoint(end.u() - normalX, end.v() - normalY),
+                new ScreenPoint(start.u() - normalX, start.v() - normalY)
+        };
+    }
+
+    private void drawClippedSilhouetteQuad(
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            Direction facing,
+            BlockPos relativeOrigin,
+            int size,
+            ScreenPoint first,
+            ScreenPoint second,
+            ScreenPoint third,
+            ScreenPoint fourth,
+            int red,
+            int green,
+            int blue,
+            int alpha,
+            int packedLight,
+            float faceOffset
+    ) {
+        ArrayList<TexturedScreenVertex> polygon = new ArrayList<>(List.of(
+                new TexturedScreenVertex(first.u(), first.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
+                new TexturedScreenVertex(second.u(), second.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
+                new TexturedScreenVertex(third.u(), third.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
+                new TexturedScreenVertex(fourth.u(), fourth.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V)));
+        float contentMin = screenContentMin(size);
+        float contentMax = screenContentMax(size);
+        for (int edge = 0; edge < 4; edge++) {
+            polygon = clipPolygon(polygon, edge, contentMin, contentMax);
+        }
+        if (polygon.size() < 3) {
+            return;
+        }
+        drawTexturedMatrixPolygon(
+                poseStack, bufferSource, RadarBlipSprite.ATLAS, facing, relativeOrigin, size, polygon,
+                red, green, blue, alpha, packedLight, faceOffset, false);
     }
 
     @Override
@@ -216,6 +450,8 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             float viewYawDegrees,
             int mapRadiusBlocks,
             long updateVersion,
+            double monitorOffsetX,
+            double monitorOffsetZ,
             PowerRadarClientConfig.RadarRenderPalette palette
     ) {
         List<InWorldBlip> blips = cachedInWorldBlips(
@@ -224,7 +460,9 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                 size,
                 viewYawDegrees,
                 mapRadiusBlocks,
-                updateVersion);
+                updateVersion,
+                monitorOffsetX,
+                monitorOffsetZ);
         if (blips.isEmpty()) {
             return;
         }
@@ -266,7 +504,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         }
     }
 
-    private static void drawBlipLayer(
+    private void drawBlipLayer(
             PoseStack poseStack,
             MultiBufferSource bufferSource,
             Direction facing,
@@ -298,18 +536,23 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             int size,
             float viewYawDegrees,
             int mapRadiusBlocks,
-            long updateVersion
+            long updateVersion,
+            double monitorOffsetX,
+            double monitorOffsetZ
     ) {
         InWorldBlipCacheKey key = new InWorldBlipCacheKey(
                 updateVersion,
                 size,
                 Float.floatToIntBits(viewYawDegrees),
-                mapRadiusBlocks);
+                mapRadiusBlocks,
+                Double.doubleToLongBits(monitorOffsetX),
+                Double.doubleToLongBits(monitorOffsetZ));
         InWorldBlipCache cache = this.blipCaches.get(monitorPos);
         if (cache != null && cache.key().equals(key)) {
             return cache.blips();
         }
-        List<InWorldBlip> blips = buildInWorldBlips(displayData, size, viewYawDegrees, mapRadiusBlocks);
+        List<InWorldBlip> blips = buildInWorldBlips(
+                displayData, size, viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ);
         this.blipCaches.put(monitorPos.immutable(), new InWorldBlipCache(key, blips));
         return blips;
     }
@@ -318,11 +561,13 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         return displayData.monitorPos().immutable();
     }
 
-    private static List<InWorldBlip> buildInWorldBlips(
+    private List<InWorldBlip> buildInWorldBlips(
             RadarMonitorDisplayData displayData,
             int size,
             float viewYawDegrees,
-            int mapRadiusBlocks
+            int mapRadiusBlocks,
+            double monitorOffsetX,
+            double monitorOffsetZ
     ) {
         if (displayData.targets().isEmpty()) {
             return List.of();
@@ -330,8 +575,11 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         float projectionRadius = screenProjectionRadius(size);
         ArrayList<InWorldBlip> blips = new ArrayList<>(displayData.targets().size());
         for (RadarDisplayTarget target : displayData.targets()) {
+            if (target.category() == RadarTargetCategory.SABLE_STRUCTURE) {
+                continue;
+            }
             RadarDisplayProjection projection = RadarDisplayProjector.project(
-                    displayData, target, viewYawDegrees, mapRadiusBlocks);
+                    displayData, target, viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ);
             if (!projection.visible()) {
                 continue;
             }
@@ -403,31 +651,31 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         return SCREEN_FRAME_PIXELS / (BLOCK_TEXTURE_PIXELS * Math.max(1, size));
     }
 
-    private static float screenBackgroundMin(int size) {
-        return SCREEN_MIN + screenFrameInset(size);
+    private float screenBackgroundMin(int size) {
+        return this.renderWithoutFrameInset ? SCREEN_MIN : SCREEN_MIN + screenFrameInset(size);
     }
 
-    private static float screenBackgroundMax(int size) {
-        return SCREEN_MAX - screenFrameInset(size);
+    private float screenBackgroundMax(int size) {
+        return this.renderWithoutFrameInset ? SCREEN_MAX : SCREEN_MAX - screenFrameInset(size);
     }
 
-    private static float screenContentMin(int size) {
+    private float screenContentMin(int size) {
         float backgroundMin = screenBackgroundMin(size);
         float backgroundSize = screenBackgroundMax(size) - backgroundMin;
         return backgroundMin + backgroundSize * SCREEN_BACKGROUND_FRAME_PIXELS / SCREEN_BACKGROUND_TEXTURE_PIXELS;
     }
 
-    private static float screenContentMax(int size) {
+    private float screenContentMax(int size) {
         float backgroundMax = screenBackgroundMax(size);
         float backgroundSize = backgroundMax - screenBackgroundMin(size);
         return backgroundMax - backgroundSize * SCREEN_BACKGROUND_FRAME_PIXELS / SCREEN_BACKGROUND_TEXTURE_PIXELS;
     }
 
-    private static float screenProjectionRadius(int size) {
+    private float screenProjectionRadius(int size) {
         return Math.max(0.01F, (screenBackgroundMax(size) - screenBackgroundMin(size)) / 2.0F);
     }
 
-    private static void drawRadarGrid(
+    private void drawRadarGrid(
             PoseStack poseStack,
             MultiBufferSource bufferSource,
             Direction facing,
@@ -508,7 +756,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                 red, green, blue, alpha, packedLight, faceOffset);
     }
 
-    private static void drawClippedRotatedMatrixQuad(
+    private void drawClippedRotatedMatrixQuad(
             PoseStack poseStack,
             MultiBufferSource bufferSource,
             ResourceLocation texture,
@@ -851,7 +1099,9 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             long clientStateVersion,
             int size,
             int viewYawBits,
-            int mapRadiusBlocks
+            int mapRadiusBlocks,
+            long monitorOffsetXBits,
+            long monitorOffsetZBits
     ) {
     }
 

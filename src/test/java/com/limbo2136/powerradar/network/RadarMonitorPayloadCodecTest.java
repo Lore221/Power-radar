@@ -31,8 +31,8 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 class RadarMonitorPayloadCodecTest {
-    private static final String V3_FIXTURE_SHA_256 =
-            "2349cefd2b0aa4a9bea8e25d79172e3a8c2cf3400a61838307062b945783adf6";
+    private static final String V5_FIXTURE_SHA_256 =
+            "a509099f2ae4d4094723b165c447c5bd423d1bd4366c908e90b6b80bf3f96969";
 
     @Test
     void fullSnapshotRoundTripsWithoutUnreadBytes() {
@@ -123,9 +123,59 @@ class RadarMonitorPayloadCodecTest {
     }
 
     @Test
-    void v3WireBytesRemainStable() throws NoSuchAlgorithmException {
-        assertEquals("3", ModNetwork.PROTOCOL_VERSION);
-        assertEquals(3, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
+    void blockPoseDeltaRoundTrips() {
+        ResourceLocation dimension = ResourceLocation.fromNamespaceAndPath("power_radar", "moving_plot");
+        RadarMonitorBlockPosePayload expected = new RadarMonitorBlockPosePayload(
+                new BlockPos(4, 70, -9),
+                12_345L,
+                new RadarMonitorBlockPosePayload.MonitorPose(4.5D, 70.5D, -8.5D, 91.0F),
+                List.of(new RadarMonitorBlockPosePayload.RadarPose(
+                        new RadarId(dimension, new BlockPos(2, 3, 4)),
+                        10.25D, 65.5D, -31.75D, 359.5F)));
+
+        RadarMonitorBlockPosePayload actual = roundTrip(RadarMonitorBlockPosePayload.STREAM_CODEC, expected);
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void sableSilhouettePayloadsRoundTrip() {
+        UUID structureUuid = UUID.fromString("156afdf2-8e42-4fac-a98c-17196ec33a17");
+        RadarMonitorSilhouetteRequestPayload request = new RadarMonitorSilhouetteRequestPayload(
+                new BlockPos(3, 70, -8), structureUuid, 4);
+        assertEquals(request, roundTrip(RadarMonitorSilhouetteRequestPayload.STREAM_CODEC, request));
+
+        RadarMonitorSilhouettePayload silhouette = new RadarMonitorSilhouettePayload(
+                ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"),
+                structureUuid,
+                5,
+                List.of(new RadarMonitorSilhouettePayload.Line(-2.5F, -1.0F, 3.5F, -1.0F)),
+                List.of(new RadarMonitorSilhouettePayload.Fill(-2.5F, -1.0F, 3.5F, 2.0F)));
+        assertEquals(silhouette, roundTrip(RadarMonitorSilhouettePayload.STREAM_CODEC, silhouette));
+
+        RadarDisplayTarget sableTarget = new RadarDisplayTarget(
+                structureUuid,
+                -1,
+                ResourceLocation.fromNamespaceAndPath("sable", "sublevel"),
+                RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE,
+                "Codec Airship",
+                RadarTargetCategory.SABLE_STRUCTURE,
+                ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"),
+                100.5D, 72.0D, -35.25D,
+                0.25D, 0.0D, -0.5D,
+                true,
+                -73.5F,
+                5,
+                0);
+        RadarMonitorBlockTargetsPayload targets = new RadarMonitorBlockTargetsPayload(
+                new BlockPos(3, 70, -8), 12L, 100L, 101L, List.of(sableTarget));
+        assertEquals(targets, roundTrip(RadarMonitorBlockTargetsPayload.STREAM_CODEC, targets));
+    }
+
+    @Test
+    void v5WireBytesRemainStable() throws NoSuchAlgorithmException {
+        assertEquals("5", ModNetwork.PROTOCOL_VERSION);
+        assertEquals(5, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
 
         RegistryFriendlyByteBuf buffer = newBuffer();
         try {
@@ -134,7 +184,7 @@ class RadarMonitorPayloadCodecTest {
             buffer.getBytes(buffer.readerIndex(), encoded);
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
 
-            assertEquals(V3_FIXTURE_SHA_256, digest);
+            assertEquals(V5_FIXTURE_SHA_256, digest);
         } finally {
             buffer.release();
         }
@@ -184,6 +234,8 @@ class RadarMonitorPayloadCodecTest {
                         -0.0625,
                         1.5,
                         true,
+                        0.0F,
+                        0,
                         7),
                 new RadarDisplayTarget(
                         null,
@@ -200,6 +252,8 @@ class RadarMonitorPayloadCodecTest {
                         0.0,
                         0.0,
                         false,
+                        0.0F,
+                        0,
                         127));
 
         return new RadarMonitorSnapshotPayload(
@@ -244,7 +298,8 @@ class RadarMonitorPayloadCodecTest {
                 123_456_789L,
                 123_456_799L,
                 coverages,
-                List.of(new ShellAlarmDisplayZone(testDimension, 17.5D, 71.5D, -22.5D, 128)),
+                List.of(new ShellAlarmDisplayZone(
+                        testDimension, 17.5D, 71.5D, -22.5D, 128, 72, 96)),
                 targets);
     }
 
