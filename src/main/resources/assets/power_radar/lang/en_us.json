@@ -269,9 +269,6 @@
   "power_radar.tooltip.interception_fuze.cone": "Detection cone: %s degrees",
   "power_radar.unit.percent": "%s%%",
   "block.power_radar.onboard_computer": "Onboard Computer",
-  "item.power_radar.name_card": "Name Card",
-  "screen.power_radar.name_card": "Structure Name",
-  "screen.power_radar.name_card.name": "Name",
   "goggles.power_radar.onboard_computer": "Onboard Computer",
   "message.power_radar.onboard_computer.sable_only": "Can only be placed on a Sable structure"
 }

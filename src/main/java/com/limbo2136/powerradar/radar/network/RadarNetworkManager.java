@@ -403,8 +403,7 @@ public class RadarNetworkManager {
     public boolean hasForcedAutotargetEntries(UUID id) {
         ComputingPolicy policy = cachedComputingPolicy(id);
         return policy.powered() && !policy.allowlistIsWhitelist()
-                && (!policy.playerNames().isEmpty() || !policy.sableUuids().isEmpty()
-                || !policy.unresolvedSableNames().isEmpty());
+                && (!policy.playerNames().isEmpty() || !policy.sableNames().isEmpty());
     }
 
     public boolean isAutotargetExcluded(UUID id, UUID targetUuid, String name, boolean sable) {
@@ -421,8 +420,7 @@ public class RadarNetworkManager {
 
     private static boolean matchesAllowlist(ComputingPolicy policy, UUID targetUuid, String name, boolean sable) {
         if (!sable) return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
-        return targetUuid != null && policy.sableUuids().contains(targetUuid)
-                || policy.unresolvedSableNames().stream().anyMatch(name::equalsIgnoreCase);
+        return policy.sableNames().stream().anyMatch(name::equalsIgnoreCase);
     }
 
     private ComputingResolution cachedComputingResolution(UUID id) {
@@ -436,7 +434,7 @@ public class RadarNetworkManager {
             if (computer == null || !computer.isElectricallyOperational()) return ComputingPolicy.EMPTY;
             return new ComputingPolicy(true, true, computer.targetingMask(), computer.displayMask(),
                     computer.allowlistIsWhitelist(), computer.allowlistPlayerNames(),
-                    computer.allowlistSableUuids(), computer.unresolvedSableNames(),
+                    computer.allowlistSableNames(),
                     computer.allowlistedPlayers(), computer.allowlistedSableNames());
         });
     }
@@ -479,15 +477,14 @@ public class RadarNetworkManager {
 
     private record ComputingPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
                                    boolean allowlistIsWhitelist, List<String> playerNames,
-                                   List<UUID> sableUuids, List<String> unresolvedSableNames,
+                                   List<String> sableNames,
                                    List<String> allowlistedPlayers, List<String> allowlistedSables) {
         private static final ComputingPolicy EMPTY = new ComputingPolicy(false, false, 0,
-                RadarDetectionFilters.DEFAULT_MASK, true, List.of(), List.of(), List.of(), List.of(), List.of());
+                RadarDetectionFilters.DEFAULT_MASK, true, List.of(), List.of(), List.of(), List.of());
 
         private ComputingPolicy {
             playerNames = List.copyOf(playerNames);
-            sableUuids = List.copyOf(sableUuids);
-            unresolvedSableNames = List.copyOf(unresolvedSableNames);
+            sableNames = List.copyOf(sableNames);
             allowlistedPlayers = List.copyOf(allowlistedPlayers);
             allowlistedSables = List.copyOf(allowlistedSables);
         }

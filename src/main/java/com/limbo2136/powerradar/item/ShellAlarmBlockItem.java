@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModDataComponents;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -27,7 +28,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public final class ShellAlarmBlockItem extends PowerRadarElectricalBlockItem {
     public ShellAlarmBlockItem(Block block, Item.Properties properties) {
-        super(block, properties, TooltipKind.SHELL_ALARM);
+        super(block, properties, Target.SHELL_ALARM);
     }
 
     @Override

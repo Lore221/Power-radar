@@ -37,6 +37,8 @@ import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import java.util.ArrayList;
@@ -728,22 +730,35 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.radar_controller")
-                .withStyle(ChatFormatting.GOLD));
-        tooltip.add(Component.translatable("goggles.power_radar.radar_controller.status",
-                Component.translatable(statusKey())));
-        tooltip.add(Component.translatable("goggles.power_radar.radar_controller.scan_mode",
-                Component.translatable(scanModeKey())));
-        tooltip.add(Component.translatable("goggles.power_radar.radar_controller.range", this.currentRange));
-        tooltip.add(Component.translatable("power_radar.electrical.state",
-                Component.translatable(this.electricalState.translationKey())));
-        tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
-        tooltip.add(Component.translatable("power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
-        tooltip.add(Component.translatable("power_radar.electrical.panel_count", this.validPanelCount));
-        tooltip.add(Component.translatable("power_radar.electrical.basic_panel_count", this.basicPanelCount));
-        tooltip.add(Component.translatable("power_radar.electrical.effective_range", this.effectiveScanRangeBlocks()));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.RADAR_CONTROLLER)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller")
+                        .withStyle(ChatFormatting.GOLD));
+                case STATUS -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller.status",
+                        Component.translatable(statusKey())));
+                case SCAN_MODE -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller.scan_mode",
+                        Component.translatable(scanModeKey())));
+                case CURRENT_RANGE -> tooltip.add(Component.translatable(
+                        "goggles.power_radar.radar_controller.range", this.currentRange));
+                case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
+                        Component.translatable(this.electricalState.translationKey())));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
+                case PANEL_COUNT -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.panel_count", this.validPanelCount));
+                case BASIC_PANEL_COUNT -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.basic_panel_count", this.basicPanelCount));
+                case EFFECTIVE_RANGE -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.effective_range", this.effectiveScanRangeBlocks()));
+                default -> { }
+            }
+        }
         return true;
     }
 

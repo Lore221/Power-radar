@@ -152,7 +152,6 @@ final class SableStructureScanner {
         if (name == null || name.isBlank()) {
             name = "Sable Structure";
         }
-        name = SableStructureNames.resolve(serverSubLevel.getLevel().getServer(), serverSubLevel.getUniqueId(), name);
         return new SableStructureObservation(
                 serverSubLevel.getUniqueId(),
                 name,

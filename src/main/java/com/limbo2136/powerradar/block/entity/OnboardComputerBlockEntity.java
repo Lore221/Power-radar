@@ -6,8 +6,6 @@ import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
 import com.limbo2136.powerradar.block.RadarDisplayStructureResolver;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
-import com.limbo2136.powerradar.compat.aeronautics.SableStructureNames;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
@@ -18,7 +16,6 @@ import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnaps
 import com.limbo2136.powerradar.interception.MovingProtectedZone;
 import com.limbo2136.powerradar.interception.MovingProtectedZoneTracker;
 import com.limbo2136.powerradar.interception.ProtectedZoneThreatEvaluator;
-import com.limbo2136.powerradar.item.NameCardItem;
 import com.limbo2136.powerradar.onboard.OnboardCombinedModuleType;
 import com.limbo2136.powerradar.onboard.OnboardModuleColumn;
 import com.limbo2136.powerradar.onboard.OnboardModuleSlot;
@@ -26,6 +23,8 @@ import com.limbo2136.powerradar.onboard.OnboardModuleType;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -49,17 +48,13 @@ import net.minecraft.world.phys.Vec3;
 public final class OnboardComputerBlockEntity extends RadarMonitorControllerBlockEntity {
     private static final String NETWORK_TAG = "NetworkId";
     private static final String INTERCEPTION_NETWORK_TAG = "InterceptionNetworkId";
-    private static final String CARD_TAG = "NameCard";
     private static final String MODULES_TAG = "OnboardModules";
     private static final String MODULE_SLOT_TAG = "Slot";
     private static final String MODULE_STACK_TAG = "Stack";
     private static final String ACCELEROMETER_COLUMNS_TAG = "AccelerometerColumns";
     private static final String VARIOMETER_COLUMNS_TAG = "VariometerColumns";
-    private static final String ASSIGNED_STRUCTURE_TAG = "AssignedStructureId";
     @Nullable private UUID networkId;
     @Nullable private UUID interceptionNetworkId;
-    @Nullable private UUID assignedStructureUuid;
-    private ItemStack nameCard = ItemStack.EMPTY;
     private final ItemStack[] modules = new ItemStack[OnboardModuleSlot.values().length];
     private int accelerometerColumnMask;
     private int variometerColumnMask;
@@ -375,7 +370,6 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
         InterceptionNetworkNodeClientCacheBridge.onLoaded(
                 this.level, this.worldPosition, this.interceptionNetworkId);
-        refreshStructureName();
     }
 
     @Override public void clearRemoved() {
@@ -396,8 +390,6 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         InterceptionNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         super.onChunkUnloaded();
     }
-
-    public ItemStack nameCard() { return this.nameCard; }
 
     public ItemStack module(OnboardModuleSlot slot) {
         return this.modules[slot.index()];
@@ -538,76 +530,27 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         return List.copyOf(removed);
     }
 
-    public boolean insertNameCard(ItemStack held) {
-        if (!this.nameCard.isEmpty() || !(held.getItem() instanceof NameCardItem)) return false;
-        this.nameCard = held.copyWithCount(1);
-        held.shrink(1);
-        setChanged();
-        refreshStructureName();
-        sendData();
-        return true;
-    }
-
-    public ItemStack removeNameCard() {
-        ItemStack result = this.nameCard;
-        this.nameCard = ItemStack.EMPTY;
-        setChanged();
-        refreshStructureName();
-        sendData();
-        return result;
-    }
-
-    public void clearStructureName() {
-        if (this.assignedStructureUuid != null && this.level instanceof ServerLevel serverLevel) {
-            SableStructureNames.remove(serverLevel.getServer(), this.assignedStructureUuid);
-            this.assignedStructureUuid = null;
-            setChanged();
-        }
-    }
-
-    private void refreshStructureName() {
-        if (!(this.level instanceof ServerLevel serverLevel)) return;
-        String name = NameCardItem.name(this.nameCard).trim();
-        UUID desiredStructure = isElectricallyOperational() && !name.isEmpty()
-                ? SableRadarIntegration.containingStructureUuid(serverLevel, this.worldPosition).orElse(null)
-                : null;
-        if (this.assignedStructureUuid != null && !this.assignedStructureUuid.equals(desiredStructure)) {
-            SableStructureNames.remove(serverLevel.getServer(), this.assignedStructureUuid);
-            this.assignedStructureUuid = null;
-        }
-        if (desiredStructure != null) {
-            SableStructureNames.assign(serverLevel.getServer(), desiredStructure, name);
-            this.assignedStructureUuid = desiredStructure;
-        }
-        setChanged();
-    }
-
-    @Override public boolean applyElectricalSnapshot(PowerRadarCeeSnapshot snapshot) {
-        boolean wasPowered = isElectricallyOperational();
-        boolean changed = super.applyElectricalSnapshot(snapshot);
-        if (wasPowered != isElectricallyOperational()) refreshStructureName();
-        return changed;
-    }
-
-    @Override public void updateDisplayStructure(@Nullable BlockPos origin, int size,
-            net.minecraft.core.Direction facing, RadarDisplayStructureResolver.StructureStatus status) {
-        PowerRadarCeeState previousState = electricalState();
-        super.updateDisplayStructure(origin, size, facing, status);
-        if (previousState != electricalState()) refreshStructureName();
-    }
-
     @Override protected UUID directNetworkId() { return this.networkId; }
     @Override protected boolean usesDisplayStructureResolver() { return false; }
 
     @Override public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.onboard_computer")
-                .withStyle(ChatFormatting.GOLD));
-        tooltip.add(Component.translatable("power_radar.electrical.state",
-                Component.translatable(electricalState().translationKey())));
-        tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
-        tooltip.add(Component.translatable("power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.ONBOARD_COMPUTER)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.onboard_computer")
+                        .withStyle(ChatFormatting.GOLD));
+                case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
+                        Component.translatable(electricalState().translationKey())));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
+                default -> { }
+            }
+        }
         return true;
     }
 
@@ -617,8 +560,6 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         if (this.interceptionNetworkId != null) {
             tag.putUUID(INTERCEPTION_NETWORK_TAG, this.interceptionNetworkId);
         }
-        if (this.assignedStructureUuid != null) tag.putUUID(ASSIGNED_STRUCTURE_TAG, this.assignedStructureUuid);
-        if (!this.nameCard.isEmpty()) tag.put(CARD_TAG, this.nameCard.save(registries));
         ListTag moduleTags = new ListTag();
         for (OnboardModuleSlot slot : OnboardModuleSlot.values()) {
             ItemStack stack = this.modules[slot.index()];
@@ -659,9 +600,6 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                     oldInterceptionNetworkId,
                     this.interceptionNetworkId);
         }
-        this.assignedStructureUuid = tag.hasUUID(ASSIGNED_STRUCTURE_TAG)
-                ? tag.getUUID(ASSIGNED_STRUCTURE_TAG) : null;
-        this.nameCard = tag.contains(CARD_TAG) ? ItemStack.parseOptional(registries, tag.getCompound(CARD_TAG)) : ItemStack.EMPTY;
         java.util.Arrays.fill(this.modules, ItemStack.EMPTY);
         ListTag moduleTags = tag.getList(MODULES_TAG, Tag.TAG_COMPOUND);
         for (int i = 0; i < moduleTags.size(); i++) {

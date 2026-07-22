@@ -21,6 +21,8 @@ import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import java.util.ArrayList;
@@ -1556,20 +1558,33 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.interception_controller")
-                .withStyle(ChatFormatting.GOLD));
-        tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
-        tooltip.add(Component.translatable("power_radar.electrical.current",
-                PowerRadarCeeFormatter.currentComponent(this.currentAmps)));
-        tooltip.add(Component.translatable("power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(this.powerWatts)));
-        tooltip.add(Component.translatable("goggles.power_radar.interception_controller.status",
-                Component.translatable(this.status.translationKey)));
-        if (this.assignedThreatUuid != null) {
-            tooltip.add(Component.translatable(
-                    "goggles.power_radar.interception_controller.intercept_time",
-                    Math.round(this.interceptTicks)));
+        for (PowerRadarTooltipSettings.Line line
+                : PowerRadarTooltipSettings.goggles(Target.INTERCEPTION_CONTROLLER)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.interception_controller")
+                        .withStyle(ChatFormatting.GOLD));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
+                case CURRENT -> tooltip.add(Component.translatable("power_radar.electrical.current",
+                        PowerRadarCeeFormatter.currentComponent(this.currentAmps)));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(this.powerWatts)));
+                case STATUS -> tooltip.add(Component.translatable(
+                        "goggles.power_radar.interception_controller.status",
+                        Component.translatable(this.status.translationKey)));
+                case INTERCEPT_TIME -> {
+                    if (this.assignedThreatUuid != null) {
+                        tooltip.add(Component.translatable(
+                                "goggles.power_radar.interception_controller.intercept_time",
+                                Math.round(this.interceptTicks)));
+                    }
+                }
+                default -> { }
+            }
         }
         return true;
     }

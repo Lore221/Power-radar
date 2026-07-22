@@ -1,39 +1,33 @@
 package com.limbo2136.powerradar.radar;
 
-import com.limbo2136.powerradar.PowerRadarServerConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 
 public final class RadarModuleConstants {
-    public static final int MAX_MODULES = 20;
+    // Фиксированная эталонная шкала рендера 200x200, а не игровые значения дальности.
     public static final int BASE_RANGE_BLOCKS = 80;
     public static final int PHASED_ARRAY_RANGE_BONUS_BLOCKS = 20;
-    public static final int OVERVIEW_RANGE_PANEL_EQUIVALENT = 3;
-    public static final int MAX_OVERVIEW_MODULES = 5;
     public static final int OVERVIEW_TRACK_UPDATE_INTERVAL_TICKS = 10;
-    public static final double PHASED_ARRAY_POWER_WATTS = 700.0;
-    public static final double OVERVIEW_MODULE_POWER_WATTS = 700.0;
-
     private RadarModuleConstants() {
     }
 
     public static int maxModules() {
-        return PowerRadarServerConfig.maxRadarPanels();
+        return PowerRadarRadarParameters.maxPhasedArrayPanels();
     }
 
     public static int baseRangeBlocks() {
-        return PowerRadarServerConfig.radarBaseRangeBlocks();
+        return PowerRadarRadarParameters.baseRangeBlocks();
     }
 
     public static int phasedArrayRangeBonusBlocks() {
-        return PowerRadarServerConfig.basicPanelRangeBonusBlocks();
+        return PowerRadarRadarParameters.phasedArrayPanelRangeBlocks();
     }
 
     public static int overviewRangeBonusBlocks() {
-        return phasedArrayRangeBonusBlocks() * OVERVIEW_RANGE_PANEL_EQUIVALENT;
+        return PowerRadarRadarParameters.overviewModuleRangeBlocks();
     }
 
     public static int maxOverviewModules() {
-        return MAX_OVERVIEW_MODULES;
+        return PowerRadarRadarParameters.maxOverviewModules();
     }
 
     public static double phasedArrayPowerWatts() {

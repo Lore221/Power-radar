@@ -269,9 +269,6 @@
   "power_radar.tooltip.interception_fuze.cone": "Конус обнаружения: %s градусов",
   "power_radar.unit.percent": "%s%%",
   "block.power_radar.onboard_computer": "Бортовой компьютер",
-  "item.power_radar.name_card": "Именная карта",
-  "screen.power_radar.name_card": "Название структуры",
-  "screen.power_radar.name_card.name": "Название",
   "goggles.power_radar.onboard_computer": "Бортовой компьютер",
   "message.power_radar.onboard_computer.sable_only": "можно размещать только на sable структуре"
 }

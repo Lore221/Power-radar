@@ -6,7 +6,6 @@ import com.limbo2136.powerradar.network.AllowlistCardSavePayload;
 import com.limbo2136.powerradar.registry.ModItems;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem.AllowlistData;
-import com.limbo2136.powerradar.item.RadarFilterCardItem.SableAllowlistEntry;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,8 +38,7 @@ public class AllowlistCardScreen extends Screen {
     private final AllowlistCardOpenPayload snapshot;
     private final List<String> onlinePlayers;
     private final ArrayList<String> storedPlayerNames;
-    private final ArrayList<SableAllowlistEntry> storedSableEntries;
-    private final ArrayList<String> pendingSableNames;
+    private final ArrayList<String> storedSableNames;
     private EditBox sableNameBox;
     private boolean sableMode;
     private int option;
@@ -58,8 +56,7 @@ public class AllowlistCardScreen extends Screen {
         this.onlinePlayers = List.copyOf(snapshot.onlinePlayers());
         AllowlistData data = RadarFilterCardItem.decodeAllowlistLines(snapshot.storedNames(), snapshot.sableMode());
         this.storedPlayerNames = new ArrayList<>(data.playerNames());
-        this.storedSableEntries = new ArrayList<>(data.sableEntries());
-        this.pendingSableNames = new ArrayList<>(data.unresolvedSableNames());
+        this.storedSableNames = new ArrayList<>(data.sableNames());
         this.playerIndex = this.onlinePlayers.isEmpty() ? -1 : 0;
     }
 
@@ -308,7 +305,7 @@ public class AllowlistCardScreen extends Screen {
         String candidate = candidateName();
         if (candidate == null) return;
         if (this.sableMode) {
-            if (!containsSableName(candidate)) this.pendingSableNames.add(candidate);
+            if (!containsSableName(candidate)) this.storedSableNames.add(candidate);
             this.sableNameBox.setValue("");
         } else if (this.storedPlayerNames.stream().noneMatch(candidate::equalsIgnoreCase)) {
             this.storedPlayerNames.add(candidate);
@@ -333,8 +330,7 @@ public class AllowlistCardScreen extends Screen {
         String candidate = candidateName();
         if (candidate == null) return;
         if (this.sableMode) {
-            this.pendingSableNames.removeIf(candidate::equalsIgnoreCase);
-            this.storedSableEntries.removeIf(entry -> candidate.equalsIgnoreCase(entry.displayName()));
+            this.storedSableNames.removeIf(candidate::equalsIgnoreCase);
             this.sableNameBox.setValue("");
         } else {
             this.storedPlayerNames.removeIf(candidate::equalsIgnoreCase);
@@ -355,22 +351,18 @@ public class AllowlistCardScreen extends Screen {
     private void saveState() {
         if (this.stateSaved) return;
         this.stateSaved = true;
-        AllowlistData data = new AllowlistData(
-                this.storedPlayerNames, this.storedSableEntries, this.pendingSableNames);
+        AllowlistData data = new AllowlistData(this.storedPlayerNames, this.storedSableNames);
         PacketDistributor.sendToServer(new AllowlistCardSavePayload(
                 this.snapshot.hand(), this.sableMode, this.option, data.encodedLines()));
     }
 
     private boolean containsSableName(String candidate) {
-        return this.pendingSableNames.stream().anyMatch(candidate::equalsIgnoreCase)
-                || this.storedSableEntries.stream().anyMatch(entry -> candidate.equalsIgnoreCase(entry.displayName()));
+        return this.storedSableNames.stream().anyMatch(candidate::equalsIgnoreCase);
     }
 
     private List<String> sableDisplayNames() {
         LinkedHashMap<String, String> names = new LinkedHashMap<>();
-        this.storedSableEntries.forEach(entry -> names.putIfAbsent(
-                entry.displayName().toLowerCase(Locale.ROOT), entry.displayName()));
-        this.pendingSableNames.forEach(name -> names.putIfAbsent(name.toLowerCase(Locale.ROOT), name));
+        this.storedSableNames.forEach(name -> names.putIfAbsent(name.toLowerCase(Locale.ROOT), name));
         return List.copyOf(names.values());
     }
 

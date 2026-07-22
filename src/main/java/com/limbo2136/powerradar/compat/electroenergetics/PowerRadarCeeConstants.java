@@ -1,12 +1,10 @@
 package com.limbo2136.powerradar.compat.electroenergetics;
 
-import com.limbo2136.powerradar.PowerRadarServerConfig;
+import com.limbo2136.powerradar.radar.PowerRadarRadarParameters;
 import com.limbo2136.powerradar.radar.RadarModuleConstants;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 
 public final class PowerRadarCeeConstants {
-    public static final int MAX_RADAR_PANELS = 20;
-
     public static final int SHELL_ALARM_DEFAULT_WIDTH_BLOCKS = 64;
     public static final int SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS = 40;
     public static final int SHELL_ALARM_DEFAULT_DEPTH_BLOCKS = 64;
@@ -28,18 +26,6 @@ public final class PowerRadarCeeConstants {
     public static final double TARGET_CONTROLLER_MAX_LEAD_TICKS = 80.0;
     public static final double TARGET_CONTROLLER_MIN_LEAD_DISTANCE_BLOCKS = 16.0;
     public static final double TARGET_CONTROLLER_TARGET_HEIGHT_FACTOR = 0.5;
-
-    public static final int RADAR_BASE_RANGE_BLOCKS = 80;
-    public static final int BASIC_PANEL_RANGE_BONUS_BLOCKS = 20;
-
-    public static final int GROUND_UP_BLOCKS = 128;
-    public static final int GROUND_DOWN_BLOCKS = 20;
-    public static final int SURFACE_DOWN_BLOCKS = 1500;
-
-    public static final double AIR_RANGE_MULTIPLIER = 1.5;
-    public static final double AIR_FOV_DEGREES = 90.0;
-    public static final int AIR_MIN_Y_OFFSET = 40;
-    public static final int AIR_MAX_Y_OFFSET = 1500;
 
     private PowerRadarCeeConstants() {
     }
@@ -171,15 +157,15 @@ public final class PowerRadarCeeConstants {
         return Math.max(min, Math.min(max, value));
     }
 
-    public static int maxRadarPanels() { return PowerRadarServerConfig.maxRadarPanels(); }
-    public static int radarBaseRangeBlocks() { return PowerRadarServerConfig.radarBaseRangeBlocks(); }
-    public static int basicPanelRangeBonusBlocks() { return PowerRadarServerConfig.basicPanelRangeBonusBlocks(); }
-    public static int groundUpBlocks() { return PowerRadarServerConfig.groundUpBlocks(); }
-    public static int groundDownBlocks() { return PowerRadarServerConfig.groundDownBlocks(); }
-    public static int surfaceDownBlocks() { return PowerRadarServerConfig.surfaceDownBlocks(); }
-    public static double airRangeMultiplier() { return PowerRadarServerConfig.airRangeMultiplier(); }
-    public static double airFovDegrees() { return PowerRadarServerConfig.airFovDegrees(); }
-    public static int airMinYOffset() { return PowerRadarServerConfig.airMinYOffset(); }
-    public static int airMaxYOffset() { return PowerRadarServerConfig.airMaxYOffset(); }
+    public static int maxRadarPanels() { return PowerRadarRadarParameters.maxPhasedArrayPanels(); }
+    public static int radarBaseRangeBlocks() { return PowerRadarRadarParameters.baseRangeBlocks(); }
+    public static int basicPanelRangeBonusBlocks() { return PowerRadarRadarParameters.phasedArrayPanelRangeBlocks(); }
+    public static int groundUpBlocks() { return PowerRadarRadarParameters.groundUpBlocks(); }
+    public static int groundDownBlocks() { return PowerRadarRadarParameters.groundDownBlocks(); }
+    public static int surfaceDownBlocks() { return PowerRadarRadarParameters.surfaceDownBlocks(); }
+    public static double airRangeMultiplier() { return PowerRadarRadarParameters.airRangeMultiplier(); }
+    public static double airFovDegrees() { return PowerRadarRadarParameters.airFovDegrees(); }
+    public static int airMinYOffset() { return PowerRadarRadarParameters.airMinYOffset(); }
+    public static int airMaxYOffset() { return PowerRadarRadarParameters.airMaxYOffset(); }
 
 }

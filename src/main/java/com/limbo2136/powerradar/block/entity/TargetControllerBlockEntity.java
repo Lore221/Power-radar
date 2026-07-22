@@ -29,6 +29,8 @@ import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBoxTransform;
@@ -1315,20 +1317,26 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     // Показывает электрическое состояние и итоговую причину готовности в очках Create.
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.target_controller")
-                .withStyle(ChatFormatting.GOLD));
-        tooltip.add(Component.translatable(
-                "power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
-        tooltip.add(Component.translatable(
-                "power_radar.electrical.current",
-                PowerRadarCeeFormatter.currentComponent(this.currentAmps)));
-        tooltip.add(Component.translatable(
-                "power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(this.powerWatts)));
-        tooltip.add(Component.translatable(
-                "goggles.power_radar.target_controller.fire_status",
-                Component.translatable(this.fireStatus.translationKey())));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.TARGET_CONTROLLER)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.target_controller")
+                        .withStyle(ChatFormatting.GOLD));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
+                case CURRENT -> tooltip.add(Component.translatable("power_radar.electrical.current",
+                        PowerRadarCeeFormatter.currentComponent(this.currentAmps)));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(this.powerWatts)));
+                case STATUS -> tooltip.add(Component.translatable(
+                        "goggles.power_radar.target_controller.fire_status",
+                        Component.translatable(this.fireStatus.translationKey())));
+                default -> { }
+            }
+        }
         return true;
     }
 

@@ -26,6 +26,8 @@ import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
@@ -766,32 +768,44 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm")
-                .withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.translatable("power_radar.electrical.state",
-                Component.translatable(this.electrical.electricalState().translationKey()))
-                .withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(this.electrical.voltageVolts()))
-                .withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable("power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts()))
-                .withStyle(ChatFormatting.DARK_GRAY));
-        if (this.sableProtectionMode) {
-            tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.sable_margin",
-                            sableProtectionMarginPercent())
-                    .withStyle(ChatFormatting.DARK_GRAY));
-        } else {
-            tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.zone",
-                            protectionWidthBlocks(), protectionHeightBlocks(), protectionDepthBlocks())
-                    .withStyle(ChatFormatting.DARK_GRAY));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.SHELL_ALARM)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.shell_alarm")
+                        .withStyle(ChatFormatting.GRAY));
+                case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
+                                Component.translatable(this.electrical.electricalState().translationKey()))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                                PowerRadarCeeFormatter.voltageComponent(this.electrical.voltageVolts()))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                                PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts()))
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                case PROTECTION_ZONE -> {
+                    if (this.sableProtectionMode) {
+                        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.sable_margin",
+                                        sableProtectionMarginPercent())
+                                .withStyle(ChatFormatting.DARK_GRAY));
+                    } else {
+                        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.zone",
+                                        protectionWidthBlocks(), protectionHeightBlocks(), protectionDepthBlocks())
+                                .withStyle(ChatFormatting.DARK_GRAY));
+                    }
+                }
+                case SHELL_COUNT -> tooltip.add(Component.translatable(
+                                "goggles.power_radar.shell_alarm.shells", this.trackedShellCount)
+                        .withStyle(ChatFormatting.DARK_GRAY));
+                case ALARM_STATE -> tooltip.add(Component.translatable(this.alarmActive
+                                ? "goggles.power_radar.shell_alarm.danger"
+                                : "goggles.power_radar.shell_alarm.clear")
+                        .withStyle(this.alarmActive ? ChatFormatting.RED : ChatFormatting.GREEN));
+                default -> { }
+            }
         }
-        tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.shells", this.trackedShellCount)
-                .withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable(this.alarmActive
-                        ? "goggles.power_radar.shell_alarm.danger"
-                        : "goggles.power_radar.shell_alarm.clear")
-                .withStyle(this.alarmActive ? ChatFormatting.RED : ChatFormatting.GREEN));
         return true;
     }
 

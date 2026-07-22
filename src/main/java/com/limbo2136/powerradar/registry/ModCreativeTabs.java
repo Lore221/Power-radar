@@ -26,7 +26,6 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.COMPUTING_BLOCK.get());
                         if (SableRadarIntegration.isAeronauticsLoaded()) {
                             output.accept(ModItems.ONBOARD_COMPUTER.get());
-                            output.accept(ModItems.NAME_CARD.get());
                         }
                         output.accept(ModItems.TARGETING_CARD.get());
                         output.accept(ModItems.DISPLAY_CARD.get());

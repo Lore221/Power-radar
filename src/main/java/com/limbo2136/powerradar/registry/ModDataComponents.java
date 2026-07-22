@@ -51,12 +51,6 @@ public final class ModDataComponents {
                     .networkSynchronized(ByteBufCodecs.BOOL)
                     .build());
 
-    public static final DeferredHolder<DataComponentType<?>, DataComponentType<String>> NAME_CARD_NAME =
-            DATA_COMPONENTS.register("name_card_name", () -> DataComponentType.<String>builder()
-                    .persistent(Codec.STRING)
-                    .networkSynchronized(ByteBufCodecs.STRING_UTF8)
-                    .build());
-
     private ModDataComponents() {
     }
 

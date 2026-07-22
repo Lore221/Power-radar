@@ -25,6 +25,8 @@ import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import java.util.ArrayList;
@@ -725,15 +727,25 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.radar_monitor_controller")
-                .withStyle(ChatFormatting.GOLD));
-        tooltip.add(Component.translatable("power_radar.electrical.state",
-                Component.translatable(this.electricalState.translationKey())));
-        tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
-        tooltip.add(Component.translatable("power_radar.electrical.power",
-                PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
-        tooltip.add(Component.translatable("power_radar.electrical.display_count", activeDisplayCount()));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.MONITOR_CONTROLLER)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.radar_monitor_controller")
+                        .withStyle(ChatFormatting.GOLD));
+                case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
+                        Component.translatable(this.electricalState.translationKey())));
+                case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
+                case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
+                case DISPLAY_COUNT -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.display_count", activeDisplayCount()));
+                default -> { }
+            }
+        }
         return true;
     }
 

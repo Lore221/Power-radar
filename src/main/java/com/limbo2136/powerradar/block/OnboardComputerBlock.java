@@ -9,7 +9,6 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceType
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
-import com.limbo2136.powerradar.item.NameCardItem;
 import com.limbo2136.powerradar.onboard.OnboardModuleColumn;
 import com.limbo2136.powerradar.onboard.OnboardModuleSlot;
 import com.limbo2136.powerradar.onboard.OnboardModuleType;
@@ -93,31 +92,7 @@ public final class OnboardComputerBlock extends BaseEntityBlock
             }
             return ItemInteractionResult.sidedSuccess(level.isClientSide());
         }
-        if (!(stack.getItem() instanceof NameCardItem)) return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
-        if (!(level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer))
-            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
-        if (!level.isClientSide()) {
-            if (computer.nameCard().isEmpty()) {
-                computer.insertNameCard(stack);
-            } else {
-                giveNameCardToPlayer(computer, player);
-            }
-        }
-        return ItemInteractionResult.sidedSuccess(level.isClientSide());
-    }
-    @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        if (!player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty()) return InteractionResult.PASS;
-        if (!(level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer))
-            return InteractionResult.PASS;
-        if (!level.isClientSide()) {
-            if (computer.nameCard().isEmpty()) return InteractionResult.PASS;
-            giveNameCardToPlayer(computer, player);
-        }
-        return InteractionResult.sidedSuccess(level.isClientSide());
-    }
-    private static void giveNameCardToPlayer(OnboardComputerBlockEntity computer, Player player) {
-        ItemStack card = computer.removeNameCard();
-        if (!player.addItem(card)) player.drop(card, false);
+        return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
     }
 
     @Override public InteractionResult onWrenched(BlockState state, UseOnContext context) {
@@ -176,8 +151,6 @@ public final class OnboardComputerBlock extends BaseEntityBlock
     @Override protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState next, boolean moved) {
         if (!state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
             computer.destroyOwnedNetworks();
-            computer.clearStructureName();
-            if (!computer.nameCard().isEmpty()) Block.popResource(level, pos, computer.removeNameCard());
             for (ItemStack module : computer.removeAllModules()) {
                 Block.popResource(level, pos, module);
             }

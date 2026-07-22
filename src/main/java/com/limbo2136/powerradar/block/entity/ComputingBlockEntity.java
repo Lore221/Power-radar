@@ -9,6 +9,8 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegratio
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
@@ -110,20 +112,16 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
 
     public boolean allowlistIsWhitelist() { return cards[2].isEmpty() || RadarFilterCardItem.cardOption(cards[2], 1) == 1; }
     public List<String> allowlistPlayerNames() { return allowlistData().playerNames(); }
-    public List<UUID> allowlistSableUuids() {
-        return allowlistData().sableEntries().stream().map(RadarFilterCardItem.SableAllowlistEntry::structureUuid).toList();
-    }
     public List<String> allowlistSableNames() {
-        return allowlistData().sableEntries().stream().map(RadarFilterCardItem.SableAllowlistEntry::displayName).toList();
+        return allowlistData().sableNames();
     }
-    public List<String> unresolvedSableNames() { return allowlistData().unresolvedSableNames(); }
     public List<String> allowlistedSableNames() {
         return cards[2].isEmpty() || !allowlistIsWhitelist() ? List.of() : allowlistSableNames();
     }
 
     private RadarFilterCardItem.AllowlistData allowlistData() {
         return cards[2].isEmpty()
-                ? new RadarFilterCardItem.AllowlistData(List.of(), List.of(), List.of())
+                ? new RadarFilterCardItem.AllowlistData(List.of(), List.of())
                 : RadarFilterCardItem.allowlistData(cards[2]);
     }
 
@@ -142,31 +140,51 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
-        tooltip.add(Component.translatable("goggles.power_radar.computing_block").withStyle(ChatFormatting.GOLD));
-        for (int i = 0; i < cards.length; i++) {
-            tooltip.add(Component.translatable("goggles.power_radar.computing_block.slot." + i,
-                    cards[i].isEmpty() ? Component.translatable("goggles.power_radar.computing_block.empty")
-                            : cards[i].getHoverName()));
-        }
-        if (level instanceof ServerLevel serverLevel) {
-            RadarLinkConnectionResolver.Resolution resolution =
-                    RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, worldPosition);
-            if (resolution.status() == RadarLinkConnectionResolver.Status.SINGLE && resolution.link().networkId() != null) {
-                RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
-                if (!manager.controlConsumersAllowed(resolution.link().networkId())) {
-                    tooltip.add(Component.translatable("goggles.power_radar.computing_block.onboard_network"));
-                } else {
-                    RadarNetworkManager.ComputingResolution computing = manager
-                            .resolveComputingBlock(resolution.link().networkId());
-                    tooltip.add(Component.translatable(computing.conflict()
-                            ? "goggles.power_radar.computing_block.conflict"
-                            : "goggles.power_radar.computing_block.connected"));
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.COMPUTING_BLOCK)) {
+            if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
+                continue;
+            }
+            PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
+            switch (field) {
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.computing_block")
+                        .withStyle(ChatFormatting.GOLD));
+                case CARD_SLOTS -> {
+                    for (int i = 0; i < cards.length; i++) {
+                        tooltip.add(Component.translatable("goggles.power_radar.computing_block.slot." + i,
+                                cards[i].isEmpty()
+                                        ? Component.translatable("goggles.power_radar.computing_block.empty")
+                                        : cards[i].getHoverName()));
+                    }
                 }
-            } else {
-                tooltip.add(Component.translatable("goggles.power_radar.computing_block.disconnected"));
+                case NETWORK_STATUS -> {
+                    if (level instanceof ServerLevel serverLevel) {
+                        appendNetworkStatus(tooltip, serverLevel);
+                    }
+                }
+                default -> { }
             }
         }
         return true;
+    }
+
+    // Вычисляет сетевой статус только если соответствующая строка включена в раскладке очков.
+    private void appendNetworkStatus(List<Component> tooltip, ServerLevel serverLevel) {
+        RadarLinkConnectionResolver.Resolution resolution =
+                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, worldPosition);
+        if (resolution.status() != RadarLinkConnectionResolver.Status.SINGLE || resolution.link().networkId() == null) {
+            tooltip.add(Component.translatable("goggles.power_radar.computing_block.disconnected"));
+            return;
+        }
+        RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+        if (!manager.controlConsumersAllowed(resolution.link().networkId())) {
+            tooltip.add(Component.translatable("goggles.power_radar.computing_block.onboard_network"));
+            return;
+        }
+        RadarNetworkManager.ComputingResolution computing = manager
+                .resolveComputingBlock(resolution.link().networkId());
+        tooltip.add(Component.translatable(computing.conflict()
+                ? "goggles.power_radar.computing_block.conflict"
+                : "goggles.power_radar.computing_block.connected"));
     }
 
     @Override

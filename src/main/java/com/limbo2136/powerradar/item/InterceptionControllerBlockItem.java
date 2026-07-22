@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.item;
 
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.registry.ModDataComponents;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -23,7 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public final class InterceptionControllerBlockItem extends PowerRadarElectricalBlockItem {
     public InterceptionControllerBlockItem(Block block, Item.Properties properties) {
-        super(block, properties, TooltipKind.INTERCEPTION_CONTROLLER);
+        super(block, properties, Target.INTERCEPTION_CONTROLLER);
     }
 
     @Override
