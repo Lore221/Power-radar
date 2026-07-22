@@ -8,6 +8,7 @@ import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
@@ -703,7 +704,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 tag.getDouble("ElectricalPowerWatts"),
                 tag.contains("ElectricalResistanceOhms")
                         ? tag.getDouble("ElectricalResistanceOhms")
-                        : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS));
+                        : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS));
         this.radarStructureEntityUuid = tag.hasUUID("RadarStructureEntity")
                 ? tag.getUUID("RadarStructureEntity") : null;
         this.networkId = tag.hasUUID("PowerRadarNetworkId")

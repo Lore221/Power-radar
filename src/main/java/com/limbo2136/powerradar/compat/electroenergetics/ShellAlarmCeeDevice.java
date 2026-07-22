@@ -17,30 +17,15 @@ public class ShellAlarmCeeDevice extends PowerRadarCeeLoadDevice {
 
     @Override
     public void preTick(BridgeCollector bridges) {
-        setLoad(true, PowerRadarCeeConstants.SHELL_ALARM_POWER_WATTS,
-                PowerRadarCeeConstants.OFF_RESISTANCE_OHMS,
-                PowerRadarCeeConstants.SHELL_ALARM_NOMINAL_VOLTAGE);
+        setLoad(true, PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts(),
+                PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                PowerRadarElectricalParameters.Voltages.shellAlarm().nominal());
         super.preTick(bridges);
     }
 
     @Override
-    protected double minVoltage() {
-        return PowerRadarCeeConstants.SHELL_ALARM_MIN_VOLTAGE;
-    }
-
-    @Override
-    protected double restartVoltage() {
-        return PowerRadarCeeConstants.SHELL_ALARM_RESTART_VOLTAGE;
-    }
-
-    @Override
-    protected double maxVoltage() {
-        return PowerRadarCeeConstants.SHELL_ALARM_MAX_VOLTAGE;
-    }
-
-    @Override
-    protected double overvoltageRecoveryVoltage() {
-        return PowerRadarCeeConstants.SHELL_ALARM_OVERVOLTAGE_RECOVERY;
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.shellAlarm();
     }
 
     @Override

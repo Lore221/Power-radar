@@ -2,9 +2,11 @@ package com.limbo2136.powerradar.compat.aeronautics;
 
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import dev.ryanhcode.sable.Sable;
+import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
 
@@ -36,9 +38,24 @@ final class SableRadarWorldPose {
         return new RadarWorldPose(worldOrigin, worldYaw, true);
     }
 
-    static Vec3 worldPosition(ServerLevel level, BlockPos containingPos, Vec3 localPosition) {
+    static Vec3 worldPosition(Level level, BlockPos containingPos, Vec3 localPosition) {
         SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
         return subLevel == null ? localPosition : subLevel.logicalPose().transformPosition(localPosition);
+    }
+
+    static Vec3 interpolatedLocalDirection(
+            Level level,
+            BlockPos containingPos,
+            Vec3 worldDirection,
+            float partialTick
+    ) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
+        if (subLevel == null) {
+            return worldDirection;
+        }
+        Pose3d renderPose = subLevel.lastPose().lerp(
+                subLevel.logicalPose(), Math.clamp(partialTick, 0.0F, 1.0F), new Pose3d());
+        return renderPose.transformNormalInverse(worldDirection);
     }
 
     static Vec3 localDirection(ServerLevel level, BlockPos containingPos, Vec3 worldDirection) {

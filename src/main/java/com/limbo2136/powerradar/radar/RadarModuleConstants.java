@@ -1,6 +1,7 @@
 package com.limbo2136.powerradar.radar;
 
 import com.limbo2136.powerradar.PowerRadarServerConfig;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 
 public final class RadarModuleConstants {
     public static final int MAX_MODULES = 20;
@@ -36,11 +37,11 @@ public final class RadarModuleConstants {
     }
 
     public static double phasedArrayPowerWatts() {
-        return PowerRadarServerConfig.basicRadarPanelPowerWatts();
+        return PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts();
     }
 
     public static double overviewModulePowerWatts() {
-        return PowerRadarServerConfig.overviewModulePowerWatts();
+        return PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
     }
 
     public static int overviewTrackUpdateIntervalTicks() {

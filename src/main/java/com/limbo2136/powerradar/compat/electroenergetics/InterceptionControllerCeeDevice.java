@@ -2,21 +2,14 @@ package com.limbo2136.powerradar.compat.electroenergetics;
 
 import com.george_vi.electroenergetics.devices.device.DevicesSavedData;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
-import com.george_vi.electroenergetics.foundation.device.SimpleElectricalDevice;
-import com.george_vi.electroenergetics.simulation.BridgeCollector;
-import com.george_vi.electroenergetics.simulation.SimulationResults;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-public class InterceptionControllerCeeDevice extends SimpleElectricalDevice {
-    private double powerVoltageVolts;
-    private double currentAmps;
-    private double powerWatts;
+public class InterceptionControllerCeeDevice extends PowerRadarCeeResistiveDevice {
     private InterceptionControllerBlockEntity blockEntity;
 
     public InterceptionControllerCeeDevice(
@@ -29,16 +22,12 @@ public class InterceptionControllerCeeDevice extends SimpleElectricalDevice {
     }
 
     @Override
-    public void preTick(BridgeCollector bridges) {
-        bridges.builder(this.pos)
-                .resistor(0, 1, PowerRadarCeeConstants.TARGET_CONTROLLER_POWER_RESISTANCE_OHMS);
+    protected double resistanceOhms() {
+        return PowerRadarElectricalParameters.Resistances.interceptionController();
     }
 
     @Override
-    public void postTick(SimulationResults results) {
-        this.powerVoltageVolts = safe(results.getVoltageAt(this.pos, 0, 1));
-        this.currentAmps = Math.abs(safe(results.getCurrentThrough(this.pos, 0, 1)));
-        this.powerWatts = Math.abs(this.powerVoltageVolts) * this.currentAmps;
+    protected void publishSnapshot() {
         InterceptionControllerBlockEntity controller = loadedBlockEntity();
         if (controller != null) {
             controller.applyElectricalSnapshot(snapshot());
@@ -47,32 +36,16 @@ public class InterceptionControllerCeeDevice extends SimpleElectricalDevice {
             PowerRadar.LOGGER.info(
                     "[PowerRadar BugReport][Interception][CEE] pos={} voltage={} current={} power={} blockEntityLoaded={}",
                     this.pos,
-                    round(this.powerVoltageVolts),
-                    round(this.currentAmps),
-                    round(this.powerWatts),
+                    round(voltageVolts()),
+                    round(currentAmps()),
+                    round(powerWatts()),
                     controller != null);
         }
     }
 
-    @Override
-    public void write(CompoundTag tag) {
-        super.write(tag);
-        tag.putDouble("PowerVoltage", this.powerVoltageVolts);
-        tag.putDouble("CurrentAmps", this.currentAmps);
-        tag.putDouble("PowerWatts", this.powerWatts);
-    }
-
-    @Override
-    public void read(CompoundTag tag) {
-        super.read(tag);
-        this.powerVoltageVolts = safe(tag.getDouble("PowerVoltage"));
-        this.currentAmps = Math.abs(safe(tag.getDouble("CurrentAmps")));
-        this.powerWatts = Math.abs(safe(tag.getDouble("PowerWatts")));
-    }
-
     public InterceptionControllerCeeSnapshot snapshot() {
         return new InterceptionControllerCeeSnapshot(
-                this.powerVoltageVolts, this.currentAmps, this.powerWatts);
+                voltageVolts(), currentAmps(), powerWatts());
     }
 
     private InterceptionControllerBlockEntity loadedBlockEntity() {
@@ -92,10 +65,6 @@ public class InterceptionControllerCeeDevice extends SimpleElectricalDevice {
             return controller;
         }
         return null;
-    }
-
-    private static double safe(double value) {
-        return Double.isFinite(value) ? value : 0.0;
     }
 
     private static double round(double value) {

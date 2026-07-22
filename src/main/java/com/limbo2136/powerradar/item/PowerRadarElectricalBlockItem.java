@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.item;
 import com.limbo2136.powerradar.PowerRadarServerConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -41,11 +42,13 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         switch (this.tooltipKind) {
             case RADAR_CONTROLLER -> tooltip.add(property(
                     "power_radar.tooltip.nominal_power",
-                    PowerRadarCeeFormatter.powerComponent(PowerRadarCeeConstants.radarControllerPowerWatts())));
+                    PowerRadarCeeFormatter.powerComponent(
+                            PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts())));
             case BASIC_RADAR_PANEL -> {
                 tooltip.add(property(
                         "power_radar.tooltip.nominal_power",
-                        PowerRadarCeeFormatter.powerComponent(PowerRadarCeeConstants.basicRadarPanelPowerWatts())));
+                        PowerRadarCeeFormatter.powerComponent(
+                                PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts())));
                 tooltip.add(property(
                         "power_radar.tooltip.range_bonus",
                         Component.translatable("power_radar.unit.blocks_bonus",
@@ -53,20 +56,22 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             }
             case MONITOR_CONTROLLER -> tooltip.add(property(
                     "power_radar.tooltip.nominal_power",
-                    PowerRadarCeeFormatter.powerComponent(PowerRadarCeeConstants.monitorControllerPowerWatts())));
+                    PowerRadarCeeFormatter.powerComponent(
+                            PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts())));
             case RADAR_DISPLAY -> tooltip.add(property(
                     "power_radar.tooltip.nominal_power",
-                    PowerRadarCeeFormatter.powerComponent(PowerRadarCeeConstants.radarDisplayPowerWatts())));
+                    PowerRadarCeeFormatter.powerComponent(
+                            PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts())));
             case TARGET_CONTROLLER -> {
                 tooltip.add(property(
                         "power_radar.tooltip.internal_resistance",
                         PowerRadarCeeFormatter.resistanceComponent(
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_POWER_RESISTANCE_OHMS)));
+                                PowerRadarElectricalParameters.Resistances.targetController())));
                 tooltip.add(property(
                         "power_radar.tooltip.working_voltage",
                         Component.literal(PowerRadarCeeFormatter.voltageRange(
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE,
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE))));
+                                PowerRadarElectricalParameters.Voltages.targetController().minimum(),
+                                PowerRadarElectricalParameters.Voltages.targetController().maximum()))));
                 tooltip.add(property(
                         "power_radar.tooltip.autocannon_min_distance",
                         Component.translatable(
@@ -82,22 +87,23 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
                 tooltip.add(property(
                         "power_radar.tooltip.internal_resistance",
                         PowerRadarCeeFormatter.resistanceComponent(
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_POWER_RESISTANCE_OHMS)));
+                                PowerRadarElectricalParameters.Resistances.interceptionController())));
                 tooltip.add(property(
                         "power_radar.tooltip.working_voltage",
                         Component.literal(PowerRadarCeeFormatter.voltageRange(
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE,
-                                PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE))));
+                                PowerRadarElectricalParameters.Voltages.interceptionController().minimum(),
+                                PowerRadarElectricalParameters.Voltages.interceptionController().maximum()))));
             }
             case SHELL_ALARM -> {
                 tooltip.add(property(
                         "power_radar.tooltip.nominal_power",
-                        PowerRadarCeeFormatter.powerComponent(PowerRadarCeeConstants.SHELL_ALARM_POWER_WATTS)));
+                        PowerRadarCeeFormatter.powerComponent(
+                                PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts())));
                 tooltip.add(property(
                         "power_radar.tooltip.working_voltage",
                         Component.literal(PowerRadarCeeFormatter.voltageRange(
-                                PowerRadarCeeConstants.SHELL_ALARM_MIN_VOLTAGE,
-                                PowerRadarCeeConstants.SHELL_ALARM_MAX_VOLTAGE))));
+                                PowerRadarElectricalParameters.Voltages.shellAlarm().minimum(),
+                                PowerRadarElectricalParameters.Voltages.shellAlarm().maximum()))));
                 tooltip.add(property(
                         "power_radar.tooltip.shell_alarm_zone",
                         Component.translatable(

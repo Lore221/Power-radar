@@ -1,6 +1,7 @@
 package com.limbo2136.powerradar.client;
 
 import com.limbo2136.powerradar.PowerRadar;
+import com.limbo2136.powerradar.client.onboard.OnboardComputerRenderer;
 import com.limbo2136.powerradar.client.radarlink.RadarLinkClientRuntime;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
@@ -8,6 +9,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
 
 @EventBusSubscriber(modid = PowerRadar.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class PowerRadarClient {
@@ -23,5 +25,10 @@ public final class PowerRadarClient {
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.ONBOARD_COMPUTER.get(), OnboardComputerRenderer::new);
         event.registerEntityRenderer(ModEntities.RADAR_STRUCTURE.get(), RadarStructureEntityRenderer::new);
+    }
+
+    @SubscribeEvent
+    public static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
+        OnboardComputerRenderer.registerAdditionalModels(event);
     }
 }

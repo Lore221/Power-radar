@@ -1,0 +1,11 @@
+{
+  "parent": "block/block",
+  "loader": "neoforge:obj",
+  "render_type": "minecraft:cutout",
+  "flip_v": true,
+  "model": "power_radar:models/block/on_board_modules/attitude_sphere.obj",
+  "textures": {
+    "0": "power_radar:block/on_board_modules/modules_4",
+    "particle": "power_radar:block/on_board_modules/modules_4"
+  }
+}

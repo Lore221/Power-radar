@@ -7,6 +7,7 @@ public final class PowerRadarClientConfig {
     public static final ModConfigSpec SPEC;
 
     private static final ModConfigSpec.BooleanValue MONITOR_BLOCK_ALIGNED_VIEW;
+    private static final ModConfigSpec.EnumValue<AttitudeIndicatorRenderMode> ATTITUDE_INDICATOR_RENDER_MODE;
     private static final ModConfigSpec.ConfigValue<String> RADAR_CONE_COLOR;
     private static final ModConfigSpec.ConfigValue<String> SHELL_ALARM_ZONE_COLOR;
     private static final ModConfigSpec.ConfigValue<String> SABLE_SILHOUETTE_COLOR;
@@ -61,6 +62,14 @@ public final class PowerRadarClientConfig {
                 "Color of the frame drawn around the selected target.");
         builder.pop();
         builder.pop();
+        builder.push("onboard_computer");
+        ATTITUDE_INDICATOR_RENDER_MODE = builder
+                .comment(
+                        "Selects the experimental attitude-indicator renderer.",
+                        "TEXTURE_STRIP projects the cyclic texture under the window.",
+                        "OBJ_SPHERE rotates the low-poly attitude sphere inside the housing.")
+                .defineEnum("attitude_indicator_render_mode", AttitudeIndicatorRenderMode.TEXTURE_STRIP);
+        builder.pop();
         SPEC = builder.build();
     }
 
@@ -69,6 +78,18 @@ public final class PowerRadarClientConfig {
 
     public static boolean monitorBlockAlignedView() {
         return SPEC.isLoaded() ? MONITOR_BLOCK_ALIGNED_VIEW.get() : MONITOR_BLOCK_ALIGNED_VIEW.getDefault();
+    }
+
+    public static AttitudeIndicatorRenderMode attitudeIndicatorRenderMode() {
+        return SPEC.isLoaded()
+                ? ATTITUDE_INDICATOR_RENDER_MODE.get()
+                : ATTITUDE_INDICATOR_RENDER_MODE.getDefault();
+    }
+
+    // Новые варианты можно добавлять сюда, не меняя сохранённый ключ конфигурации.
+    public enum AttitudeIndicatorRenderMode {
+        TEXTURE_STRIP,
+        OBJ_SPHERE
     }
 
     public static RadarRenderPalette radarRenderPalette() {

@@ -5,6 +5,7 @@ import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.ShellAlarmCeeDevice;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
@@ -117,25 +118,28 @@ public class ShellAlarmBlock extends BaseEntityBlock implements ElectricalDevice
 
     @Override
     public Map<Integer, Vec3> getNodePositions(Level level, BlockPos pos, BlockState state) {
-        return Map.of(0, getNodePosition(level, pos, state, 0), 1, getNodePosition(level, pos, state, 1));
+        return terminals(state).positions();
     }
 
     @Override
     public Vec3 getNodePosition(Level level, BlockPos pos, BlockState state, int index) {
-        Direction facing = state.getValue(FACING);
-        Direction rear = facing.getOpposite();
-        Direction right = facing.getClockWise();
-        double sideOffset = index == 0 ? -0.24 : 0.24;
-        return new Vec3(0.5, 0.68, 0.5)
-                .add(rear.getStepX() * 0.56, 0.0, rear.getStepZ() * 0.56)
-                .add(right.getStepX() * sideOffset, 0.0, right.getStepZ() * sideOffset);
+        return terminals(state).position(index);
     }
 
     @Override
     public MutableComponent getNodeLabel(Level level, BlockPos pos, BlockState state, int node) {
-        return Component.translatable(node == 0
-                ? "power_radar.cee.node.power_positive"
-                : "power_radar.cee.node.power_negative");
+        return terminals(state).label(node);
+    }
+
+    private static PowerRadarCeeTerminalPair terminals(BlockState state) {
+        Direction facing = state.getValue(FACING);
+        Direction rear = facing.getOpposite();
+        Direction right = facing.getClockWise();
+        Vec3 center = new Vec3(0.5, 0.68, 0.5)
+                .add(rear.getStepX() * 0.56, 0.0, rear.getStepZ() * 0.56);
+        return new PowerRadarCeeTerminalPair(
+                center.add(right.getStepX() * -0.24, 0.0, right.getStepZ() * -0.24),
+                center.add(right.getStepX() * 0.24, 0.0, right.getStepZ() * 0.24));
     }
 
     @Nullable

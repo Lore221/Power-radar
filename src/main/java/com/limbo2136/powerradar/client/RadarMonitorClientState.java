@@ -16,6 +16,7 @@ import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -104,6 +105,15 @@ public final class RadarMonitorClientState {
         private final Map<RadarId, PoseTransition> poseTransitions = new HashMap<>();
         @Nullable
         private MonitorPoseTransition monitorPoseTransition;
+        @Nullable
+        private RadarMonitorBlockPosePayload.MonitorPose lastMonitorPoseSample;
+        private long lastMonitorPoseServerGameTime = Long.MIN_VALUE;
+        @Nullable
+        private VectorTransition monitorVelocityTransition;
+        @Nullable
+        private Vec3 lastMonitorVelocitySample;
+        @Nullable
+        private VectorTransition monitorAccelerationTransition;
 
         private Entry() {
         }
@@ -145,6 +155,40 @@ public final class RadarMonitorClientState {
             float receivePartialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(false);
             double receiveTime = clientRenderTime(receivePartialTick, payload.serverGameTime());
             if (payload.monitorPose() != null) {
+                Vec3 nextVelocity = Vec3.ZERO;
+                Vec3 nextAcceleration = Vec3.ZERO;
+                boolean hasVelocitySample = false;
+                long elapsedTicks = payload.serverGameTime() - this.lastMonitorPoseServerGameTime;
+                if (this.lastMonitorPoseSample != null && elapsedTicks > 0L) {
+                    RadarMonitorBlockPosePayload.MonitorPose last = this.lastMonitorPoseSample;
+                    RadarMonitorBlockPosePayload.MonitorPose next = payload.monitorPose();
+                    nextVelocity = new Vec3(
+                            next.originX() - last.originX(),
+                            next.originY() - last.originY(),
+                            next.originZ() - last.originZ())
+                            .scale(20.0D / elapsedTicks);
+                    hasVelocitySample = true;
+                    if (this.lastMonitorVelocitySample != null) {
+                        nextAcceleration = nextVelocity.subtract(this.lastMonitorVelocitySample)
+                                .scale(20.0D / elapsedTicks);
+                    }
+                }
+                Vec3 previousVelocity = this.monitorVelocityTransition == null
+                        ? nextVelocity
+                        : sample(this.monitorVelocityTransition, receiveTime);
+                this.monitorVelocityTransition = new VectorTransition(
+                        previousVelocity, nextVelocity, receiveTime);
+                if (hasVelocitySample) {
+                    Vec3 previousAcceleration = this.monitorAccelerationTransition == null
+                            ? nextAcceleration
+                            : sample(this.monitorAccelerationTransition, receiveTime);
+                    this.monitorAccelerationTransition = new VectorTransition(
+                            previousAcceleration, nextAcceleration, receiveTime);
+                    this.lastMonitorVelocitySample = nextVelocity;
+                }
+                this.lastMonitorPoseSample = payload.monitorPose();
+                this.lastMonitorPoseServerGameTime = payload.serverGameTime();
+
                 RadarMonitorBlockPosePayload.MonitorPose previous = this.monitorPoseTransition == null
                         ? payload.monitorPose()
                         : sample(this.monitorPoseTransition, receiveTime);
@@ -228,6 +272,20 @@ public final class RadarMonitorClientState {
             return sample(this.monitorPoseTransition, clientRenderTime(partialTick, 0L));
         }
 
+        public Vec3 interpolatedMonitorVelocity(float partialTick) {
+            if (this.monitorVelocityTransition == null) {
+                return Vec3.ZERO;
+            }
+            return sample(this.monitorVelocityTransition, clientRenderTime(partialTick, 0L));
+        }
+
+        public Vec3 interpolatedMonitorAcceleration(float partialTick) {
+            if (this.monitorAccelerationTransition == null) {
+                return Vec3.ZERO;
+            }
+            return sample(this.monitorAccelerationTransition, clientRenderTime(partialTick, 0L));
+        }
+
         public boolean hasMovingMonitorPose() {
             return this.monitorPoseTransition != null;
         }
@@ -272,6 +330,12 @@ public final class RadarMonitorClientState {
                     RadarGeometry.normalizeDegrees(previous.yawDegrees() + yawDelta * (float) amount));
         }
 
+        private static Vec3 sample(VectorTransition transition, double renderTime) {
+            double amount = Math.max(0.0D, Math.min(1.0D,
+                    renderTime - transition.receivedClientTime()));
+            return transition.previous().lerp(transition.current(), amount);
+        }
+
         @Nullable
         public RadarMonitorDisplayData displayData() {
             return this.displayData;
@@ -300,6 +364,13 @@ public final class RadarMonitorClientState {
     private record MonitorPoseTransition(
             RadarMonitorBlockPosePayload.MonitorPose previous,
             RadarMonitorBlockPosePayload.MonitorPose current,
+            double receivedClientTime
+    ) {
+    }
+
+    private record VectorTransition(
+            Vec3 previous,
+            Vec3 current,
             double receivedClientTime
     ) {
     }

@@ -16,34 +16,28 @@ public class MonitorControllerCeeDevice extends PowerRadarCeeLoadDevice {
 
     public void configureLoad(boolean validStructure, int activeDisplayCount) {
         if (!validStructure || activeDisplayCount <= 0) {
-            setLoad(false, 0.0, PowerRadarCeeConstants.OFF_RESISTANCE_OHMS, PowerRadarCeeConstants.monitorNominalVoltage());
+            setLoad(false, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                    PowerRadarElectricalParameters.Voltages.monitor().nominal());
             return;
         }
         setLoad(
                 true,
                 PowerRadarCeeConstants.monitorConstantPowerWatts(activeDisplayCount),
-                PowerRadarCeeConstants.OFF_RESISTANCE_OHMS,
-                PowerRadarCeeConstants.monitorNominalVoltage());
+                PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                PowerRadarElectricalParameters.Voltages.monitor().nominal());
+    }
+
+    public void configureFixedLoad(boolean enabled, double powerWatts) {
+        setLoad(
+                enabled,
+                enabled ? powerWatts : 0.0D,
+                PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                PowerRadarElectricalParameters.Voltages.monitor().nominal());
     }
 
     @Override
-    protected double minVoltage() {
-        return PowerRadarCeeConstants.monitorMinVoltage();
-    }
-
-    @Override
-    protected double restartVoltage() {
-        return PowerRadarCeeConstants.monitorRestartVoltage();
-    }
-
-    @Override
-    protected double maxVoltage() {
-        return PowerRadarCeeConstants.monitorMaxVoltage();
-    }
-
-    @Override
-    protected double overvoltageRecoveryVoltage() {
-        return PowerRadarCeeConstants.monitorOvervoltageRecovery();
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.monitor();
     }
 
     @Override

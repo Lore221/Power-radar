@@ -15,14 +15,15 @@ public class ComputingBlockCeeDevice extends PowerRadarCeeLoadDevice {
     }
 
     public void configureLoad() {
-        setLoad(true, PowerRadarCeeConstants.monitorControllerPowerWatts(),
-                PowerRadarCeeConstants.OFF_RESISTANCE_OHMS, PowerRadarCeeConstants.monitorNominalVoltage());
+        setLoad(true, PowerRadarElectricalParameters.Ratings.computingBlockPowerWatts(),
+                PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                PowerRadarElectricalParameters.Voltages.monitor().nominal());
     }
 
-    @Override protected double minVoltage() { return PowerRadarCeeConstants.monitorMinVoltage(); }
-    @Override protected double restartVoltage() { return PowerRadarCeeConstants.monitorRestartVoltage(); }
-    @Override protected double maxVoltage() { return PowerRadarCeeConstants.monitorMaxVoltage(); }
-    @Override protected double overvoltageRecoveryVoltage() { return PowerRadarCeeConstants.monitorOvervoltageRecovery(); }
+    @Override
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.monitor();
+    }
 
     @Override
     protected void publishSnapshot() {

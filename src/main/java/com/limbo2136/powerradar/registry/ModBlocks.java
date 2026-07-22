@@ -78,13 +78,13 @@ public final class ModBlocks {
     public static final DeferredBlock<RadarLinkBlock> RADAR_LINK = BLOCKS.registerBlock(
             "radar_link",
             RadarLinkBlock::new,
-            BlockBehaviour.Properties.of().strength(2.5F, 4.0F)
+            BlockBehaviour.Properties.of().strength(2.5F, 4.0F).noOcclusion()
     );
 
     public static final DeferredBlock<TargetControllerBlock> TARGET_CONTROLLER = BLOCKS.registerBlock(
             "target_controller",
             TargetControllerBlock::new,
-            BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
+            BlockBehaviour.Properties.of().strength(3.0F, 6.0F).noOcclusion()
     );
 
     public static final DeferredBlock<MechanicalSirenBlock> MECHANICAL_SIREN = BLOCKS.registerBlock(

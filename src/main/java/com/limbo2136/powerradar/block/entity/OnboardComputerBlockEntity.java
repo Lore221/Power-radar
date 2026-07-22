@@ -19,6 +19,10 @@ import com.limbo2136.powerradar.interception.MovingProtectedZone;
 import com.limbo2136.powerradar.interception.MovingProtectedZoneTracker;
 import com.limbo2136.powerradar.interception.ProtectedZoneThreatEvaluator;
 import com.limbo2136.powerradar.item.NameCardItem;
+import com.limbo2136.powerradar.onboard.OnboardCombinedModuleType;
+import com.limbo2136.powerradar.onboard.OnboardModuleColumn;
+import com.limbo2136.powerradar.onboard.OnboardModuleSlot;
+import com.limbo2136.powerradar.onboard.OnboardModuleType;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
@@ -29,10 +33,14 @@ import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.LodestoneTracker;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -42,11 +50,19 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     private static final String NETWORK_TAG = "NetworkId";
     private static final String INTERCEPTION_NETWORK_TAG = "InterceptionNetworkId";
     private static final String CARD_TAG = "NameCard";
+    private static final String MODULES_TAG = "OnboardModules";
+    private static final String MODULE_SLOT_TAG = "Slot";
+    private static final String MODULE_STACK_TAG = "Stack";
+    private static final String ACCELEROMETER_COLUMNS_TAG = "AccelerometerColumns";
+    private static final String VARIOMETER_COLUMNS_TAG = "VariometerColumns";
     private static final String ASSIGNED_STRUCTURE_TAG = "AssignedStructureId";
     @Nullable private UUID networkId;
     @Nullable private UUID interceptionNetworkId;
     @Nullable private UUID assignedStructureUuid;
     private ItemStack nameCard = ItemStack.EMPTY;
+    private final ItemStack[] modules = new ItemStack[OnboardModuleSlot.values().length];
+    private int accelerometerColumnMask;
+    private int variometerColumnMask;
     private final MovingProtectedZoneTracker protectedZoneTracker = new MovingProtectedZoneTracker();
     @Nullable private MovingProtectedZone protectedZone;
     private long lastProcessedThreatScanGameTime = Long.MIN_VALUE;
@@ -56,10 +72,12 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
 
     public OnboardComputerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.ONBOARD_COMPUTER.get(), pos, state);
+        java.util.Arrays.fill(this.modules, ItemStack.EMPTY);
     }
 
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, OnboardComputerBlockEntity computer) {
         if (!(level instanceof ServerLevel serverLevel)) return;
+        computer.validateLodestoneModules(serverLevel);
         if (computer.networkId == null) computer.createOwnNetwork(serverLevel);
         computer.ensureOnboardNetworkRole(serverLevel);
         if (computer.interceptionNetworkId == null) computer.createOwnInterceptionNetwork();
@@ -67,6 +85,34 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                 RadarDisplayStructureResolver.StructureStatus.ACTIVE);
         RadarMonitorControllerBlockEntity.tick(serverLevel, pos, state, computer);
         computer.tickShellAlarm(serverLevel, state);
+    }
+
+    private void validateLodestoneModules(ServerLevel level) {
+        // Installed stacks do not receive Item.inventoryTick(), so reproduce the
+        // vanilla tracker invalidation at a low, staggered rate.
+        if (Math.floorMod(level.getGameTime() + this.worldPosition.asLong(), 20L) != 0L) {
+            return;
+        }
+        ServerLevel worldLevel = level.getServer().getLevel(level.dimension());
+        if (worldLevel == null) {
+            worldLevel = level;
+        }
+        boolean changed = false;
+        for (ItemStack module : this.modules) {
+            LodestoneTracker tracker = module.get(DataComponents.LODESTONE_TRACKER);
+            if (tracker == null) {
+                continue;
+            }
+            LodestoneTracker updated = tracker.tick(worldLevel);
+            if (updated != tracker) {
+                module.set(DataComponents.LODESTONE_TRACKER, updated);
+                changed = true;
+            }
+        }
+        if (changed) {
+            setChanged();
+            sendData();
+        }
     }
 
     private void tickShellAlarm(ServerLevel level, BlockState state) {
@@ -353,6 +399,145 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
 
     public ItemStack nameCard() { return this.nameCard; }
 
+    public ItemStack module(OnboardModuleSlot slot) {
+        return this.modules[slot.index()];
+    }
+
+    public int installedModuleMask() {
+        int mask = 0;
+        for (OnboardModuleSlot slot : OnboardModuleSlot.values()) {
+            if (!this.modules[slot.index()].isEmpty()) {
+                mask |= 1 << slot.index();
+            }
+        }
+        return mask;
+    }
+
+    @Nullable
+    public OnboardCombinedModuleType assembledModule(OnboardModuleColumn column) {
+        if ((this.accelerometerColumnMask & column.bit()) != 0) {
+            return OnboardCombinedModuleType.ACCELEROMETER;
+        }
+        if ((this.variometerColumnMask & column.bit()) != 0) {
+            return OnboardCombinedModuleType.VARIOMETER;
+        }
+        return null;
+    }
+
+    @Nullable
+    public OnboardCombinedModuleType assemblableModule(OnboardModuleColumn column) {
+        OnboardModuleType front = OnboardModuleType.fromStack(module(column.frontSlot()));
+        OnboardModuleType rear = OnboardModuleType.fromStack(module(column.rearSlot()));
+        return OnboardCombinedModuleType.fromParts(front, rear);
+    }
+
+    public boolean toggleCombinedModule(OnboardModuleColumn column) {
+        OnboardCombinedModuleType assembled = assembledModule(column);
+        if (assembled != null) {
+            setCombinedModuleAssembled(assembled, column, false);
+        } else {
+            OnboardCombinedModuleType candidate = assemblableModule(column);
+            if (candidate == null) {
+                return false;
+            }
+            setCombinedModuleAssembled(candidate, column, true);
+        }
+        setChanged();
+        sendData();
+        return true;
+    }
+
+    // Маски остаются раздельными, чтобы старый тег акселерометра сохранял совместимость миров.
+    private void setCombinedModuleAssembled(
+            OnboardCombinedModuleType type,
+            OnboardModuleColumn column,
+            boolean assembled
+    ) {
+        int bit = column.bit();
+        if (type == OnboardCombinedModuleType.ACCELEROMETER) {
+            this.accelerometerColumnMask = assembled
+                    ? this.accelerometerColumnMask | bit
+                    : this.accelerometerColumnMask & ~bit;
+        } else if (type == OnboardCombinedModuleType.VARIOMETER) {
+            this.variometerColumnMask = assembled
+                    ? this.variometerColumnMask | bit
+                    : this.variometerColumnMask & ~bit;
+        }
+    }
+
+    private void clearCombinedModule(OnboardModuleColumn column) {
+        int inverseBit = ~column.bit();
+        this.accelerometerColumnMask &= inverseBit;
+        this.variometerColumnMask &= inverseBit;
+    }
+
+    private void validateCombinedModule(OnboardModuleColumn column) {
+        OnboardCombinedModuleType candidate = assemblableModule(column);
+        if (candidate != OnboardCombinedModuleType.ACCELEROMETER) {
+            this.accelerometerColumnMask &= ~column.bit();
+        }
+        if (candidate != OnboardCombinedModuleType.VARIOMETER) {
+            this.variometerColumnMask &= ~column.bit();
+        }
+    }
+
+    public boolean hasAssembledModule(OnboardModuleColumn column) {
+        return assembledModule(column) != null;
+    }
+
+    public boolean canAssembleModule(OnboardModuleColumn column) {
+        return assemblableModule(column) != null;
+    }
+
+    private void clearAllCombinedModules() {
+        this.accelerometerColumnMask = 0;
+        this.variometerColumnMask = 0;
+    }
+
+    public boolean insertModule(OnboardModuleSlot slot, ItemStack held, boolean consume) {
+        if (!this.modules[slot.index()].isEmpty() || !OnboardModuleType.accepts(held)) {
+            return false;
+        }
+        this.modules[slot.index()] = held.copyWithCount(1);
+        if (consume) {
+            held.shrink(1);
+        }
+        setChanged();
+        sendData();
+        return true;
+    }
+
+    public ItemStack removeModule(OnboardModuleSlot slot) {
+        ItemStack result = this.modules[slot.index()];
+        if (result.isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        OnboardModuleColumn column = OnboardModuleColumn.containing(slot);
+        if (column != null) {
+            clearCombinedModule(column);
+        }
+        this.modules[slot.index()] = ItemStack.EMPTY;
+        setChanged();
+        sendData();
+        return result;
+    }
+
+    public List<ItemStack> removeAllModules() {
+        List<ItemStack> removed = new ArrayList<>();
+        for (OnboardModuleSlot slot : OnboardModuleSlot.values()) {
+            ItemStack stack = this.modules[slot.index()];
+            if (!stack.isEmpty()) {
+                removed.add(stack);
+                this.modules[slot.index()] = ItemStack.EMPTY;
+            }
+        }
+        if (!removed.isEmpty()) {
+            clearAllCombinedModules();
+            setChanged();
+        }
+        return List.copyOf(removed);
+    }
+
     public boolean insertNameCard(ItemStack held) {
         if (!this.nameCard.isEmpty() || !(held.getItem() instanceof NameCardItem)) return false;
         this.nameCard = held.copyWithCount(1);
@@ -434,6 +619,26 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
         if (this.assignedStructureUuid != null) tag.putUUID(ASSIGNED_STRUCTURE_TAG, this.assignedStructureUuid);
         if (!this.nameCard.isEmpty()) tag.put(CARD_TAG, this.nameCard.save(registries));
+        ListTag moduleTags = new ListTag();
+        for (OnboardModuleSlot slot : OnboardModuleSlot.values()) {
+            ItemStack stack = this.modules[slot.index()];
+            if (stack.isEmpty()) {
+                continue;
+            }
+            CompoundTag moduleTag = new CompoundTag();
+            moduleTag.putByte(MODULE_SLOT_TAG, (byte) slot.index());
+            moduleTag.put(MODULE_STACK_TAG, stack.save(registries));
+            moduleTags.add(moduleTag);
+        }
+        if (!moduleTags.isEmpty()) {
+            tag.put(MODULES_TAG, moduleTags);
+        }
+        if (this.accelerometerColumnMask != 0) {
+            tag.putByte(ACCELEROMETER_COLUMNS_TAG, (byte) this.accelerometerColumnMask);
+        }
+        if (this.variometerColumnMask != 0) {
+            tag.putByte(VARIOMETER_COLUMNS_TAG, (byte) this.variometerColumnMask);
+        }
     }
 
     @Override protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
@@ -457,5 +662,20 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         this.assignedStructureUuid = tag.hasUUID(ASSIGNED_STRUCTURE_TAG)
                 ? tag.getUUID(ASSIGNED_STRUCTURE_TAG) : null;
         this.nameCard = tag.contains(CARD_TAG) ? ItemStack.parseOptional(registries, tag.getCompound(CARD_TAG)) : ItemStack.EMPTY;
+        java.util.Arrays.fill(this.modules, ItemStack.EMPTY);
+        ListTag moduleTags = tag.getList(MODULES_TAG, Tag.TAG_COMPOUND);
+        for (int i = 0; i < moduleTags.size(); i++) {
+            CompoundTag moduleTag = moduleTags.getCompound(i);
+            int slot = moduleTag.getByte(MODULE_SLOT_TAG);
+            if (slot < 0 || slot >= this.modules.length) {
+                continue;
+            }
+            this.modules[slot] = ItemStack.parseOptional(registries, moduleTag.getCompound(MODULE_STACK_TAG));
+        }
+        this.accelerometerColumnMask = tag.getByte(ACCELEROMETER_COLUMNS_TAG);
+        this.variometerColumnMask = tag.getByte(VARIOMETER_COLUMNS_TAG);
+        for (OnboardModuleColumn column : OnboardModuleColumn.values()) {
+            validateCombinedModule(column);
+        }
     }
 }

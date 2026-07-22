@@ -28,11 +28,27 @@ public final class PowerRadarServerConfig {
 
     private static final ModConfigSpec.DoubleValue MONITOR_CONTROLLER_POWER_WATTS;
     private static final ModConfigSpec.DoubleValue RADAR_DISPLAY_POWER_WATTS;
+    private static final ModConfigSpec.DoubleValue COMPUTING_BLOCK_POWER_WATTS;
+    private static final ModConfigSpec.DoubleValue ONBOARD_COMPUTER_POWER_WATTS;
     private static final ModConfigSpec.DoubleValue MONITOR_NOMINAL_VOLTAGE;
     private static final ModConfigSpec.DoubleValue MONITOR_MIN_VOLTAGE;
     private static final ModConfigSpec.DoubleValue MONITOR_RESTART_VOLTAGE;
     private static final ModConfigSpec.DoubleValue MONITOR_MAX_VOLTAGE;
     private static final ModConfigSpec.DoubleValue MONITOR_OVERVOLTAGE_RECOVERY;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_POWER_WATTS;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_NOMINAL_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_MIN_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_RESTART_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_MAX_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue SHELL_ALARM_OVERVOLTAGE_RECOVERY;
+    private static final ModConfigSpec.DoubleValue TARGET_CONTROLLER_RESISTANCE_OHMS;
+    private static final ModConfigSpec.DoubleValue INTERCEPTION_CONTROLLER_RESISTANCE_OHMS;
+    private static final ModConfigSpec.DoubleValue TARGET_CONTROLLER_MIN_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue TARGET_CONTROLLER_FULL_SPEED_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue TARGET_CONTROLLER_MAX_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue INTERCEPTION_CONTROLLER_MIN_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue INTERCEPTION_CONTROLLER_FULL_SPEED_VOLTAGE;
+    private static final ModConfigSpec.DoubleValue INTERCEPTION_CONTROLLER_MAX_VOLTAGE;
 
     private static final ModConfigSpec.IntValue RADAR_SCAN_UPDATE_INTERVAL_TICKS;
     private static final ModConfigSpec.IntValue STRUCTURE_VALIDATION_INTERVAL_TICKS;
@@ -63,26 +79,54 @@ public final class PowerRadarServerConfig {
         AIR_MAX_Y_OFFSET = builder.defineInRange("air_max_y_offset", 1500, 0, 32_000);
         builder.pop();
 
-        builder.push("radar_electricity");
-        RADAR_CONTROLLER_POWER_WATTS = builder.defineInRange("controller_power_watts", 1000.0D, 0.0D, 1.0E9D);
-        BASIC_RADAR_PANEL_POWER_WATTS = builder.defineInRange("basic_panel_power_watts", 700.0D, 0.0D, 1.0E9D);
-        OVERVIEW_MODULE_POWER_WATTS = builder.defineInRange("overview_module_power_watts", 700.0D, 0.0D, 1.0E9D);
-        RADAR_NOMINAL_VOLTAGE = builder.defineInRange("nominal_voltage", 600.0D, 1.0D, 1.0E6D);
-        RADAR_MIN_VOLTAGE = builder.defineInRange("min_voltage", 400.0D, 0.0D, 1.0E6D);
-        RADAR_RESTART_VOLTAGE = builder.defineInRange("restart_voltage", 430.0D, 0.0D, 1.0E6D);
-        RADAR_FULL_RANGE_VOLTAGE = builder.defineInRange("full_range_voltage", 600.0D, 0.001D, 1.0E6D);
-        RADAR_MAX_VOLTAGE = builder.defineInRange("max_voltage", 700.0D, 0.001D, 1.0E6D);
+        builder.push("voltages");
+        builder.push("radar");
+        RADAR_NOMINAL_VOLTAGE = builder.defineInRange("nominal", 600.0D, 1.0D, 1.0E6D);
+        RADAR_MIN_VOLTAGE = builder.defineInRange("minimum", 400.0D, 0.0D, 1.0E6D);
+        RADAR_RESTART_VOLTAGE = builder.defineInRange("restart", 430.0D, 0.0D, 1.0E6D);
+        RADAR_FULL_RANGE_VOLTAGE = builder.defineInRange("full_range", 600.0D, 0.001D, 1.0E6D);
+        RADAR_MAX_VOLTAGE = builder.defineInRange("maximum", 700.0D, 0.001D, 1.0E6D);
         RADAR_OVERVOLTAGE_RECOVERY = builder.defineInRange("overvoltage_recovery", 650.0D, 0.0D, 1.0E6D);
         builder.pop();
-
-        builder.push("monitor_electricity");
-        MONITOR_CONTROLLER_POWER_WATTS = builder.defineInRange("controller_power_watts", 45.0D, 0.0D, 1.0E9D);
-        RADAR_DISPLAY_POWER_WATTS = builder.defineInRange("display_power_watts", 5.0D, 0.0D, 1.0E9D);
-        MONITOR_NOMINAL_VOLTAGE = builder.defineInRange("nominal_voltage", 24.0D, 1.0D, 1.0E6D);
-        MONITOR_MIN_VOLTAGE = builder.defineInRange("min_voltage", 18.0D, 0.0D, 1.0E6D);
-        MONITOR_RESTART_VOLTAGE = builder.defineInRange("restart_voltage", 20.0D, 0.0D, 1.0E6D);
-        MONITOR_MAX_VOLTAGE = builder.defineInRange("max_voltage", 30.0D, 0.001D, 1.0E6D);
+        builder.push("monitor");
+        MONITOR_NOMINAL_VOLTAGE = builder.defineInRange("nominal", 24.0D, 1.0D, 1.0E6D);
+        MONITOR_MIN_VOLTAGE = builder.defineInRange("minimum", 18.0D, 0.0D, 1.0E6D);
+        MONITOR_RESTART_VOLTAGE = builder.defineInRange("restart", 20.0D, 0.0D, 1.0E6D);
+        MONITOR_MAX_VOLTAGE = builder.defineInRange("maximum", 30.0D, 0.001D, 1.0E6D);
         MONITOR_OVERVOLTAGE_RECOVERY = builder.defineInRange("overvoltage_recovery", 28.0D, 0.0D, 1.0E6D);
+        builder.pop();
+        builder.push("shell_alarm");
+        SHELL_ALARM_NOMINAL_VOLTAGE = builder.defineInRange("nominal", 400.0D, 1.0D, 1.0E6D);
+        SHELL_ALARM_MIN_VOLTAGE = builder.defineInRange("minimum", 300.0D, 0.0D, 1.0E6D);
+        SHELL_ALARM_RESTART_VOLTAGE = builder.defineInRange("restart", 320.0D, 0.0D, 1.0E6D);
+        SHELL_ALARM_MAX_VOLTAGE = builder.defineInRange("maximum", 400.0D, 0.001D, 1.0E6D);
+        SHELL_ALARM_OVERVOLTAGE_RECOVERY = builder.defineInRange("overvoltage_recovery", 380.0D, 0.0D, 1.0E6D);
+        builder.pop();
+        builder.push("target_controller");
+        TARGET_CONTROLLER_MIN_VOLTAGE = builder.defineInRange("minimum", 200.0D, 0.0D, 1.0E6D);
+        TARGET_CONTROLLER_FULL_SPEED_VOLTAGE = builder.defineInRange("full_speed", 300.0D, 0.001D, 1.0E6D);
+        TARGET_CONTROLLER_MAX_VOLTAGE = builder.defineInRange("maximum", 360.0D, 0.001D, 1.0E6D);
+        builder.pop();
+        builder.push("interception_controller");
+        INTERCEPTION_CONTROLLER_MIN_VOLTAGE = builder.defineInRange("minimum", 200.0D, 0.0D, 1.0E6D);
+        INTERCEPTION_CONTROLLER_FULL_SPEED_VOLTAGE = builder.defineInRange("full_speed", 300.0D, 0.001D, 1.0E6D);
+        INTERCEPTION_CONTROLLER_MAX_VOLTAGE = builder.defineInRange("maximum", 360.0D, 0.001D, 1.0E6D);
+        builder.pop(2);
+
+        builder.push("resistances");
+        TARGET_CONTROLLER_RESISTANCE_OHMS = builder.defineInRange("target_controller_ohms", 30.0D, 0.001D, 1.0E9D);
+        INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = builder.defineInRange("interception_controller_ohms", 30.0D, 0.001D, 1.0E9D);
+        builder.pop();
+
+        builder.push("ratings");
+        RADAR_CONTROLLER_POWER_WATTS = builder.defineInRange("radar_controller_power_watts", 1000.0D, 0.0D, 1.0E9D);
+        BASIC_RADAR_PANEL_POWER_WATTS = builder.defineInRange("phased_array_panel_power_watts", 700.0D, 0.0D, 1.0E9D);
+        OVERVIEW_MODULE_POWER_WATTS = builder.defineInRange("overview_module_power_watts", 700.0D, 0.0D, 1.0E9D);
+        MONITOR_CONTROLLER_POWER_WATTS = builder.defineInRange("monitor_controller_power_watts", 45.0D, 0.0D, 1.0E9D);
+        RADAR_DISPLAY_POWER_WATTS = builder.defineInRange("radar_display_power_watts", 5.0D, 0.0D, 1.0E9D);
+        COMPUTING_BLOCK_POWER_WATTS = builder.defineInRange("computing_block_power_watts", 45.0D, 0.0D, 1.0E9D);
+        ONBOARD_COMPUTER_POWER_WATTS = builder.defineInRange("onboard_computer_power_watts", 50.0D, 0.0D, 1.0E9D);
+        SHELL_ALARM_POWER_WATTS = builder.defineInRange("shell_alarm_power_watts", 45.0D, 0.0D, 1.0E9D);
         builder.pop();
 
         builder.push("performance");
@@ -147,11 +191,27 @@ public final class PowerRadarServerConfig {
     public static double radarOvervoltageRecovery() { return value(RADAR_OVERVOLTAGE_RECOVERY); }
     public static double monitorControllerPowerWatts() { return value(MONITOR_CONTROLLER_POWER_WATTS); }
     public static double radarDisplayPowerWatts() { return value(RADAR_DISPLAY_POWER_WATTS); }
+    public static double computingBlockPowerWatts() { return value(COMPUTING_BLOCK_POWER_WATTS); }
+    public static double onboardComputerPowerWatts() { return value(ONBOARD_COMPUTER_POWER_WATTS); }
     public static double monitorNominalVoltage() { return value(MONITOR_NOMINAL_VOLTAGE); }
     public static double monitorMinVoltage() { return value(MONITOR_MIN_VOLTAGE); }
     public static double monitorRestartVoltage() { return value(MONITOR_RESTART_VOLTAGE); }
     public static double monitorMaxVoltage() { return value(MONITOR_MAX_VOLTAGE); }
     public static double monitorOvervoltageRecovery() { return value(MONITOR_OVERVOLTAGE_RECOVERY); }
+    public static double shellAlarmPowerWatts() { return value(SHELL_ALARM_POWER_WATTS); }
+    public static double shellAlarmNominalVoltage() { return value(SHELL_ALARM_NOMINAL_VOLTAGE); }
+    public static double shellAlarmMinVoltage() { return value(SHELL_ALARM_MIN_VOLTAGE); }
+    public static double shellAlarmRestartVoltage() { return value(SHELL_ALARM_RESTART_VOLTAGE); }
+    public static double shellAlarmMaxVoltage() { return value(SHELL_ALARM_MAX_VOLTAGE); }
+    public static double shellAlarmOvervoltageRecovery() { return value(SHELL_ALARM_OVERVOLTAGE_RECOVERY); }
+    public static double targetControllerResistanceOhms() { return value(TARGET_CONTROLLER_RESISTANCE_OHMS); }
+    public static double interceptionControllerResistanceOhms() { return value(INTERCEPTION_CONTROLLER_RESISTANCE_OHMS); }
+    public static double targetControllerMinVoltage() { return value(TARGET_CONTROLLER_MIN_VOLTAGE); }
+    public static double targetControllerFullSpeedVoltage() { return value(TARGET_CONTROLLER_FULL_SPEED_VOLTAGE); }
+    public static double targetControllerMaxVoltage() { return value(TARGET_CONTROLLER_MAX_VOLTAGE); }
+    public static double interceptionControllerMinVoltage() { return value(INTERCEPTION_CONTROLLER_MIN_VOLTAGE); }
+    public static double interceptionControllerFullSpeedVoltage() { return value(INTERCEPTION_CONTROLLER_FULL_SPEED_VOLTAGE); }
+    public static double interceptionControllerMaxVoltage() { return value(INTERCEPTION_CONTROLLER_MAX_VOLTAGE); }
     public static int radarScanUpdateIntervalTicks() { return value(RADAR_SCAN_UPDATE_INTERVAL_TICKS); }
     public static int structureValidationIntervalTicks() { return value(STRUCTURE_VALIDATION_INTERVAL_TICKS); }
     public static int staleTrackExpirationTicks() { return value(STALE_TRACK_EXPIRATION_TICKS); }

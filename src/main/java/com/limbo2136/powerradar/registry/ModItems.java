@@ -77,7 +77,7 @@ public final class ModItems {
                     new Item.Properties()));
     public static final DeferredItem<InterceptionFuzeItem> INTERCEPTION_FUZE = ITEMS.register(
             "interception_fuze",
-            () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(16)));
+            () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(64)));
 
     private ModItems() {
     }

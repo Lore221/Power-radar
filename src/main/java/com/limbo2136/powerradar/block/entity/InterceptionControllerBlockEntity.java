@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.interception.InterceptionBallistics;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
@@ -1368,10 +1369,12 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             return 0.0;
         }
         double voltage = Math.abs(this.powerVoltageVolts);
+        PowerRadarElectricalParameters.DriveVoltageRange voltages =
+                PowerRadarElectricalParameters.Voltages.interceptionController();
         double fraction = clamp(
-                (voltage - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE)
-                        / (PowerRadarCeeConstants.TARGET_CONTROLLER_FULL_SPEED_VOLTAGE
-                        - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE),
+                (voltage - voltages.minimum())
+                        / Math.max(PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS,
+                        voltages.fullSpeed() - voltages.minimum()),
                 0.0, 1.0);
         double rpm = PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM
                 + (PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_RPM
@@ -1382,8 +1385,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private boolean validVoltage() {
         double voltage = Math.abs(this.powerVoltageVolts);
-        return voltage >= PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE
-                && voltage <= PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE;
+        PowerRadarElectricalParameters.DriveVoltageRange voltages =
+                PowerRadarElectricalParameters.Voltages.interceptionController();
+        return voltage >= voltages.minimum() && voltage <= voltages.maximum();
     }
 
     private void releaseAssignment(ServerLevel level) {
@@ -1446,7 +1450,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private Status statusFor(Solution solution, boolean powered, boolean ready) {
         if (!powered) {
-            return Math.abs(this.powerVoltageVolts) > PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE
+            return Math.abs(this.powerVoltageVolts)
+                    > PowerRadarElectricalParameters.Voltages.interceptionController().maximum()
                     ? Status.OVERVOLTAGE : Status.UNDERVOLTAGE;
         }
         if (this.interceptionNetworkId == null) {

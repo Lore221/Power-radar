@@ -6,6 +6,7 @@ import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
 import java.util.Map;
@@ -110,13 +111,15 @@ public class InterceptionControllerBlock extends BaseEntityBlock
 
     @Override
     public Map<Integer, Vec3> getNodePositions(Level level, BlockPos pos, BlockState state) {
-        return Map.of(
-                0, getNodePosition(level, pos, state, 0),
-                1, getNodePosition(level, pos, state, 1));
+        return terminals(state).positions();
     }
 
     @Override
     public Vec3 getNodePosition(Level level, BlockPos pos, BlockState state, int index) {
+        return terminals(state).position(index);
+    }
+
+    private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         Direction facing = state.getValue(FACING);
         Direction rear = facing.getOpposite();
         Direction right = facing.getAxis() == Direction.Axis.Y ? Direction.EAST : facing.getClockWise();
@@ -125,19 +128,17 @@ public class InterceptionControllerBlock extends BaseEntityBlock
             case DOWN -> Direction.NORTH;
             default -> Direction.UP;
         };
-        double horizontalOffset = index == 0 ? -0.24 : 0.24;
-        return new Vec3(0.5, 0.5, 0.5)
+        Vec3 center = new Vec3(0.5, 0.5, 0.5)
                 .add(rear.getStepX() * 0.56, rear.getStepY() * 0.56, rear.getStepZ() * 0.56)
-                .add(right.getStepX() * horizontalOffset, right.getStepY() * horizontalOffset,
-                        right.getStepZ() * horizontalOffset)
                 .add(up.getStepX() * 0.22, up.getStepY() * 0.22, up.getStepZ() * 0.22);
+        return new PowerRadarCeeTerminalPair(
+                center.add(right.getStepX() * -0.24, right.getStepY() * -0.24, right.getStepZ() * -0.24),
+                center.add(right.getStepX() * 0.24, right.getStepY() * 0.24, right.getStepZ() * 0.24));
     }
 
     @Override
     public MutableComponent getNodeLabel(Level level, BlockPos pos, BlockState state, int node) {
-        return Component.translatable(node == 0
-                ? "power_radar.cee.node.power_positive"
-                : "power_radar.cee.node.power_negative");
+        return terminals(state).label(node);
     }
 
     @Nullable

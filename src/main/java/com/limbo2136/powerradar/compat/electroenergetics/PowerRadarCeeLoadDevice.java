@@ -11,9 +11,9 @@ import net.minecraft.world.level.Level;
 
 public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     private boolean bridgeEnabled;
-    private double resistanceOhms = PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+    private double resistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
     private double constantPowerWatts;
-    private double parallelResistanceOhms = PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+    private double parallelResistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
     private double nominalVoltageVolts = 1.0;
     private double voltageVolts;
     private double currentAmps;
@@ -48,14 +48,19 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     public void preTick(BridgeCollector bridges) {
         if (this.bridgeEnabled) {
             this.resistanceOhms = calculateResistanceOhms();
-            bridges.builder(this.pos).resistor(0, 1, this.resistanceOhms);
+            bridges.builder(this.pos).resistor(
+                    PowerRadarCeeTerminalPair.POSITIVE,
+                    PowerRadarCeeTerminalPair.NEGATIVE,
+                    this.resistanceOhms);
         }
     }
 
     @Override
     public void postTick(SimulationResults results) {
-        this.voltageVolts = safe(results.getVoltageAt(this.pos, 0, 1));
-        this.currentAmps = Math.abs(safe(results.getCurrentThrough(this.pos, 0, 1)));
+        this.voltageVolts = safe(results.getVoltageAt(
+                this.pos, PowerRadarCeeTerminalPair.POSITIVE, PowerRadarCeeTerminalPair.NEGATIVE));
+        this.currentAmps = Math.abs(safe(results.getCurrentThrough(
+                this.pos, PowerRadarCeeTerminalPair.POSITIVE, PowerRadarCeeTerminalPair.NEGATIVE)));
         this.powerWatts = Math.abs(this.voltageVolts) * this.currentAmps;
         this.electricalState = resolveElectricalState(this.voltageVolts);
         publishSnapshot();
@@ -79,11 +84,13 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     public void read(CompoundTag tag) {
         super.read(tag);
         this.bridgeEnabled = tag.getBoolean("BridgeEnabled");
-        this.resistanceOhms = tag.contains("ResistanceOhms") ? PowerRadarCeeConstants.sanitizeResistance(tag.getDouble("ResistanceOhms")) : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+        this.resistanceOhms = tag.contains("ResistanceOhms")
+                ? PowerRadarCeeConstants.sanitizeResistance(tag.getDouble("ResistanceOhms"))
+                : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         this.constantPowerWatts = safe(tag.getDouble("ConstantPowerWatts"));
         this.parallelResistanceOhms = tag.contains("ParallelResistanceOhms")
                 ? PowerRadarCeeConstants.sanitizeResistance(tag.getDouble("ParallelResistanceOhms"))
-                : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+                : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         this.nominalVoltageVolts = tag.contains("NominalVoltageVolts") && tag.getDouble("NominalVoltageVolts") > 0.0
                 ? safe(tag.getDouble("NominalVoltageVolts"))
                 : 1.0;
@@ -110,15 +117,10 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     protected void publishSnapshot() {
     }
 
-    protected abstract double minVoltage();
-
-    protected abstract double restartVoltage();
-
-    protected abstract double maxVoltage();
-
-    protected abstract double overvoltageRecoveryVoltage();
+    protected abstract PowerRadarElectricalParameters.LoadVoltageRange voltageRange();
 
     private PowerRadarCeeState resolveElectricalState(double voltage) {
+        PowerRadarElectricalParameters.LoadVoltageRange voltages = voltageRange();
         if (!this.bridgeEnabled) {
             return PowerRadarCeeState.INVALID_STRUCTURE;
         }
@@ -129,19 +131,19 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
             return PowerRadarCeeState.REVERSE_POLARITY;
         }
         if (this.electricalState == PowerRadarCeeState.OVERVOLTAGE) {
-            return voltage <= overvoltageRecoveryVoltage()
+            return voltage <= voltages.overvoltageRecovery()
                     ? PowerRadarCeeState.POWERED
                     : PowerRadarCeeState.OVERVOLTAGE;
         }
-        if (voltage > maxVoltage()) {
+        if (voltage > voltages.maximum()) {
             return PowerRadarCeeState.OVERVOLTAGE;
         }
         if (this.electricalState == PowerRadarCeeState.UNDERVOLTAGE || this.electricalState == PowerRadarCeeState.INVALID_STRUCTURE) {
-            return voltage >= restartVoltage()
+            return voltage >= voltages.restart()
                     ? PowerRadarCeeState.POWERED
                     : PowerRadarCeeState.UNDERVOLTAGE;
         }
-        return voltage >= minVoltage()
+        return voltage >= voltages.minimum()
                 ? PowerRadarCeeState.POWERED
                 : PowerRadarCeeState.UNDERVOLTAGE;
     }
@@ -151,7 +153,7 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
                 this.voltageVolts,
                 this.nominalVoltageVolts,
                 this.constantPowerWatts);
-        if (this.parallelResistanceOhms >= PowerRadarCeeConstants.OFF_RESISTANCE_OHMS) {
+        if (this.parallelResistanceOhms >= PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS) {
             return constantPowerResistance;
         }
         return PowerRadarCeeConstants.parallelResistanceOhms(constantPowerResistance, this.parallelResistanceOhms);

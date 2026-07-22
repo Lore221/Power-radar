@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
@@ -82,7 +83,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     private double cachedElectricalVoltageVolts;
     private double cachedElectricalCurrentAmps;
     private double cachedElectricalPowerWatts;
-    private double cachedElectricalResistanceOhms = PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+    private double cachedElectricalResistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
     private RadarScanProfile activeScanProfile;
     private RadarScanProfile activeFrequentScanProfile;
     private RadarScanContext activeScanContext;
@@ -830,7 +831,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         this.cachedElectricalPowerWatts = safeElectrical(tag.getDouble("ElectricalPowerWatts"));
         this.cachedElectricalResistanceOhms = tag.contains("ElectricalResistanceOhms")
                 ? PowerRadarCeeConstants.sanitizeResistance(tag.getDouble("ElectricalResistanceOhms"))
-                : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+                : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         this.radarStructureEntityUuid = tag.hasUUID("RadarStructureEntity")
                 ? tag.getUUID("RadarStructureEntity")
                 : null;

@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ public final class RadarMonitorDisplayBuilder {
             PowerRadarCeeState monitorElectricalState
     ) {
         return noLink(monitorPos, monitorFacing, serverGameTime, RadarNetworkConnectionStatus.NO_LINK,
-                monitorElectricalState, 0.0, PowerRadarCeeConstants.OFF_RESISTANCE_OHMS, 0, 0, false);
+                monitorElectricalState, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS, 0, 0, false);
     }
 
     public static RadarMonitorDisplayData noLink(
@@ -41,7 +42,7 @@ public final class RadarMonitorDisplayBuilder {
             RadarNetworkConnectionStatus connectionStatus
     ) {
         return noLink(monitorPos, monitorFacing, serverGameTime, connectionStatus,
-                PowerRadarCeeState.INVALID_STRUCTURE, 0.0, PowerRadarCeeConstants.OFF_RESISTANCE_OHMS, 0, 0, false);
+                PowerRadarCeeState.INVALID_STRUCTURE, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS, 0, 0, false);
     }
 
     public static RadarMonitorDisplayData noLink(

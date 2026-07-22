@@ -6,6 +6,7 @@ import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.RadarControllerCeeDevice;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
@@ -107,23 +108,31 @@ public class RadarControllerBlock extends BaseEntityBlock implements ElectricalD
 
     @Override
     public Map<Integer, Vec3> getNodePositions(Level level, BlockPos pos, BlockState state) {
-        return Map.of(0, getNodePosition(level, pos, state, 0), 1, getNodePosition(level, pos, state, 1));
+        return terminals(state).positions();
     }
 
     @Override
     public Vec3 getNodePosition(Level level, BlockPos pos, BlockState state, int index) {
+        return terminals(state).position(index);
+    }
+
+    private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         Direction facing = state.getValue(FACING);
         Direction rear = facing.getOpposite();
         Direction right = facing.getClockWise();
-        double sideOffset = index == 0 ? NODE_A_SIDE_OFFSET : NODE_B_SIDE_OFFSET;
-        return new Vec3(0.5, NODE_Y, 0.5)
+        Vec3 center = new Vec3(0.5, NODE_Y, 0.5)
                 .add(rear.getStepX() * NODE_REAR_OFFSET, 0.0, rear.getStepZ() * NODE_REAR_OFFSET)
-                .add(right.getStepX() * sideOffset, 0.0, right.getStepZ() * sideOffset);
+                .add(right.getStepX() * NODE_A_SIDE_OFFSET, 0.0, right.getStepZ() * NODE_A_SIDE_OFFSET);
+        Vec3 negative = center.add(
+                right.getStepX() * (NODE_B_SIDE_OFFSET - NODE_A_SIDE_OFFSET),
+                0.0,
+                right.getStepZ() * (NODE_B_SIDE_OFFSET - NODE_A_SIDE_OFFSET));
+        return new PowerRadarCeeTerminalPair(center, negative);
     }
 
     @Override
     public MutableComponent getNodeLabel(Level level, BlockPos pos, BlockState state, int node) {
-        return Component.translatable(node == 0 ? "power_radar.cee.node.terminal_a" : "power_radar.cee.node.terminal_b");
+        return terminals(state).label(node);
     }
 
     public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {

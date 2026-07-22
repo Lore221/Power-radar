@@ -5,11 +5,7 @@
 	"texture_size": [48, 48],
 	"textures": {
 		"1": "power_radar:block/surface_radar_controller" ,
-<<<<<<< HEAD
-		"particle": "power_radar:block/air_radar_controller"
-=======
 		"particle": "power_radar:block/surface_radar_controller"
->>>>>>> c4cec78065ff490934923a0126df3e7bb786e02d
 	},
 	"elements": [
 		{

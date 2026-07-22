@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.block.RadarDisplayStructure;
 import com.limbo2136.powerradar.block.RadarDisplayStructureResolver;
 import com.limbo2136.powerradar.block.RadarMonitorControllerBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
@@ -74,7 +75,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private double cachedElectricalVoltageVolts;
     private double cachedElectricalCurrentAmps;
     private double cachedElectricalPowerWatts;
-    private double cachedElectricalResistanceOhms = PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+    private double cachedElectricalResistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
     @Nullable
     private UUID cachedConsumerLeaseNetworkId;
     @Nullable
@@ -796,7 +797,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         this.cachedElectricalPowerWatts = safeElectrical(tag.getDouble("ElectricalPowerWatts"));
         this.cachedElectricalResistanceOhms = tag.contains("ElectricalResistanceOhms")
                 ? PowerRadarCeeConstants.sanitizeResistance(tag.getDouble("ElectricalResistanceOhms"))
-                : PowerRadarCeeConstants.OFF_RESISTANCE_OHMS;
+                : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         if (this.level == null || !this.level.isClientSide()) {
             updateElectricalStateAndLoad();
             invalidateSnapshotCache();

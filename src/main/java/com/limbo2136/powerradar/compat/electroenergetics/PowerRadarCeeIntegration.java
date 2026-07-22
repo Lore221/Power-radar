@@ -35,4 +35,11 @@ public final class PowerRadarCeeIntegration {
         SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
         if (device instanceof ComputingBlockCeeDevice computingDevice) computingDevice.configureLoad();
     }
+
+    public static void configureOnboardComputerLoad(ServerLevel level, BlockPos pos) {
+        SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
+        if (device instanceof MonitorControllerCeeDevice monitorDevice) {
+            monitorDevice.configureFixedLoad(true, PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts());
+        }
+    }
 }

@@ -16,6 +16,7 @@ import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeSnapshot;
 import com.limbo2136.powerradar.bridge.TrajectoryIconBridge;
@@ -62,6 +63,8 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
 public class TargetControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
+    // Временные интервалы и допуски задаются в серверных тиках, блоках и градусах.
+    // Эти значения согласуют захват цели, кэширование решения и импульсы для CBC.
     private static final double CBC_CANNON_AIM_ORIGIN_Y_OFFSET = 2.0;
     private static final int TARGET_LOCK_WARMUP_TICKS = 3;
     private static final int BIG_CANNON_FIRE_RETRY_INTERVAL_TICKS = 5;
@@ -75,6 +78,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private static final int AUTOCANNON_OUTPUT_GRACE_TICKS = 20;
     private static final double[] LINE_OF_SIGHT_HEIGHT_FACTORS = {0.2, 0.5, 0.9};
 
+    // Синхронизируемое состояние питания, наведения и выходного сигнала.
     private boolean readyToFire;
     private double powerVoltageVolts;
     private double currentAmps;
@@ -85,36 +89,43 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private float currentPitchDegrees;
     private double yawVelocityDegreesPerTick;
     private double pitchVelocityDegreesPerTick;
+    // Последние результаты дорогих проверок видимости и баллистики.
     private UUID lastVisibilityTargetUuid;
     private long lastVisibilityCheckGameTime = Long.MIN_VALUE;
     private boolean lastTargetVisible;
     private WeaponBallistics lastKnownBallistics;
     private String lastKnownBallisticsCannonKind = "none";
+    // Состояние захвата цели и формирования импульса выстрела.
     private UUID lockedTargetUuid;
     private int targetLockTicks;
     private int bigCannonFireRetryTicks;
     private int autocannonOutputGraceTicks;
     private FireStatus fireStatus = FireStatus.NO_TARGET;
     private long lastDiagnosticSyncGameTime = Long.MIN_VALUE;
+    // Диагностические отметки не участвуют в принятии игровых решений.
     private BlockPos lastMissingWeaponMountPos;
     private long lastMissingWeaponMountGameTime = Long.MIN_VALUE;
+    // Автопоиск повторно проверяет кандидатов только на новых снимках радара.
     private UUID cachedAutotargetUuid;
     private boolean cachedAutotargetAvailable;
     private long lastAutotargetPolicyRevision = Long.MIN_VALUE;
     private long lastAutotargetSnapshotGameTime = Long.MIN_VALUE;
     private long lastAutotargetCacheResetGameTime = Long.MIN_VALUE;
     private final Map<UUID, AutotargetReadiness> autotargetReadinessCache = new HashMap<>();
+    // Между редкими чтениями CBC углы установки оцениваются локально.
     private BlockPos estimatedAimMountPos;
     private boolean hasEstimatedAimAngles;
     private float estimatedYawDegrees;
     private float estimatedPitchDegrees;
     private long lastAimAngleResyncGameTime = Long.MIN_VALUE;
+    // Кэши характеристик установки защищают горячий серверный тик от повторной инспекции CBC.
     private BlockPos cachedBigCannonBallisticsMountPos;
     private WeaponBallistics cachedBigCannonBallistics;
     private long lastBigCannonBallisticsCacheGameTime = Long.MIN_VALUE;
     private BlockPos cachedWeaponKindMountPos;
     private WeaponKind cachedWeaponKind;
     private long lastWeaponKindCacheGameTime = Long.MIN_VALUE;
+    // Решение упреждения переиспользуется, пока цель, орудие и исходные точки почти не изменились.
     private UUID cachedLeadTargetUuid;
     private BlockPos cachedLeadMountPos;
     private WeaponBallistics cachedLeadBallistics;
@@ -128,18 +139,21 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private TargetLeadSolver.BallisticAim cachedLeadBallisticAim;
     private double cachedLeadFlightTicks;
     private boolean cachedLeadUsesAcceleration;
+    // Скорость и ускорение подвижной платформы вычисляются в мировых координатах.
     private Vec3 lastPlatformWorldPoint;
     private Vec3 platformVelocity = Vec3.ZERO;
     private Vec3 platformAcceleration = Vec3.ZERO;
     private long lastPlatformMotionGameTime = Long.MIN_VALUE;
     private boolean platformVelocityInitialized;
     private boolean platformAccelerationInitialized;
+    // Feed-forward учитывает изменение требуемых углов между последовательными тиками.
     private UUID aimRateTargetUuid;
     private float lastDesiredYawDegrees;
     private float lastDesiredPitchDegrees;
     private long lastAimRateGameTime = Long.MIN_VALUE;
     private double yawFeedForwardDegreesPerTick;
     private double pitchFeedForwardDegreesPerTick;
+    // Выбор траектории хранится локально на контроллере и влияет только на большую пушку.
     private TrajectoryModeBehaviour trajectoryMode;
     private boolean cachedHighArcMode;
 
@@ -147,13 +161,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         super(ModBlockEntities.TARGET_CONTROLLER.get(), pos, blockState);
     }
 
+    // Создаёт двухпозиционную панель Create на допустимых боковых гранях блока.
     @Override
     public void addBehaviours(List<BlockEntityBehaviour> behaviours) {
         CenteredSideValueBoxTransform transform = new CenteredSideValueBoxTransform(
                 TargetControllerBlockEntity::isTrajectoryPanelFace) {
             @Override
             protected Vec3 getSouthLocation() {
-                return new Vec3(0.5D, 0.5D, 17.5D / 16.0D);
+                return new Vec3(0.5D, 0.5D, 16.6D / 16.0D);
             }
 
             @Override
@@ -172,6 +187,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         behaviours.add(this.trajectoryMode);
     }
 
+    // Для вертикального контроллера панель остаётся на глобальных восточной и западной гранях.
     private static boolean isTrajectoryPanelFace(BlockState state, Direction direction) {
         Direction facing = state.getValue(TargetControllerBlock.FACING);
         if (facing.getAxis().isVertical()) {
@@ -180,6 +196,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return direction == facing.getClockWise() || direction == facing.getCounterClockWise();
     }
 
+    // Передаёт серверный тик Create и основной цикл управления одному экземпляру контроллера.
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, TargetControllerBlockEntity controller) {
         if (level instanceof ServerLevel serverLevel) {
             controller.tick();
@@ -191,18 +208,20 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return this.readyToFire;
     }
 
+    // Принимает уже рассчитанный адаптером CEE электрический снимок без обращения к интеграции из логики наведения.
     public void applyElectricalSnapshot(TargetControllerCeeSnapshot snapshot) {
         this.powerVoltageVolts = snapshot.powerVoltageVolts();
         this.currentAmps = snapshot.currentAmps();
         this.powerWatts = snapshot.powerWatts();
     }
 
+    // Восстанавливает устойчивое состояние, но намеренно сбрасывает переходный сигнал выстрела и все кэши.
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
         this.cachedHighArcMode = this.trajectoryMode != null && this.trajectoryMode.getValue() == 1;
-        // The firing output is transient. Restoring a saved high level would not create
-        // the rising redstone edge that CBC big cannons require after a chunk reload.
+        // Выход выстрела переходный: сохранённый высокий уровень не создаст фронт сигнала,
+        // который нужен большой пушке CBC после повторной загрузки чанка.
         this.readyToFire = false;
         this.powerVoltageVolts = tag.getDouble("PowerVoltage");
         this.currentAmps = tag.getDouble("CurrentAmps");
@@ -222,6 +241,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         invalidateTargetLeadCache();
     }
 
+    // Сохраняет только устойчивые параметры; выход выстрела всегда записывается выключенным.
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
@@ -236,6 +256,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         tag.putString("FireStatus", this.fireStatus.name());
     }
 
+    // Выполняет полный серверный цикл: решение цели, шаг приводов, статус и красный камень.
     private void tickServer(ServerLevel level, BlockState state) {
         TargetSolution solution = solve(level, state);
         this.desiredYawDegrees = solution.desiredYawDegrees();
@@ -268,6 +289,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         syncDiagnostics(level, state);
     }
 
+    // Формирует непрерывный выход автопушки и повторяемые фронты сигнала для большой пушки.
     private boolean updateFireOutput(TargetSolution solution, boolean fireConditionsMet) {
         if (fireConditionsMet && "AUTOCANNON".equals(solution.cannonKind())) {
             this.bigCannonFireRetryTicks = 0;
@@ -298,6 +320,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return true;
     }
 
+    // Собирает единое неизменяемое решение из сети радара, живой цели, CBC и баллистики.
     private TargetSolution solve(ServerLevel level, BlockState state) {
         if (!ModList.get().isLoaded("createbigcannons")) {
             return TargetSolution.invalid("cbc-missing");
@@ -482,6 +505,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 pitchError);
     }
 
+    // Проверяет соседнюю установку CBC и ограничивает повторяющуюся диагностику отсутствующей пушки.
     private Optional<WeaponMount> inspectWeaponMount(ServerLevel level, BlockPos mountPos) {
         long gameTime = level.getGameTime();
         if (mountPos.equals(this.lastMissingWeaponMountPos) && gameTime - this.lastMissingWeaponMountGameTime < 10L) {
@@ -518,6 +542,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     }
 
     @javax.annotation.Nullable
+    // Возвращает текущую автоматическую цель, пока её снимок остаётся доступным и живым.
     private TrackedTargetView cachedAutotargetCandidate(
             ServerLevel level,
             RadarTargetingDataSource radarController,
@@ -539,6 +564,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     }
 
     @javax.annotation.Nullable
+    // На новом снимке радара выбирает первого разрешённого и достижимого кандидата.
     private TrackedTargetView selectAutotargetForSnapshot(
             ServerLevel level,
             RadarTargetingDataSource radarController,
@@ -579,6 +605,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return readyMatch[0];
     }
 
+    // Кэширует дорогую проверку баллистической готовности кандидата на короткий интервал.
     private boolean autotargetReady(
             ServerLevel level,
             TrackedTargetView track,
@@ -615,6 +642,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 : PowerRadarServerConfig.bigCannonMinFiringDistanceBlocks();
     }
 
+    // Ограничивает скорость и ускорение приводов и применяет следующий локальный угол к CBC.
     private AimStep applyAimStep(ServerLevel level, TargetSolution solution) {
         double targetMaxStep = maxStepDegreesPerTick();
         if (targetMaxStep <= 0.0 || solution.mountPos() == null) {
@@ -676,6 +704,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 yawWithinTolerance && pitchWithinTolerance);
     }
 
+    // Оценивает угловую скорость команды, чтобы привод не отставал от движущейся цели.
     private AimFeedForward updateAimFeedForward(
             TargetSolution solution,
             long gameTime,
@@ -719,6 +748,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return manager.isAutotargetForced(networkId, track.targetUuid(), name, sable) || autotargetEnabled(mask, track);
     }
 
+    // Периодически сверяет оценённые углы с фактическими углами установки CBC.
     private AimAngles currentAimAngles(WeaponMount cannonState, long gameTime) {
         BlockPos mountPos = cannonState.mountPos();
         if (this.hasEstimatedAimAngles
@@ -746,14 +776,17 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         this.lastAimAngleResyncGameTime = Long.MIN_VALUE;
     }
 
+    // Переводит доступную электрическую мощность в предельную угловую скорость привода.
     private double maxStepDegreesPerTick() {
         double voltage = Math.abs(this.powerVoltageVolts);
         if (!isPowerVoltageValid()) {
             return 0.0;
         }
+        PowerRadarElectricalParameters.DriveVoltageRange voltages =
+                PowerRadarElectricalParameters.Voltages.targetController();
         double denominator = Math.max(0.001,
-                PowerRadarCeeConstants.TARGET_CONTROLLER_FULL_SPEED_VOLTAGE - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE);
-        double fraction = clamp((voltage - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE) / denominator, 0.0, 1.0);
+                voltages.fullSpeed() - voltages.minimum());
+        double fraction = clamp((voltage - voltages.minimum()) / denominator, 0.0, 1.0);
         double rpm = PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM
                 + (PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_RPM - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM) * fraction;
         return rpm / 60.0 * 360.0 / 20.0;
@@ -761,8 +794,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
 
     private boolean isPowerVoltageValid() {
         double voltage = Math.abs(this.powerVoltageVolts);
-        return voltage >= PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_POWER_VOLTAGE
-                && voltage <= PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE;
+        PowerRadarElectricalParameters.DriveVoltageRange voltages =
+                PowerRadarElectricalParameters.Voltages.targetController();
+        return voltage >= voltages.minimum() && voltage <= voltages.maximum();
     }
 
     private double currentAimRpm() {
@@ -774,6 +808,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return Math.abs(this.yawVelocityDegreesPerTick) * 20.0 * 60.0 / 360.0;
     }
 
+    // Выбирает актуальные баллистические параметры, сохраняя последнее пригодное состояние пушки.
     private WeaponBallistics aimBallistics(WeaponMount cannonState) {
         WeaponBallistics current = cannonState.ballistics();
         String cannonKind = cannonState.kind().name();
@@ -789,6 +824,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     }
 
     @javax.annotation.Nullable
+    // Возвращает краткоживущий кэш боеприпаса большой пушки для горячего цикла наведения.
     private WeaponBallistics cachedBigCannonBallistics(BlockPos mountPos, long gameTime) {
         if (this.cachedBigCannonBallistics == null || !mountPos.equals(this.cachedBigCannonBallisticsMountPos)) {
             return null;
@@ -819,6 +855,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     }
 
     @javax.annotation.Nullable
+    // Переиспользует тип установки до плановой сверки с CBC.
     private WeaponKind cachedWeaponKind(BlockPos mountPos, long gameTime) {
         if (this.cachedWeaponKind == null || !mountPos.equals(this.cachedWeaponKindMountPos)) {
             return null;
@@ -867,6 +904,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 lockTicks, TARGET_LOCK_WARMUP_TICKS, gameTime);
     }
 
+    // Пересчитывает упреждение только при заметном изменении входов или истечении срока кэша.
     private TargetLeadSolver.LeadSolution cachedLeadSolution(
             TrackedTargetView track,
             UUID targetUuid,
@@ -910,6 +948,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return solution;
     }
 
+    // Сохраняет все входы решения вместе с результатом, чтобы проверка кэша оставалась явной.
     private void rememberTargetLeadSolution(
             UUID targetUuid,
             BlockPos mountPos,
@@ -995,6 +1034,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 + (currentProfile != null && !currentProfile.available() ? "/cached/profile=" + currentProfile.mode() : "");
     }
 
+    // Навесная траектория допускает закрытую цель; настильное оружие требует прямой видимости.
     private static boolean requiresDirectLineOfSight(WeaponKind cannonKind, boolean preferHighArc) {
         return cannonKind == WeaponKind.AUTOCANNON
                 || cannonKind == WeaponKind.BIG_CANNON && !preferHighArc;
@@ -1012,6 +1052,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return entity != null && entity.isAlive();
     }
 
+    // Подменяет снимок радара текущими данными загруженной сущности, не меняя её устойчивую идентичность.
     private static TrackedTargetView liveTargetView(ServerLevel level, TrackedTargetView track, long gameTime) {
         if (!level.dimension().location().equals(track.dimensionId()) || track.targetUuid() == null) {
             return track;
@@ -1028,6 +1069,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return new LiveTrackedTargetView(track, entity, gameTime);
     }
 
+    // Переносит Sable-контакт из сохранённой позы снимка в текущую мировую позу конструкции.
     private static TrackedTargetView liveSableTargetView(
             TrackedTargetView track,
             SableStructureObservation observation,
@@ -1047,6 +1089,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 height);
     }
 
+    // Не повторяет трассировку одной цели несколько раз в пределах одного серверного тика.
     private boolean cachedTargetVisible(ServerLevel level, TrackedTargetView track, Vec3 origin, long gameTime) {
         UUID targetUuid = track.targetUuid();
         if (targetUuid == null) {
@@ -1064,6 +1107,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return this.lastTargetVisible;
     }
 
+    // Проверяет несколько высот габарита, чтобы частичное укрытие не скрывало всю цель.
     private static boolean hasLineOfSightToTrack(ServerLevel level, Vec3 origin, TrackedTargetView track) {
         double height = Math.max(0.1, track.boundingHeight());
         Vec3 position = track.position();
@@ -1091,12 +1135,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return hit.getType() == HitResult.Type.MISS;
     }
 
+    // CBC сообщает позицию установки; вертикальная поправка переводит её к оси вылета снаряда.
     private static Vec3 cannonAimOrigin(WeaponMount cannonState) {
         return cannonState.muzzleOrigin() == null
                 ? Vec3.atCenterOf(cannonState.mountPos()).add(0.0, CBC_CANNON_AIM_ORIGIN_Y_OFFSET, 0.0)
                 : cannonState.muzzleOrigin();
     }
 
+    // Получает скорость и ускорение точки выстрела в корневом мире, включая движение Sable.
     private PlatformMotion updatePlatformMotion(ServerLevel level, Vec3 worldPoint) {
         if (!RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)) {
             resetPlatformMotion();
@@ -1140,6 +1186,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 true);
     }
 
+    // Сдвигает начало решения на задержку электрического сигнала до фактического выстрела CBC.
     private static Vec3 predictedLaunchOrigin(Vec3 currentOrigin, PlatformMotion platformMotion) {
         if (!platformMotion.onSable() || !platformMotion.hasVelocity()) {
             return currentOrigin;
@@ -1152,11 +1199,13 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return predicted;
     }
 
+    // Физика сущностей и трассировка выполняются в корневом серверном мире, а не в подуровне Sable.
     private static ServerLevel authoritativeLevel(ServerLevel level) {
         ServerLevel worldLevel = level.getServer().getLevel(level.dimension());
         return worldLevel == null ? level : worldLevel;
     }
 
+    // Сбрасывает производные при потере непрерывности позы, чтобы не создать ложный скачок ускорения.
     private void resetPlatformMotion() {
         this.lastPlatformWorldPoint = null;
         this.lastPlatformMotionGameTime = Long.MIN_VALUE;
@@ -1173,6 +1222,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return from + (to - from) * factor;
     }
 
+    // Удаляет численный шум по каждой мировой оси до расчёта упреждения.
     private static Vec3 suppressNoise(Vec3 value, double epsilon) {
         return new Vec3(
                 Math.abs(value.x) < epsilon ? 0.0D : value.x,
@@ -1180,6 +1230,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 Math.abs(value.z) < epsilon ? 0.0D : value.z);
     }
 
+    // Ограничивает выбросы ускорения после телепортации или первого неполного снимка движения.
     private static Vec3 clampAcceleration(Vec3 acceleration) {
         double limit = 0.25D;
         return new Vec3(
@@ -1197,12 +1248,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 Math.cos(yaw) * horizontal);
     }
 
+    // Подбирает допуск выстрела по типу оружия и времени полёта рассчитанного решения.
     private static double aimToleranceDegrees(TargetSolution solution) {
         return "BIG_CANNON".equals(solution.cannonKind())
                 ? 0.35
                 : PowerRadarCeeConstants.TARGET_CONTROLLER_AIM_TOLERANCE_DEGREES;
     }
 
+    // Преобразует приоритетную причину блокировки выстрела в один статус для очков Create.
     private FireStatus determineFireStatus(
             TargetSolution solution,
             boolean powered,
@@ -1214,7 +1267,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         if (!powered) {
             double voltage = Math.abs(this.powerVoltageVolts);
-            return voltage > PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_POWER_VOLTAGE
+            return voltage > PowerRadarElectricalParameters.Voltages.targetController().maximum()
                     ? FireStatus.OVERVOLTAGE
                     : FireStatus.UNDERVOLTAGE;
         }
@@ -1249,6 +1302,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return FireStatus.AIMING;
     }
 
+    // Ограничивает частоту клиентских обновлений диагностического состояния до двух раз в секунду.
     private void syncDiagnostics(ServerLevel level, BlockState state) {
         long gameTime = level.getGameTime();
         if (gameTime - this.lastDiagnosticSyncGameTime < 10L) {
@@ -1258,6 +1312,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         level.sendBlockUpdated(this.worldPosition, state, state, Block.UPDATE_CLIENTS);
     }
 
+    // Показывает электрическое состояние и итоговую причину готовности в очках Create.
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
         tooltip.add(Component.translatable("goggles.power_radar.target_controller")
@@ -1287,6 +1342,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return this.saveCustomOnly(registries);
     }
 
+    // Уведомляет мир только при изменении уровня выходного сигнала.
     private void setReadyToFire(ServerLevel level, BlockState state, boolean nextReady) {
         if (this.readyToFire == nextReady) {
             return;
@@ -1301,6 +1357,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
     }
 
+    // Обновляет соседей самого контроллера и отдельную точку выхода перед его лицевой гранью.
     private void notifyRedstoneOutputChanged(ServerLevel level, BlockState state) {
         Block block = state.getBlock();
         level.updateNeighborsAt(this.worldPosition, block);
@@ -1317,6 +1374,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         level.updateNeighbourForOutputSignal(firingOutputPos, block);
     }
 
+    // Печатает полный снимок цепочки наведения только в явно включённом режиме отчёта об ошибках.
     private void logDebug(TargetSolution solution, boolean powered, boolean active, AimStep step) {
         if (!PowerRadarDebugOptions.targetSystemBugReportLogging()) {
             return;
@@ -1414,6 +1472,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return current;
     }
 
+    // Новый UUID начинает прогрев захвата заново; непрерывная цель накапливает тики готовности.
     private int updateTargetLock(UUID targetUuid) {
         if (!targetUuid.equals(this.lockedTargetUuid)) {
             this.lockedTargetUuid = targetUuid;
@@ -1431,6 +1490,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         invalidateTargetLeadCache();
     }
 
+    // Полностью очищает выбор и проверки кандидатов при изменении политики сети.
     private void resetAutotargetSearchState() {
         this.cachedAutotargetUuid = null;
         this.cachedAutotargetAvailable = false;
@@ -1440,6 +1500,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         resetTargetLock();
     }
 
+    // Полный результат одного тика отделяет вычисление решения от применения приводов и выхода.
     private record TargetSolution(
             boolean valid,
             String reason,
@@ -1474,6 +1535,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
     }
 
+    // Порядок проверок задаёт только determineFireStatus; enum хранит устойчивые ключи перевода.
     private enum FireStatus {
         READY("goggles.power_radar.target_controller.fire_status.ready"),
         UNDERVOLTAGE("goggles.power_radar.target_controller.fire_status.undervoltage"),
@@ -1502,6 +1564,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
     }
 
+    // Результат одного ограниченного шага привода используется и для выстрела, и для диагностики.
     private record AimStep(
             boolean applied,
             float yawStepDegrees,
@@ -1531,6 +1594,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         private static final AimFeedForward ZERO = new AimFeedForward(0.0D, 0.0D, false);
     }
 
+    // Движение точки выстрела выражено в блоках за тик и блоках за тик в квадрате.
     private record PlatformMotion(
             Vec3 velocity,
             Vec3 acceleration,
@@ -1543,6 +1607,8 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         private static final PlatformMotion SABLE_STATIONARY =
                 new PlatformMotion(Vec3.ZERO, Vec3.ZERO, false, false, true);
     }
+
+    // Специализация Create сохраняет стандартный двухпозиционный тумблер с собственными иконками.
     private static class TrajectoryModeBehaviour extends ScrollOptionBehaviour<TrajectoryModeOption> {
         private TrajectoryModeBehaviour(Component label, SmartBlockEntity blockEntity,
                                         CenteredSideValueBoxTransform transform) {
@@ -1551,6 +1617,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
 
     }
 
+    // Значение тумблера сопоставляет локальный режим траектории с областью общего атласа icons.
     private enum TrajectoryModeOption implements INamedIconOptions {
         FLAT(false, "message.power_radar.target_controller.trajectory.flat"),
         HIGH(true, "message.power_radar.target_controller.trajectory.high");
@@ -1574,6 +1641,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
     }
 
+    // Оборачивает снимок цели скорректированной кинематикой, сохраняя остальные поля источника.
     private record AdjustedTrackedTargetView(
             TrackedTargetView fallback,
             Vec3 position,
@@ -1631,6 +1699,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
     }
 
+    // Оборачивает загруженную сущность актуальной позицией и скоростью текущего серверного тика.
     private record LiveTrackedTargetView(
             TrackedTargetView fallback,
             Entity entity,

@@ -23,34 +23,20 @@ public class RadarControllerCeeDevice extends PowerRadarCeeLoadDevice {
     ) {
         int activeModuleCount = structureType == RadarStructureType.OVERVIEW ? overviewModuleCount : phasedArrayPanelCount;
         if (!validStructure || activeModuleCount <= 0) {
-            setLoad(false, 0.0, PowerRadarCeeConstants.OFF_RESISTANCE_OHMS, PowerRadarCeeConstants.radarNominalVoltage());
+            setLoad(false, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                    PowerRadarElectricalParameters.Voltages.radar().nominal());
             return;
         }
         setLoad(
                 true,
                 PowerRadarCeeConstants.radarConstantPowerWatts(structureType, phasedArrayPanelCount, overviewModuleCount),
-                PowerRadarCeeConstants.OFF_RESISTANCE_OHMS,
-                PowerRadarCeeConstants.radarNominalVoltage());
+                PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
+                PowerRadarElectricalParameters.Voltages.radar().nominal());
     }
 
     @Override
-    protected double minVoltage() {
-        return PowerRadarCeeConstants.radarMinVoltage();
-    }
-
-    @Override
-    protected double restartVoltage() {
-        return PowerRadarCeeConstants.radarRestartVoltage();
-    }
-
-    @Override
-    protected double maxVoltage() {
-        return PowerRadarCeeConstants.radarMaxVoltage();
-    }
-
-    @Override
-    protected double overvoltageRecoveryVoltage() {
-        return PowerRadarCeeConstants.radarOvervoltageRecovery();
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.radar();
     }
 
     @Override

@@ -10,5 +10,5 @@ public record PowerRadarCeeSnapshot(
 ) {
     public static final PowerRadarCeeSnapshot EMPTY =
             new PowerRadarCeeSnapshot(false, PowerRadarCeeState.INVALID_STRUCTURE,
-                    0.0, 0.0, 0.0, PowerRadarCeeConstants.OFF_RESISTANCE_OHMS);
+                    0.0, 0.0, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS);
 }

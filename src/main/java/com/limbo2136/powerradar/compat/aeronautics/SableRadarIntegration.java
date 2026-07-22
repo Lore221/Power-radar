@@ -26,6 +26,24 @@ public final class SableRadarIntegration {
     public static boolean canPlaceOnStructure(Level level, BlockPos pos) {
         return isAeronauticsLoaded() && SableStructureScanner.isInsideStructure(level, pos);
     }
+
+    public static Vec3 worldPosition(Level level, BlockPos containingPos, Vec3 localPosition) {
+        return SABLE_LOADED
+                ? SableRadarWorldPose.worldPosition(level, containingPos, localPosition)
+                : localPosition;
+    }
+
+    public static Vec3 interpolatedLocalDirection(
+            Level level,
+            BlockPos containingPos,
+            Vec3 worldDirection,
+            float partialTick
+    ) {
+        return SABLE_LOADED
+                ? SableRadarWorldPose.interpolatedLocalDirection(
+                        level, containingPos, worldDirection, partialTick)
+                : worldDirection;
+    }
     public static List<SableStructureObservation> loadedStructures(ServerLevel level) {
         return SABLE_LOADED ? SableStructureScanner.loadedStructures(level) : List.of();
     }
