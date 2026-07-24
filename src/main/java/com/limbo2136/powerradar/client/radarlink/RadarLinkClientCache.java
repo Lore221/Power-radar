@@ -7,12 +7,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
-import net.minecraft.client.multiplayer.ClientLevel;
 
 public final class RadarLinkClientCache {
+    // Кэш не авторитетен и живёт только до смены объекта ClientLevel в обработчике контуров.
     private static final Map<ResourceKey<Level>, Map<UUID, Set<BlockPos>>> LINKS_BY_LEVEL = new HashMap<>();
     private static final Map<ResourceKey<Level>, Map<BlockPos, UUID>> NETWORK_BY_POS = new HashMap<>();
 

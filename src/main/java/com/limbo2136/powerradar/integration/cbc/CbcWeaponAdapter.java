@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
+/** Стабильный оружейный фасад; CBC-типы и отражение остаются внутри compat-слоя. */
 public final class CbcWeaponAdapter {
     private CbcWeaponAdapter() {
     }
@@ -57,6 +58,7 @@ public final class CbcWeaponAdapter {
             float yawDegrees,
             float logicalPitchDegrees
     ) {
+        // logicalPitchDegrees положителен вверх; преобразование особенностей CBC выполняет compat-слой.
         return TargetControllerCbcCompat.applyAdjustableMountAngles(
                 level, mount.mountPos(), yawDegrees, logicalPitchDegrees, mapCachedKind(mount.kind()));
     }

@@ -10,9 +10,11 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifec
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.mojang.serialization.MapCodec;
+import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -32,9 +34,6 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import java.util.Map;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.RandomSource;
 
 public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceBlock<ComputingBlockCeeDevice> {
@@ -59,7 +58,9 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
     @Override
     protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean moved) {
         super.onPlace(state, level, pos, oldState, moved);
-        if (!level.getBlockTicks().hasScheduledTick(pos, this)) level.scheduleTick(pos, this, 1);
+        if (!level.getBlockTicks().hasScheduledTick(pos, this)) {
+            level.scheduleTick(pos, this, 1);
+        }
     }
 
     @Override
@@ -75,9 +76,15 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
     }
 
     @Override
-    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
-                                          Player player, net.minecraft.world.InteractionHand hand,
-                                          BlockHitResult hitResult) {
+    protected ItemInteractionResult useItemOn(
+            ItemStack stack,
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            net.minecraft.world.InteractionHand hand,
+            BlockHitResult hitResult
+    ) {
         if (!(stack.getItem() instanceof RadarFilterCardItem card)
                 || !(level.getBlockEntity(pos) instanceof ComputingBlockEntity computer)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
@@ -89,8 +96,13 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
-                                                BlockHitResult hitResult) {
+    protected InteractionResult useWithoutItem(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            BlockHitResult hitResult
+    ) {
         if (!player.getMainHandItem().isEmpty()) {
             return InteractionResult.PASS;
         }
@@ -107,6 +119,7 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
         if (hit.getDirection() != state.getValue(FACING)) {
             return -1;
         }
+        // Три визуальные секции соответствуют ordinal Kind и устойчивым NBT-ключам Card0..Card2.
         double localY = hit.getLocation().y - hit.getBlockPos().getY();
         return localY >= 2.0D / 3.0D ? 0 : localY >= 1.0D / 3.0D ? 1 : 2;
     }
@@ -137,11 +150,23 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
 
     @Nullable
     @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide() ? null : createTickerHelper(type, ModBlockEntities.COMPUTING_BLOCK.get(), ComputingBlockEntity::serverTick);
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(
+            Level level,
+            BlockState state,
+            BlockEntityType<T> type
+    ) {
+        return level.isClientSide()
+                ? null
+                : createTickerHelper(
+                        type,
+                        ModBlockEntities.COMPUTING_BLOCK.get(),
+                        ComputingBlockEntity::serverTick);
     }
 
-    @Override public SimulatedDeviceType<ComputingBlockCeeDevice> getDevice() { return PowerRadarCeeDeviceTypes.COMPUTING_BLOCK.get(); }
+    @Override
+    public SimulatedDeviceType<ComputingBlockCeeDevice> getDevice() {
+        return PowerRadarCeeDeviceTypes.COMPUTING_BLOCK.get();
+    }
 
     @Override
     public Map<Integer, Vec3> getNodePositions(Level level, BlockPos pos, BlockState state) {

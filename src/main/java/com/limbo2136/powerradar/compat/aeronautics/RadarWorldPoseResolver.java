@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
+/** Выбирает обычные мировые координаты или Sable-преобразование без утечки Sable-типов наружу. */
 public final class RadarWorldPoseResolver {
     private static final boolean SABLE_LOADED = ModList.get().isLoaded("sable");
 

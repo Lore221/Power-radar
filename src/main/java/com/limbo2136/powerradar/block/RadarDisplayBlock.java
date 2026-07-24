@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.block;
 
+import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.create.RadarDisplayPlacementHelper;
 import com.mojang.serialization.MapCodec;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
@@ -9,6 +10,8 @@ import net.createmod.catnip.placement.PlacementOffset;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.InteractionResult;
@@ -28,6 +31,7 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 public class RadarDisplayBlock extends HorizontalDirectionalBlock implements IWrenchable {
     public static final MapCodec<RadarDisplayBlock> CODEC = simpleCodec(RadarDisplayBlock::new);
@@ -86,7 +90,16 @@ public class RadarDisplayBlock extends HorizontalDirectionalBlock implements IWr
     }
 
     @Override
-    protected void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean moving) {
+    protected void neighborChanged(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Block block,
+            BlockPos fromPos,
+            boolean moving
+    ) {
+        // Соседские уведомления от массовой смены ACTIVE/FRAME_SHAPE не запускают новую сверку.
+        // Состав дисплея пересчитывают только явные placement/removal lifecycle callbacks выше.
     }
 
     @Override
@@ -126,7 +139,13 @@ public class RadarDisplayBlock extends HorizontalDirectionalBlock implements IWr
     }
 
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+    protected InteractionResult useWithoutItem(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            BlockHitResult hitResult
+    ) {
         return handleDisplayInteraction(level, pos, player);
     }
 
@@ -136,14 +155,12 @@ public class RadarDisplayBlock extends HorizontalDirectionalBlock implements IWr
                     RadarDisplayStructureResolver.resolveActiveOwner(level, pos);
             if (result.status() == RadarDisplayStructureResolver.DisplayOwnerStatus.ACTIVE
                     && result.controllerPos() != null
-                    && level instanceof net.minecraft.server.level.ServerLevel serverLevel
-                    && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-                net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(
+                    && level instanceof ServerLevel serverLevel
+                    && player instanceof ServerPlayer serverPlayer) {
+                PacketDistributor.sendToPlayer(
                         serverPlayer,
-                        com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity.createSnapshotPayload(
-                                serverLevel,
-                                result.controllerPos()
-                        )
+                        RadarMonitorControllerBlockEntity.createSnapshotPayload(
+                                serverLevel, result.controllerPos())
                 );
                 return InteractionResult.CONSUME;
             }

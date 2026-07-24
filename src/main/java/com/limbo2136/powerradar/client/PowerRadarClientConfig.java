@@ -93,6 +93,7 @@ public final class PowerRadarClientConfig {
     }
 
     public static RadarRenderPalette radarRenderPalette() {
+        // Снимок палитры пересобирается только после изменения строк конфига и переиспользуется за кадр.
         String cone = colorValue(RADAR_CONE_COLOR);
         String shellAlarmZone = colorValue(SHELL_ALARM_ZONE_COLOR);
         String sableSilhouette = colorValue(SABLE_SILHOUETTE_COLOR);

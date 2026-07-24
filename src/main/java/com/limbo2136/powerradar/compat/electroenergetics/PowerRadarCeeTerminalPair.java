@@ -5,8 +5,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.phys.Vec3;
 
-/** Standard two-terminal layout used by every Power Radar CEE block. */
+/** Единая нумерация двух контактов для всех CEE-блоков Power Radar. */
 public record PowerRadarCeeTerminalPair(Vec3 positivePosition, Vec3 negativePosition) {
+    // Нумерация узлов является внешним контрактом CEE: 0 — плюс, 1 — минус.
     public static final int POSITIVE = 0;
     public static final int NEGATIVE = 1;
 

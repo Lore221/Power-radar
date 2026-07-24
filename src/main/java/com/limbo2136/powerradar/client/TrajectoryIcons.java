@@ -23,6 +23,7 @@ public final class TrajectoryIcons {
     }
 
     public static AllIcons icon(boolean highArc) {
+        // Публичная сигнатура вызывается отражением из TrajectoryIconBridge.
         return highArc ? HIGH : FLAT;
     }
 

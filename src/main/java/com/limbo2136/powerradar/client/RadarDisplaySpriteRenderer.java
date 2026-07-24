@@ -109,6 +109,7 @@ public final class RadarDisplaySpriteRenderer {
                 blip.screenY() - halfSize,
                 depth
         );
+        // Иконка рисуется первой, рамка — поверх неё на той же экранной позиции.
         RadarBlipSprite icon = RadarBlipSprite.forCategory(blip.category());
         drawLayer(graphics, icon, drawSize, palette.blip(blip.category()), alpha);
         if (frame != null) {

@@ -11,6 +11,7 @@ final class SableSilhouetteBuilder {
     }
 
     static Result build(Set<Long> occupied, double anchorX, double anchorZ) {
+        // Каждая занятая XZ-колонна даёт только внешние рёбра; TreeMap фиксирует порядок и хэш.
         Map<Integer, List<Integer>> horizontal = new TreeMap<>();
         Map<Integer, List<Integer>> vertical = new TreeMap<>();
         for (long packed : occupied) {
@@ -39,6 +40,7 @@ final class SableSilhouetteBuilder {
     }
 
     private static List<SableSilhouetteFill> buildFills(Set<Long> occupied, double anchorX, double anchorZ) {
+        // Смежные блоки одной строки объединяются в прямоугольник в локальных координатах структуры.
         Map<Integer, List<Integer>> rows = new TreeMap<>();
         for (long packed : occupied) {
             rows.computeIfAbsent(unpackZ(packed), ignored -> new ArrayList<>()).add(unpackX(packed));

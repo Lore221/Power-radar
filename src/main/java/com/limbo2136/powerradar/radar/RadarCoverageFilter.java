@@ -6,8 +6,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 public final class RadarCoverageFilter {
-    // Matches radar_overview_octagon.png: a 128px footprint with 29px corner cuts.
+    // Повторяет radar_overview_octagon.png: поле 128 px с угловыми срезами по 29 px.
     private static final double OVERVIEW_DIAGONAL_LIMIT = 98.0D / 64.0D;
+
     private RadarCoverageFilter() {
     }
 
@@ -58,6 +59,7 @@ public final class RadarCoverageFilter {
                 && normalizedX + normalizedZ <= OVERVIEW_DIAGONAL_LIMIT;
     }
 
+    /** Возвращает знаковое отклонение цели от направления радара в градусах. */
     public static double bearingDegrees(float yawDegrees, Vec3 delta) {
         double radians = Math.toRadians(yawDegrees);
         double forwardX = Math.sin(radians);

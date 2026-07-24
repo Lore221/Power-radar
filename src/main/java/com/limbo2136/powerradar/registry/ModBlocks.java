@@ -96,7 +96,7 @@ public final class ModBlocks {
     public static final DeferredBlock<ShellAlarmBlock> SHELL_ALARM = BLOCKS.registerBlock(
             "shell_alarm",
             ShellAlarmBlock::new,
-            BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
+            BlockBehaviour.Properties.of().strength(3.0F, 6.0F).noOcclusion()
     );
 
     public static final DeferredBlock<InterceptionControllerBlock> INTERCEPTION_CONTROLLER =

@@ -1,7 +1,7 @@
 {
-	"ambientocclusion": false,
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
+	"ambientocclusion": false,
 	"texture_size": [48, 48],
 	"textures": {
 		"0": "power_radar:block/on_board_modules/modules_3",

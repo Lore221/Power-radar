@@ -132,13 +132,13 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     public void prepareForBlockRemoval() {
         this.removingOrUnloading = true;
         invalidateSnapshotCache();
-        reconcileConsumerLease("block-removal", true);
+        reconcileConsumerLease(true);
     }
 
     @Override
     public void onChunkUnloaded() {
         this.removingOrUnloading = true;
-        releaseCachedConsumerLease("chunk-unload");
+        releaseCachedConsumerLease();
         super.onChunkUnloaded();
     }
 
@@ -177,8 +177,8 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                 blockEntity.sendBlockSnapshotToNearby(serverLevel, snapshot);
             }
         }
-        // The pose delta is deliberately last. On scan ticks it must supersede the
-        // coverage pose embedded in the lower-frequency static snapshot.
+        // Дельта позы намеренно отправляется последней: в тик сканирования она должна
+        // перекрыть позу покрытия из более редкого статического снимка.
         blockEntity.sendMovingPoses(serverLevel, pos);
     }
 
@@ -254,6 +254,8 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                 || this.lastSentBlockStaticGameTime == Long.MIN_VALUE
                 || gameTime - this.lastSentBlockStaticGameTime >= NEARBY_PLAYERS_CACHE_TICKS;
         if (refreshStatic) {
+            // Статический пакет намеренно не содержит целей: клиент сохраняет прежний список
+            // до следующего target-пакета и не создаёт однокадровое мерцание.
             RadarMonitorSnapshotPayload staticSnapshot = snapshot.withTargets(List.of());
             RadarMonitorBlockStaticPayload staticPayload = new RadarMonitorBlockStaticPayload(staticSnapshot);
             for (ServerPlayer player : nearbyPlayers) {
@@ -494,6 +496,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         }
         UUID directNetworkId = directNetworkId();
         if (directNetworkId != null) {
+            // Onboard Computer является прямым потребителем собственной сети и не ищет Radar Link.
             RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
             GlobalPos consumerPos = GlobalPos.of(level.dimension(), controllerPos);
             RadarNetworkManager.ControllersResolution resolution = networkManager
@@ -685,7 +688,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.structureRevision++;
             invalidateSnapshotCache();
             updateElectricalStateAndLoad();
-            requestLeaseReconcile("structure");
+            requestLeaseReconcile();
             syncChanged();
             if (this.level instanceof ServerLevel serverLevel) {
                 sendBlockSnapshotToNearby(serverLevel);
@@ -861,24 +864,25 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.startupSafetyTicks--;
             return;
         }
+        // Двухтиковая задержка отделяет загрузку NBT от сверки соседей и runtime-lease.
         if (this.needsStructureReconcile) {
             this.needsStructureReconcile = false;
             RadarDisplayStructureResolver.reconcileAround(level, pos, "deferred-startup");
         }
         if (this.needsLeaseReconcile && canHoldLeaseNow()) {
             this.needsLeaseReconcile = false;
-            reconcileConsumerLease("deferred", false);
+            reconcileConsumerLease(false);
         }
     }
 
-    private void requestLeaseReconcile(String reason) {
+    private void requestLeaseReconcile() {
         if (this.removingOrUnloading) {
             this.needsLeaseReconcile = false;
             return;
         }
         this.needsLeaseReconcile = true;
         if (canHoldLeaseNow()) {
-            reconcileConsumerLease(reason, false);
+            reconcileConsumerLease(false);
             this.needsLeaseReconcile = false;
         }
     }
@@ -887,7 +891,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         return !this.removingOrUnloading && isRendererEnabled();
     }
 
-    private void reconcileConsumerLease(String reason, boolean releaseOnly) {
+    private void reconcileConsumerLease(boolean releaseOnly) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
         }
@@ -916,7 +920,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         }
     }
 
-    private void releaseCachedConsumerLease(String reason) {
+    private void releaseCachedConsumerLease() {
         if (!(this.level instanceof ServerLevel serverLevel)
                 || this.cachedConsumerLeaseNetworkId == null
                 || this.cachedConsumerLeaseLinkPos == null) {
@@ -957,9 +961,9 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             invalidateSnapshotCache();
             if (previousState != this.electricalState) {
                 if (this.electricalState != PowerRadarCeeState.POWERED) {
-                    releaseCachedConsumerLease("power-loss");
+                    releaseCachedConsumerLease();
                 } else {
-                    requestLeaseReconcile("power-restored");
+                    requestLeaseReconcile();
                 }
             }
             syncChanged();

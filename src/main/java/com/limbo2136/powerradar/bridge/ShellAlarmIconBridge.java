@@ -6,6 +6,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.loading.FMLEnvironment;
 
 public final class ShellAlarmIconBridge {
+    // Строка класса и публичная сигнатура dimensions() образуют отражательный клиентский контракт.
     private static final String CLIENT_ICONS = "com.limbo2136.powerradar.client.ShellAlarmIcons";
     private static Method dimensionsMethod;
 

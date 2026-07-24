@@ -42,6 +42,7 @@ public final class MechanicalSirenClientAudioRuntime {
     }
 
     private static void tickSound(ClientLevel level, BlockPos pos, float speed, boolean redstonePowered) {
+        // Звуки эфемерны: при смене измерения старые экземпляры плавно гасятся и удаляются.
         discardSoundsFromOtherDimensions(level.dimension());
         GlobalPos key = GlobalPos.of(level.dimension(), pos);
         if (!redstonePowered || speed < MINIMUM_AUDIBLE_SPEED) {

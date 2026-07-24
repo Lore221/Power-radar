@@ -4,12 +4,12 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
+import com.limbo2136.powerradar.item.RadarFilterCardItem;
+import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
-import com.limbo2136.powerradar.item.RadarFilterCardItem;
-import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.lang.reflect.InvocationTargetException;
 import net.minecraft.core.GlobalPos;
@@ -49,113 +49,52 @@ public final class ModNetwork {
     }
 
     private static void handleSnapshot(RadarMonitorSnapshotPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientSnapshotHandler(payload));
-    }
-
-    private static void invokeClientSnapshotHandler(RadarMonitorSnapshotPayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleSnapshot", RadarMonitorSnapshotPayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to open radar monitor screen", exception);
-        }
+        enqueueClientHandler(
+                payload, context, RadarMonitorSnapshotPayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleSnapshot",
+                "[PowerRadar] Failed to open radar monitor screen");
     }
 
     private static void handleBlockSnapshot(RadarMonitorBlockSnapshotPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientBlockSnapshotHandler(payload));
+        enqueueClientHandler(
+                payload, context, RadarMonitorBlockSnapshotPayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleBlockSnapshot",
+                "[PowerRadar] Failed to update radar monitor block snapshot");
     }
 
     private static void handleBlockStatic(RadarMonitorBlockStaticPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientBlockStaticHandler(payload));
+        enqueueClientHandler(
+                payload, context, RadarMonitorBlockStaticPayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleBlockStatic",
+                "[PowerRadar] Failed to update radar monitor block static data");
     }
 
     private static void handleBlockTargets(RadarMonitorBlockTargetsPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientBlockTargetsHandler(payload));
+        enqueueClientHandler(
+                payload, context, RadarMonitorBlockTargetsPayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleBlockTargets",
+                "[PowerRadar] Failed to update radar monitor block target data");
     }
 
     private static void handleBlockPose(RadarMonitorBlockPosePayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientBlockPoseHandler(payload));
+        enqueueClientHandler(
+                payload, context, RadarMonitorBlockPosePayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleBlockPose",
+                "[PowerRadar] Failed to update moving radar monitor pose");
     }
 
     private static void handleSilhouette(RadarMonitorSilhouettePayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> invokeClientSilhouetteHandler(payload));
-    }
-
-    private static void invokeClientSilhouetteHandler(RadarMonitorSilhouettePayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleSilhouette", RadarMonitorSilhouettePayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to update Sable silhouette cache", exception);
-        }
-    }
-
-    private static void invokeClientBlockPoseHandler(RadarMonitorBlockPosePayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleBlockPose", RadarMonitorBlockPosePayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to update moving radar monitor pose", exception);
-        }
-    }
-
-    private static void invokeClientBlockSnapshotHandler(RadarMonitorBlockSnapshotPayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleBlockSnapshot", RadarMonitorBlockSnapshotPayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to update radar monitor block snapshot", exception);
-        }
-    }
-
-    private static void invokeClientBlockStaticHandler(RadarMonitorBlockStaticPayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleBlockStatic", RadarMonitorBlockStaticPayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to update radar monitor block static data", exception);
-        }
-    }
-
-    private static void invokeClientBlockTargetsHandler(RadarMonitorBlockTargetsPayload payload) {
-        try {
-            Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.RadarMonitorClientHooks");
-            hooks.getMethod("handleBlockTargets", RadarMonitorBlockTargetsPayload.class).invoke(null, payload);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-            PowerRadar.LOGGER.error("[PowerRadar] Failed to update radar monitor block target data", exception);
-        }
+        enqueueClientHandler(
+                payload, context, RadarMonitorSilhouettePayload.class,
+                "com.limbo2136.powerradar.client.RadarMonitorClientHooks", "handleSilhouette",
+                "[PowerRadar] Failed to update Sable silhouette cache");
     }
 
     private static void handleTargetingCardOpen(TargetingCardOpenPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) {
-            return;
-        }
-        context.enqueueWork(() -> {
-            try {
-                Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.TargetingCardClientHooks");
-                hooks.getMethod("open", TargetingCardOpenPayload.class).invoke(null, payload);
-            } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-                PowerRadar.LOGGER.error("[PowerRadar] Failed to open targeting card screen", exception);
-            }
-        });
+        enqueueClientHandler(
+                payload, context, TargetingCardOpenPayload.class,
+                "com.limbo2136.powerradar.client.TargetingCardClientHooks", "open",
+                "[PowerRadar] Failed to open targeting card screen");
     }
 
     private static void handleTargetingCardSave(TargetingCardSavePayload payload, IPayloadContext context) {
@@ -167,8 +106,8 @@ public final class ModNetwork {
             if (!(stack.getItem() instanceof RadarFilterCardItem card)
                     || payload.cardKind() < 0 || payload.cardKind() > 1
                     || card.kind() != (payload.cardKind() == 1
-                    ? RadarFilterCardItem.Kind.DISPLAY
-                    : RadarFilterCardItem.Kind.TARGETING)) {
+                            ? RadarFilterCardItem.Kind.DISPLAY
+                            : RadarFilterCardItem.Kind.TARGETING)) {
                 return;
             }
             stack.set(ModDataComponents.RADAR_FILTER_MASK.get(),
@@ -178,19 +117,48 @@ public final class ModNetwork {
     }
 
     private static void handleAllowlistCardOpen(AllowlistCardOpenPayload payload, IPayloadContext context) {
-        if (!FMLEnvironment.dist.isClient()) return;
-        context.enqueueWork(() -> {
-            try {
-                Class<?> hooks = Class.forName("com.limbo2136.powerradar.client.AllowlistCardClientHooks");
-                hooks.getMethod("open", AllowlistCardOpenPayload.class).invoke(null, payload);
-            } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException exception) {
-                PowerRadar.LOGGER.error("[PowerRadar] Failed to open allowlist card screen", exception);
-            }
-        });
+        enqueueClientHandler(
+                payload, context, AllowlistCardOpenPayload.class,
+                "com.limbo2136.powerradar.client.AllowlistCardClientHooks", "open",
+                "[PowerRadar] Failed to open allowlist card screen");
+    }
+
+    private static <P> void enqueueClientHandler(
+            P payload,
+            IPayloadContext context,
+            Class<P> payloadType,
+            String hooksClassName,
+            String methodName,
+            String errorMessage
+    ) {
+        if (!FMLEnvironment.dist.isClient()) {
+            return;
+        }
+        // Рефлексия не даёт общему классу получить прямую ссылку на клиентский пакет.
+        context.enqueueWork(() -> invokeClientHandler(
+                payload, payloadType, hooksClassName, methodName, errorMessage));
+    }
+
+    private static <P> void invokeClientHandler(
+            P payload,
+            Class<P> payloadType,
+            String hooksClassName,
+            String methodName,
+            String errorMessage
+    ) {
+        try {
+            Class<?> hooks = Class.forName(hooksClassName);
+            hooks.getMethod(methodName, payloadType).invoke(null, payload);
+        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException
+                | InvocationTargetException exception) {
+            PowerRadar.LOGGER.error(errorMessage, exception);
+        }
     }
 
     private static void handleAllowlistCardSave(AllowlistCardSavePayload payload, IPayloadContext context) {
-        if (!(context.player() instanceof ServerPlayer player)) return;
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
         context.enqueueWork(() -> {
             var stack = player.getItemInHand(payload.hand());
             if (!(stack.getItem() instanceof RadarFilterCardItem card)

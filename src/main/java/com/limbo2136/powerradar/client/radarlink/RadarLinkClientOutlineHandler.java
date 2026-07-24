@@ -66,7 +66,6 @@ public final class RadarLinkClientOutlineHandler {
         }
 
         int color = pulseColor();
-        int outlines = 0;
         for (BlockPos pos : RadarLinkClientCache.getLinks(level, networkId)) {
             if (!level.isLoaded(pos)) {
                 RadarLinkClientCache.unregister(level, pos);
@@ -90,7 +89,7 @@ public final class RadarLinkClientOutlineHandler {
             if (player.distanceToSqr(Vec3.atCenterOf(pos)) > outlineRangeSquared()) {
                 continue;
             }
-            outlines += outlineLink(level, pos, networkId, color);
+            outlineLink(level, pos, networkId, color);
         }
     }
 
@@ -146,7 +145,7 @@ public final class RadarLinkClientOutlineHandler {
         return null;
     }
 
-    private static int outlineLink(ClientLevel level, BlockPos pos, UUID networkId, int color) {
+    private static void outlineLink(ClientLevel level, BlockPos pos, UUID networkId, int color) {
         BlockState state = level.getBlockState(pos);
         AABB outline = state.hasProperty(RadarLinkBlock.FACING)
                 ? outlineBoxFor(state.getValue(RadarLinkBlock.FACING)).move(pos)
@@ -160,7 +159,6 @@ public final class RadarLinkClientOutlineHandler {
                 outline,
                 color
         );
-        return 1;
     }
 
     private static AABB outlineBoxFor(Direction facing) {

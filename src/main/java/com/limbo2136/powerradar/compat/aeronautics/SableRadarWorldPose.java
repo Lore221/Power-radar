@@ -26,6 +26,7 @@ final class SableRadarWorldPose {
         }
 
         Vec3 worldOrigin = subLevel.logicalPose().transformPosition(localOrigin);
+        // Локальный вектор вперёд лежит в XZ; logicalPose переносит его в мировой базис Sable.
         double yawRadians = Math.toRadians(localYawDegrees);
         Vector3d worldForward = subLevel.logicalPose().transformNormal(new Vector3d(
                 -Math.sin(yawRadians),

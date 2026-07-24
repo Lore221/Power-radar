@@ -6,14 +6,14 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Three-stage projectile threat test for a translating protected AABB. */
+/** Трёхэтапная проверка снаряда против движущегося защищаемого AABB. */
 public final class MovingAabbThreatEvaluator {
     private static final double MOTION_EPSILON_SQR = 1.0E-8D;
 
     private MovingAabbThreatEvaluator() {
     }
 
-    /** Cheap first-stage filter which intentionally does not inspect acceleration or ballistics. */
+    /** Дешёвый первый этап намеренно не читает ускорение и баллистические параметры. */
     public static boolean passesInitialBroadPhase(
             MovingProtectedZone zone,
             Vec3 projectilePosition,
@@ -93,6 +93,7 @@ public final class MovingAabbThreatEvaluator {
         if (projectileVelocity.lengthSqr() < MOTION_EPSILON_SQR) {
             return false;
         }
+        // Траектории без сопротивления и с линейным сопротивлением пересекаются с AABB аналитически.
         if (!ballistics.quadraticDrag()
                 && (ballistics.drag() <= 1.0E-6D || LinearDragTrajectory.supported(ballistics.drag()))) {
             AnalyticMovingAabbIntersection.Result result = AnalyticMovingAabbIntersection.evaluate(
@@ -106,6 +107,7 @@ public final class MovingAabbThreatEvaluator {
                     maximumTicks);
             return result != AnalyticMovingAabbIntersection.Result.MISS;
         }
+        // Неизвестная модель либо квадратичное сопротивление используют ограниченную резервную симуляцию.
         Vec3 center = protectedBounds.getCenter();
         double sphereRadius = Math.sqrt(
                 square(protectedBounds.getXsize())

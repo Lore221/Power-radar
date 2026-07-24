@@ -24,6 +24,7 @@ final class OnboardAttitudeStripCache {
     ) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level != levelSession) {
+            // Сравнение объекта по ссылке очищает ветви углов и при входе в то же измерение заново.
             STATES.clear();
             levelSession = level;
         }

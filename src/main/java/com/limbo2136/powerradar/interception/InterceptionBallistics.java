@@ -32,6 +32,7 @@ public final class InterceptionBallistics {
             double preferredPitchDegrees,
             double searchHalfRangeDegrees
     ) {
+        // Линейное сопротивление использует общий CBC-решатель; квадратичное здесь моделируется не полностью.
         double horizontal = TargetingMath.horizontalDistance(delta);
         double speed = ballistics.speedBlocksPerTick();
         if (horizontal <= 0.001 || speed <= 0.001) {
@@ -65,7 +66,7 @@ public final class InterceptionBallistics {
                         ballistics);
                 root = lowestRoot(roots);
             }
-        return root == null
+            return root == null
                     ? Aim.UNREACHABLE
                     : new Aim(true, (float) Math.toDegrees(root.pitchRadians()), root.flightTicks());
         }
@@ -107,6 +108,7 @@ public final class InterceptionBallistics {
     }
 
     public static Vec3 applyBallistics(Vec3 velocity, double gravity, double drag, boolean quadraticDrag) {
+        // Сначала применяется сопротивление к текущей скорости, затем гравитация за один тик.
         double speed = velocity.length();
         double dragAmount = quadraticDrag ? drag * speed : drag;
         double factor = Math.max(0.0, 1.0 - dragAmount);

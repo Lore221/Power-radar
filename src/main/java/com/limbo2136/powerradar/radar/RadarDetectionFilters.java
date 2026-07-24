@@ -1,12 +1,13 @@
 package com.limbo2136.powerradar.radar;
 
 public final class RadarDetectionFilters {
+    // Числовая раскладка хранится на картах; существующие биты нельзя переназначать без миграции.
     public static final int HOSTILE_MOBS = 1;
     public static final int PASSIVE_MOBS = 1 << 1;
     public static final int PLAYERS = 1 << 2;
     public static final int SABLE_STRUCTURES = 1 << 3;
     public static final int PROJECTILES = 1 << 4;
-    /** The targeting card reuses its fourth stored bit for phantoms; display cards use it for projectiles. */
+    /** Карта наведения трактует четвёртый сохранённый бит как фантомов, карта отображения — как снаряды. */
     public static final int TARGETING_PHANTOMS = PROJECTILES;
     public static final int DEFAULT_MASK = HOSTILE_MOBS | PASSIVE_MOBS | PLAYERS | SABLE_STRUCTURES | PROJECTILES;
 

@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.onboard;
 
 import javax.annotation.Nullable;
 
-/** One 4x8 side of the Onboard panel, backed by two vertically adjacent slots. */
+/** Один боковой столбец панели 4x8 модельных пикселей из двух соседних слотов. */
 public enum OnboardModuleColumn {
     MIN_X(OnboardModuleSlot.FRONT_MIN_X, OnboardModuleSlot.REAR_MIN_X),
     MAX_X(OnboardModuleSlot.FRONT_MAX_X, OnboardModuleSlot.REAR_MAX_X);

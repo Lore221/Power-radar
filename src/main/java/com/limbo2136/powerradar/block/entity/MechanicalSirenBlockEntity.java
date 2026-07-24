@@ -13,11 +13,6 @@ public class MechanicalSirenBlockEntity extends KineticBlockEntity {
     }
 
     @Override
-    public void tick() {
-        super.tick();
-    }
-
-    @Override
     public void tickAudio() {
         super.tickAudio();
         if (this.level == null || !this.level.isClientSide) {

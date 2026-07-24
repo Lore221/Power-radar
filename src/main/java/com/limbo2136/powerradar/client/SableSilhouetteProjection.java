@@ -13,12 +13,14 @@ final class SableSilhouetteProjection {
             float viewYawDegrees,
             double screenUnitsPerBlock
     ) {
+        // Сначала локальные XZ структуры поворачиваются в мировой XZ на угол её курса.
         double heading = Math.toRadians(structureHeadingDegrees);
         double headingCosine = Math.cos(heading);
         double headingSine = Math.sin(heading);
         double worldX = localX * headingCosine - localZ * headingSine;
         double worldZ = localX * headingSine + localZ * headingCosine;
 
+        // Затем мировой XZ переводится в экран: +X вправо, +Y экрана вниз.
         double view = Math.toRadians(viewYawDegrees);
         double screenX = worldX * Math.cos(view) + worldZ * Math.sin(view);
         double screenY = -(worldX * Math.sin(view) - worldZ * Math.cos(view));

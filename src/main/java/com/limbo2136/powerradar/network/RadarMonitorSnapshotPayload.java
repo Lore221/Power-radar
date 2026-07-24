@@ -70,8 +70,8 @@ public record RadarMonitorSnapshotPayload(
         List<RadarDisplayTarget> targets
 ) implements CustomPacketPayload {
     /**
-     * Increment when the encoded snapshot bytes change intentionally. The value also versions the
-     * NeoForge payload registrar, while the codec test locks the exact bytes of each schema.
+     * Увеличивается при намеренном изменении закодированных байтов снимка. Значение также задаёт
+     * версию регистратора NeoForge, а codec-тест фиксирует точные байты каждой схемы.
      */
     public static final int WIRE_SCHEMA_VERSION = 5;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
@@ -80,6 +80,7 @@ public record RadarMonitorSnapshotPayload(
             StreamCodec.ofMember(RadarMonitorSnapshotPayload::write, RadarMonitorSnapshotPayload::new);
 
     public RadarMonitorSnapshotPayload(RegistryFriendlyByteBuf buffer) {
+        // Порядок чтения — сетевой контракт v5 и обязан в точности совпадать с write ниже.
         this(
                 buffer.readBlockPos(),
                 buffer.readLong(),
@@ -228,6 +229,7 @@ public record RadarMonitorSnapshotPayload(
     }
 
     void write(RegistryFriendlyByteBuf buffer) {
+        // Не группировать поля «для удобства»: любое изменение порядка требует новой версии схемы.
         buffer.writeBlockPos(this.monitorPos);
         buffer.writeLong(this.revision);
         buffer.writeUtf(this.connectionStatus.name());
@@ -513,28 +515,28 @@ public record RadarMonitorSnapshotPayload(
 
     public int approximatePayloadSizeBytes() {
         int size = blockPosBytes();
+        size += 8; // ревизия
         size += utfBytes(this.connectionStatus.name());
-        size += 2; // linked + nullable radarId marker
+        size += 2; // linked + маркер nullable radarId
         if (this.radarId != null) {
             size += resourceLocationBytes(this.radarId.dimensionId()) + blockPosBytes();
         }
-        size += 1; // nullable controller marker
+        size += 1; // маркер nullable controller
         if (this.controllerPos != null) {
-        size += blockPosBytes();
-        size += 8; // revision
+            size += blockPosBytes();
         }
         size += resourceLocationBytes(this.radarDimensionId);
-        size += 24; // origin doubles
+        size += 24; // три double координаты origin
         size += utfBytes((this.radarFacing == null ? Direction.NORTH : this.radarFacing).getName());
         size += 4; // monitorViewYawDegrees
         size += utfBytes((this.structureType == null ? RadarStructureType.PHASED_ARRAY : this.structureType).name());
         size += 16; // radarYawDegrees + rotationSpeedDegreesPerTick + rotationReferenceGameTime
         size += 2; // structureValid + active
         size += utfBytes((this.monitorElectricalState == null ? PowerRadarCeeState.INVALID_STRUCTURE : this.monitorElectricalState).name());
-        size += 16; // monitor voltage + resistance
+        size += 16; // напряжение + сопротивление монитора
         size += varIntBytes(this.monitorDisplayCount);
         size += varIntBytes(this.monitorScreenSize);
-        size += 1; // renderer enabled
+        size += 1; // флаг рендера
         size += utfBytes(this.mode.name());
         size += varIntBytes(this.detectionFilterMask);
         size += varIntBytes(this.autotargetFilterMask);
@@ -581,14 +583,14 @@ public record RadarMonitorSnapshotPayload(
     }
 
     private static int targetBytes(RadarDisplayTarget target) {
-        int size = 1; // nullable uuid marker
+        int size = 1; // маркер nullable UUID
         if (target.targetUuid() != null) {
             size += 16;
         }
         size += varIntBytes(target.targetId())
                 + resourceLocationBytes(target.entityTypeId())
                 + utfBytes(target.sourceKind().name())
-                + 1; // nullable displayName marker
+                + 1; // маркер nullable displayName
         if (target.displayName() != null) {
             size += utfBytes(target.displayName());
         }

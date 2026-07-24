@@ -4,10 +4,9 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 
-/**
- * Side-neutral handoff for the mechanical siren's client-only looping sound.
- */
+/** Нейтральный по стороне шлюз к зацикленному клиентскому звуку механической сирены. */
 public final class MechanicalSirenClientAudioBridge {
+    // До клиентской инициализации вызовы намеренно ничего не делают.
     private static Handler handler = Handler.NO_OP;
 
     private MechanicalSirenClientAudioBridge() {

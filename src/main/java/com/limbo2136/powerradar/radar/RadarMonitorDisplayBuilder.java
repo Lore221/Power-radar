@@ -167,6 +167,8 @@ public final class RadarMonitorDisplayBuilder {
                     monitorElectricalState, monitorVoltageVolts, monitorResistanceOhms,
                     monitorDisplayCount, monitorScreenSize, monitorRendererEnabled);
         }
+
+        // Один проход одновременно собирает покрытие, агрегаты и цели; порядок входного списка значим.
         Map<String, RadarDisplayTarget> targetsByKey = new LinkedHashMap<>();
         ArrayList<RadarDisplayCoverage> coverages = new ArrayList<>(controllers.size());
         RadarControllerBlockEntity firstActiveController = null;
@@ -230,10 +232,14 @@ public final class RadarMonitorDisplayBuilder {
                     return;
                 }
                 RadarDisplayTarget candidate = RadarDisplayTarget.fromTrack(track, targetDisplayGameTime, radarTrackUpdateIntervalTicks);
+                // При дубликате стабильного ключа сохраняется самый свежий снимок, а LinkedHashMap удерживает
+                // место первого появления для детерминированного порядка полезной нагрузки.
                 targetsByKey.merge(candidate.stableSelectionKey(), candidate,
                         (previous, next) -> next.displayAgeTicks() < previous.displayAgeTicks() ? next : previous);
             });
         }
+
+        // Первичный контроллер задаёт ориентацию и режим: активный, затем собранный, затем первый.
         RadarControllerBlockEntity controller = firstActiveController != null
                 ? firstActiveController
                 : firstValidController != null ? firstValidController : controllers.get(0);

@@ -1,5 +1,9 @@
 package com.limbo2136.powerradar.radar;
 
+/**
+ * Проецирует мировые X/Z на квадратную карту монитора в диапазоне [-1; 1].
+ * Высота цели не влияет на положение метки, а центр карты всегда совпадает с блоком монитора.
+ */
 public final class RadarDisplayProjector {
     public static final int MONITOR_MAP_SIZE_BLOCKS = 300;
     public static final int MONITOR_MAP_RADIUS_BLOCKS = MONITOR_MAP_SIZE_BLOCKS / 2;
@@ -194,6 +198,7 @@ public final class RadarDisplayProjector {
             return RadarDisplayProjection.HIDDEN;
         }
 
+        // Свежие цели за границей скрываются, а устаревшие остаются прижатыми к краю до затухания.
         double radial = stale
                 ? clamp(edgeDistance / safeRadius, 0.0, 1.0)
                 : edgeDistance / safeRadius;

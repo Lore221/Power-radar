@@ -28,15 +28,23 @@ public class ComputingBlockCeeDevice extends PowerRadarCeeLoadDevice {
     @Override
     protected void publishSnapshot() {
         ComputingBlockEntity computer = loadedBlockEntity();
-        if (computer != null) computer.applyElectricalSnapshot(snapshot());
+        if (computer != null) {
+            computer.applyElectricalSnapshot(snapshot());
+        }
     }
 
     private ComputingBlockEntity loadedBlockEntity() {
-        if (blockEntity != null && !blockEntity.isRemoved()) return blockEntity;
-        blockEntity = null;
-        if (!level.isLoaded(pos)) return null;
-        BlockEntity loaded = level.getBlockEntity(pos);
-        if (loaded instanceof ComputingBlockEntity computer) blockEntity = computer;
-        return blockEntity;
+        if (this.blockEntity != null && !this.blockEntity.isRemoved()) {
+            return this.blockEntity;
+        }
+        this.blockEntity = null;
+        if (!this.level.isLoaded(this.pos)) {
+            return null;
+        }
+        BlockEntity loaded = this.level.getBlockEntity(this.pos);
+        if (loaded instanceof ComputingBlockEntity computer) {
+            this.blockEntity = computer;
+        }
+        return this.blockEntity;
     }
 }

@@ -1,5 +1,5 @@
 package com.limbo2136.powerradar.compat.aeronautics;
 
-/** One filled local XZ rectangle, relative to the cached structure projection center. */
+/** Заполненный прямоугольник в локальной плоскости XZ относительно центра проекции структуры. */
 public record SableSilhouetteFill(float minX, float minZ, float maxX, float maxZ) {
 }

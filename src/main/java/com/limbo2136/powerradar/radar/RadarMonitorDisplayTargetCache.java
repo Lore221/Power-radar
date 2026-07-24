@@ -10,6 +10,10 @@ import java.util.Set;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.resources.ResourceLocation;
 
+/**
+ * Краткоживущий кэш видимости меток монитора. Он хранит последнюю видимую позицию только для
+ * плавного затухания и не является источником игровых решений.
+ */
 public final class RadarMonitorDisplayTargetCache {
     private static final ResourceLocation RADAR_STRUCTURE_TYPE =
             ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_structure");
@@ -80,8 +84,8 @@ public final class RadarMonitorDisplayTargetCache {
             visibleTargets.add(entry.target().withDisplayAgeTicks((int) staleAgeTicks));
         }
 
-        // Missing source entries are removed quickly. If the radar cache no longer reports a target,
-        // it was likely removed as dead/missing/expired and should not linger on the monitor.
+        // Пропавший из исходного снимка ключ удаляется сразу: радар уже признал цель мёртвой,
+        // отсутствующей или просроченной, поэтому монитор не должен продлевать её жизнь сам.
         this.entries.keySet().removeIf(key -> !sourceKeys.contains(key));
         this.radarMarkerBindings.keySet().removeIf(key -> !sourceKeys.contains(key));
         return displayData.withTargets(visibleTargets);

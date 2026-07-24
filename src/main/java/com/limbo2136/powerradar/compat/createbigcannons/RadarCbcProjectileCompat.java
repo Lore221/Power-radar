@@ -4,6 +4,7 @@ import java.util.Optional;
 import net.minecraft.world.entity.Entity;
 import net.neoforged.fml.ModList;
 
+/** Лениво разрешает CBC-классы, сохраняя безопасный пустой результат при несовместимой версии. */
 public final class RadarCbcProjectileCompat {
     private static final String ABSTRACT_CANNON_PROJECTILE =
             "rbasamoyai.createbigcannons.munitions.AbstractCannonProjectile";

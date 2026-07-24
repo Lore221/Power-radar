@@ -1,6 +1,5 @@
 package com.limbo2136.powerradar.item;
 
-import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
@@ -105,13 +104,17 @@ public final class ShellAlarmBlockItem extends PowerRadarElectricalBlockItem {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context,
-                                List<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(
+            ItemStack stack,
+            Item.TooltipContext context,
+            List<Component> tooltip,
+            TooltipFlag flag
+    ) {
         super.appendHoverText(stack, context, tooltip, flag);
-        tooltip.add(Component.translatable(stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get())
+        boolean tuned = stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+        tooltip.add(Component.translatable(tuned
                         ? "tooltip.power_radar.radar_link.tuned"
                         : "tooltip.power_radar.radar_link.untuned")
-                .withStyle(stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get())
-                        ? ChatFormatting.GOLD : ChatFormatting.GRAY));
+                .withStyle(tuned ? ChatFormatting.GOLD : ChatFormatting.GRAY));
     }
 }

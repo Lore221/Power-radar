@@ -62,6 +62,8 @@ import net.minecraft.world.phys.AABB;
 
 public class RadarControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation, RadarTargetingDataSource {
     private static final int REGULAR_DISCOVERY_WINDOW_MULTIPLIER = 5;
+
+    // Синхронизируемое состояние конструкции и последнего опубликованного сканирования.
     private RadarScanMode scanMode = RadarScanMode.GROUND;
     private boolean assembled;
     private int validPanelCount;
@@ -81,11 +83,15 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     private double radarOriginZ;
     private final RadarTargetCache targetCache = new RadarTargetCache();
     private boolean removingOrUnloading;
+
+    // Электрический снимок изменяет дальность только при открытии следующего окна сканирования.
     private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
     private double cachedElectricalVoltageVolts;
     private double cachedElectricalCurrentAmps;
     private double cachedElectricalPowerWatts;
     private double cachedElectricalResistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
+
+    // Окно делит поиск сущностей на бюджетные срезы, а публикацию выполняет строго в последний тик.
     private RadarScanProfile activeScanProfile;
     private RadarScanProfile activeFrequentScanProfile;
     private RadarScanContext activeScanContext;
@@ -160,6 +166,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         int scanSliceTicks = Math.max(1, updateIntervalTicks - 1);
         int bucket = scanBucket(level.getGameTime(), updateIntervalTicks);
         if (bucket == 0) {
+            // Границы окна фиксируют конструкцию, питание, фильтр и исходную позу одним снимком.
             refreshScanWindow(level);
         } else if (this.activeScanContext == null) {
             return;
@@ -172,6 +179,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         if (this.activeScanPowered && this.activeScanProfile != null) {
             RadarScanContext tickContext = scanContextAt(level.getGameTime());
             if (scanSliceTick) {
+                // Для движущегося Sable план перестраивается только при изменении геометрического ключа.
                 ScanSlicePlanKey tickSlicePlanKey = scanSlicePlanKey(this.activeScanProfile, tickContext);
                 if (this.activeScanSlicePlan == null || !tickSlicePlanKey.equals(this.activeScanSlicePlanKey)) {
                     this.activeScanSlicePlan = RadarScanner.buildSlicePlan(this.activeScanProfile, tickContext);
@@ -193,6 +201,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 }
             }
             if (!discoverySlices.isEmpty() || publishTick) {
+                // Даже пустой последний срез публикуется, чтобы устаревшие цели покинули кэш вовремя.
                 RadarScanCoordinator.submit(level, new RadarScanRequest(
                         this.radarId(),
                         discoverySlices.isEmpty() ? null : discoveryProfile,
@@ -257,6 +266,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     }
 
     private void refreshScanWindow(ServerLevel level) {
+        // Режим задаёт тип блока, а display-карта сети фильтрует цели до их публикации.
         RadarScanMode blockMode = fixedScanMode();
         int networkDisplayMask = RadarNetworkManager.get(level.getServer()).displayFilterMaskForController(
                 GlobalPos.of(level.dimension(), this.worldPosition));
@@ -276,6 +286,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         long structureValidationInterval = RadarConstants.structureValidationIntervalTicks();
         if (this.cachedStructure == null
                 || this.ticksSinceStructureValidation >= structureValidationInterval) {
+            // Полная проверка многоблока выполняется редко; между проверками используется снимок структуры.
             this.cachedStructure = RadarScanner.validateStructure(level, this.worldPosition);
             this.ticksSinceStructureValidation = 0L;
         }
@@ -460,7 +471,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 new Vec3(this.radarOriginX, this.radarOriginY, this.radarOriginZ),
                 orientationState.yawAt(level.getGameTime())
         );
-        RadarScanContext context = new RadarScanContext(
+        return new RadarScanContext(
                 level,
                 level.dimension().location(),
                 this.radarId,
@@ -471,7 +482,6 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 worldPose.yawDegrees(),
                 level.getGameTime()
         );
-        return context;
     }
 
     public RadarWorldPose worldPoseAt(long gameTime) {

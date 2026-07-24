@@ -32,6 +32,7 @@ public final class TargetLeadSolver {
             int accelerationLeadWarmupTicks,
             long currentGameTime
     ) {
+        // Сначала переносим устаревший радарный снимок к текущему тику, ограничивая возраст прогноза.
         Vec3 velocity = track.hasVelocity() ? track.velocity() : Vec3.ZERO;
         boolean useAcceleration = lockTicks >= accelerationLeadWarmupTicks
                 && track.hasAcceleration()
@@ -58,6 +59,7 @@ public final class TargetLeadSolver {
                 || base.distanceTo(origin) < PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_LEAD_DISTANCE_BLOCKS) {
             return new LeadSolution(base, aim, 0.0, false);
         }
+        // Затем несколько раз согласуем будущую точку цели с рассчитанным временем полёта.
         Vec3 predicted = base;
         double flightTicks = fallbackFlightTicks(base.distanceTo(origin), ballistics);
         for (int i = 0; i < TARGET_LEAD_ITERATIONS; i++) {
@@ -105,6 +107,7 @@ public final class TargetLeadSolver {
             boolean preferHighArc,
             double pitchHint
     ) {
+        // Выбор ветки: прямое наведение, аналитика без сопротивления либо решатель сопротивления.
         float directPitch = (float) Math.toDegrees(Math.atan2(delta.y, Math.max(0.001, horizontalDistance)));
         if (ballistics == null || !ballistics.available() || ballistics.speedBlocksPerTick() <= 0.001) {
             return new BallisticAim(directPitch, true, "direct", 0.0);
@@ -161,6 +164,7 @@ public final class TargetLeadSolver {
             boolean preferHighArc,
             double pitchHint
     ) {
+        // Линейное сопротивление решается аналитически; для квадратичного остаётся резервная симуляция.
         double minElevation = minimumElevationDegrees(ballistics);
         double maxElevation = maximumElevationDegrees(ballistics);
         if (!ballistics.quadraticDrag()) {
@@ -370,6 +374,7 @@ public final class TargetLeadSolver {
             double targetHorizontalDistance,
             WeaponBallistics ballistics
     ) {
+        // Порядок шага совпадает с CBC: половинный вклад ускорения в позицию, затем скорость.
         if (!ballistics.quadraticDrag()) {
             ProjectileSimulation linear = simulateLinearDragProjectileAtHorizontalDistance(
                     pitchRadians,

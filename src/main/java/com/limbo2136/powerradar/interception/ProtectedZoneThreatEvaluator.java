@@ -8,7 +8,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Shared staged threat evaluation used by both compact protection roots. */
+/** Общая поэтапная оценка угрозы для Shell Alarm и Onboard Computer. */
 public final class ProtectedZoneThreatEvaluator {
     private ProtectedZoneThreatEvaluator() {
     }
@@ -34,6 +34,7 @@ public final class ProtectedZoneThreatEvaluator {
             TrackedTargetView track,
             double maximumTicks
     ) {
+        // Живая сущность уточняет радарный снимок; при выгрузке сохраняются измеренные данные трека.
         ProjectileSample sample = sample(level, track);
         ShellAlarmCbcCompat.Ballistics ballistics = ShellAlarmCbcCompat.ballistics(sample.entity());
         boolean dangerous = MovingAabbThreatEvaluator.threatens(

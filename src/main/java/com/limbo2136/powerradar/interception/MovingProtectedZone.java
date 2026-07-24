@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** World-space protected bounds and the sampled motion of their carrier. */
+/** Мировые границы защищаемой зоны и движение носителя, измеренное на серверном тике. */
 public record MovingProtectedZone(
         AABB bounds,
         Vec3 velocity,
@@ -27,6 +27,7 @@ public record MovingProtectedZone(
     }
 
     public static double safetyMarginPerSide(double totalExpansionPercent) {
+        // Полный процент роста делится поровну между двумя сторонами каждой оси.
         if (!Double.isFinite(totalExpansionPercent)) {
             return 0.0D;
         }

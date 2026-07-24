@@ -26,6 +26,7 @@ import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
+import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
@@ -354,7 +355,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                         networkId,
                         GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
         RadarTargetingDataSource radarController = new CombinedRadarDataSource(controllerResolution.controllers());
-        if (controllerResolution.status() != com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus.CONNECTED
+        if (controllerResolution.status() != RadarNetworkConnectionStatus.CONNECTED
                 || controllerResolution.controllers().isEmpty()) {
             return TargetSolution.invalid("radar-offline");
         }
@@ -378,7 +379,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             UUID previousAutotargetUuid = this.cachedAutotargetUuid;
             if (this.cachedAutotargetAvailable && previousAutotargetUuid != null) {
                 track = radarController.findTrackedTarget(previousAutotargetUuid);
-                if (track == null || !isSelectedTargetAlive(worldLevel, track)) track = null;
+                if (track == null || !isSelectedTargetAlive(worldLevel, track)) {
+                    track = null;
+                }
             } else {
                 track = cachedAutotargetCandidate(
                         worldLevel, radarController, networkManager, networkId, autotargetFilterMask);
@@ -589,9 +592,13 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         radarController.forEachTrackedTarget(track -> {
             UUID uuid = track.targetUuid();
             if (uuid == null || !autotargetPermitted(networkManager, networkId, autotargetFilterMask, track)
-                    || !isSelectedTargetAlive(level, track)) return;
+                    || !isSelectedTargetAlive(level, track)) {
+                return;
+            }
             present.add(uuid);
-            if (readyMatch[0] != null) return;
+            if (readyMatch[0] != null) {
+                return;
+            }
             AutotargetReadiness cached = this.autotargetReadinessCache.get(uuid);
             boolean ready;
             if (cached != null && gameTime - cached.checkedGameTime() < AUTOTARGET_READINESS_CACHE_TICKS) {
@@ -600,7 +607,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 ready = autotargetReady(level, track, origin, aimBallistics, preferHighArc, cannonKind);
                 this.autotargetReadinessCache.put(uuid, new AutotargetReadiness(gameTime, ready));
             }
-            if (ready) readyMatch[0] = track;
+            if (ready) {
+                readyMatch[0] = track;
+            }
         });
         this.autotargetReadinessCache.keySet().retainAll(present);
         this.cachedAutotargetAvailable = readyMatch[0] != null;
@@ -743,11 +752,19 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 true);
     }
 
-    private static boolean autotargetPermitted(RadarNetworkManager manager, UUID networkId, int mask, TrackedTargetView track) {
+    private static boolean autotargetPermitted(
+            RadarNetworkManager manager,
+            UUID networkId,
+            int mask,
+            TrackedTargetView track
+    ) {
         String name = targetDisplayName(track);
         boolean sable = track.classification() == TargetClassification.STRUCTURE;
-        if (manager.isAutotargetExcluded(networkId, track.targetUuid(), name, sable)) return false;
-        return manager.isAutotargetForced(networkId, track.targetUuid(), name, sable) || autotargetEnabled(mask, track);
+        if (manager.isAutotargetExcluded(networkId, track.targetUuid(), name, sable)) {
+            return false;
+        }
+        return manager.isAutotargetForced(networkId, track.targetUuid(), name, sable)
+                || autotargetEnabled(mask, track);
     }
 
     // Периодически сверяет оценённые углы с фактическими углами установки CBC.

@@ -40,6 +40,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.joml.Matrix4f;
 
+/** Полноэкранная карта радара; серверные снимки остаются единственным источником игровых данных. */
 @OnlyIn(Dist.CLIENT)
 public class RadarMonitorScreen extends Screen {
     private static final ResourceLocation GUI_BACKGROUND =
@@ -148,6 +149,7 @@ public class RadarMonitorScreen extends Screen {
         }
         this.displayData = nextDisplayData;
         this.clientStateEntry = entry;
+        // Масштаб выбирается лишь при первом содержательном снимке; дальнейшее колесо принадлежит GUI.
         if (!this.initialMapScaleApplied && RadarDisplayProjector.maximumRadarRange(nextDisplayData) > 0) {
             this.visibleMapSizeBlocks = RadarDisplayProjector.recommendedMapSizeBlocks(nextDisplayData);
             this.initialMapScaleApplied = true;
@@ -213,6 +215,7 @@ public class RadarMonitorScreen extends Screen {
 
     private void renderRadarDisplay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         PowerRadarClientConfig.RadarRenderPalette palette = PowerRadarClientConfig.radarRenderPalette();
+        // Базовые слои и геометрия идут раньше меток; рамки выбранной цели рисуются последними.
         drawRadarWorkArea(graphics, partialTick, palette.cone(), palette.shellAlarmZone(), palette.sableSilhouette());
         if (!this.displayData.monitorRendererEnabled()) {
             drawCenteredInRadarArea(graphics, Component.translatable(this.displayData.monitorElectricalState().translationKey()), TEXT_BAD);
@@ -332,6 +335,7 @@ public class RadarMonitorScreen extends Screen {
                     ? List.of(legacyCoverage())
                     : this.displayData.coverages();
             graphics.enableScissor(x + inset, y + inset, x + inset + innerSize, y + inset + innerSize);
+            // Порядок слоёв сохраняет читаемость: зоны, покрытия, затем заливка и контур Sable.
             for (ShellAlarmDisplayZone zone : this.displayData.shellAlarmZones()) {
                 drawShellAlarmZone(graphics, zone, x + inset, y + inset, innerSize, shellAlarmZoneColor);
             }
@@ -586,6 +590,7 @@ public class RadarMonitorScreen extends Screen {
         int centerY = y + size / 2;
         float viewYaw = viewYawDegrees();
         double viewRadians = Math.toRadians(viewYaw);
+        // up/right задаются в мировом XZ, после чего регулярная сетка проецируется в экранные X/Y.
         double upX = Math.sin(viewRadians);
         double upZ = -Math.cos(viewRadians);
         double rightX = Math.cos(viewRadians);
@@ -752,6 +757,7 @@ public class RadarMonitorScreen extends Screen {
             return;
         }
         this.blipCacheKey = nextKey;
+        // Производный кэш отрисовки полностью восстанавливается из displayData и версии силуэтов.
         this.blips.clear();
         this.sableFrames.clear();
         if (!hasLayout() || !this.displayData.monitorRendererEnabled() || !this.displayData.linked() || !this.displayData.structureValid()) {
@@ -976,6 +982,7 @@ public class RadarMonitorScreen extends Screen {
         double upZ = -Math.cos(viewRadians);
         double rightX = Math.cos(viewRadians);
         double rightZ = Math.sin(viewRadians);
+        // Экранное перетаскивание переводится обратно в мировой XZ с учётом текущего yaw карты.
         double horizontalBlocks = -deltaX * blocksPerPixel;
         double verticalBlocks = deltaY * blocksPerPixel;
         this.mapCenterOffsetX += rightX * horizontalBlocks + upX * verticalBlocks;
@@ -1006,6 +1013,7 @@ public class RadarMonitorScreen extends Screen {
             return true;
         }
         if (button == 1 && isMouseOverMonitor(mouseX, mouseY)) {
+            // Правый клик по любой части рамки монитора явно снимает серверный ручной выбор.
             clearSelectedTarget();
             return true;
         }

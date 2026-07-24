@@ -3,24 +3,25 @@ package com.limbo2136.powerradar.radar.network;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
-import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
-import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
@@ -32,7 +33,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
+// Единственная точка изменения постоянной топологии и её загруженного runtime-представления.
 public class RadarNetworkManager {
     private static final Map<MinecraftServer, RadarNetworkManager> MANAGERS = new WeakHashMap<>();
     private static final TicketType<UUID> RADAR_LINK_TICKET =
@@ -48,6 +52,8 @@ public class RadarNetworkManager {
     private RadarNetworkManager(MinecraftServer server) {
         this.server = server;
         this.savedData = RadarNetworkSavedData.get(server);
+        // Из сохранения восстанавливаются только постоянные настройки; ссылки, кэши и tickets
+        // заново формируются событиями загрузки мира.
         for (RadarNetworkRecord record : this.savedData.records()) {
             RadarNetworkRuntime runtime = new RadarNetworkRuntime();
             runtime.loadPersistentSettings(record.selectedTargetUuid());
@@ -101,6 +107,7 @@ public class RadarNetworkManager {
         this.savedData.setDirty();
     }
 
+    // Постоянное членство переживает выгрузку чанка; loadedLinks отражает только текущий runtime.
     public void addPersistentLink(UUID id, GlobalPos linkPos) {
         RadarNetworkRecord record = this.ensureNetwork(id);
         if (record.linkNodes().add(linkPos)) {
@@ -191,6 +198,7 @@ public class RadarNetworkManager {
                 : new ControllerResolution(resolution.status(), Optional.of(resolution.controllers().get(0)));
     }
 
+    // Порядок bindings задаёт детерминированный порядок агрегации и выбор основного радара.
     public ControllersResolution resolveControllersForConsumer(UUID id, GlobalPos consumerLinkPos) {
         Optional<RadarNetworkRecord> record = this.savedData.get(id);
         if (record.isEmpty() || record.get().controllerBindings().isEmpty()) {
@@ -295,6 +303,9 @@ public class RadarNetworkManager {
         return this.runtime(id).settingsRevision();
     }
 
+    // Собирает общий серверный DTO один раз, затем добавляет контекст конкретного монитора.
+    // Базовый снимок переиспользуется только при политике по умолчанию: карточная политика требует
+    // полного набора проверенных invalidation-событий перед расширением этого кэша.
     public RadarMonitorDisplayData displayDataForConsumer(
             UUID id,
             GlobalPos consumerLinkPos,
@@ -363,11 +374,14 @@ public class RadarNetworkManager {
         for (GlobalPos linkPos : runtime.loadedLinks()) {
             ServerLevel level = this.server.getLevel(linkPos.dimension());
             if (level == null
-                    || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)) {
+                    || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)
+                    || alarm.sableProtectionMode()) {
                 continue;
             }
-            net.minecraft.world.phys.AABB bounds = alarm.displayProtectionBounds();
-            net.minecraft.world.phys.Vec3 center = bounds.getCenter();
+            // На монитор выводятся только настраиваемые наземные зоны.
+            // Защита Sable и встроенная защита Onboard Computer остаются локальными для корабля.
+            AABB bounds = alarm.displayProtectionBounds();
+            Vec3 center = bounds.getCenter();
             zones.add(new ShellAlarmDisplayZone(
                     linkPos.dimension().location(), center.x, center.y, center.z,
                     (int) Math.ceil(bounds.getXsize()),
@@ -377,6 +391,7 @@ public class RadarNetworkManager {
         return List.copyOf(zones);
     }
 
+    // Ревизия локальна для runtime-кэша и не является частью wire- или save-контракта.
     private static long displaySnapshotRevision(
             RadarNetworkRuntime runtime,
             List<RadarControllerBlockEntity> controllers,
@@ -406,20 +421,24 @@ public class RadarNetworkManager {
                 && (!policy.playerNames().isEmpty() || !policy.sableNames().isEmpty());
     }
 
+    // targetUuid сохранён в публичном контракте для вызывающего кода; текущие карточки доступа
+    // сопоставляют игроков и Sable только по регистронезависимому отображаемому имени.
     public boolean isAutotargetExcluded(UUID id, UUID targetUuid, String name, boolean sable) {
         ComputingPolicy policy = cachedComputingPolicy(id);
         return policy.powered() && policy.allowlistIsWhitelist()
-                && matchesAllowlist(policy, targetUuid, name, sable);
+                && matchesAllowlist(policy, name, sable);
     }
 
     public boolean isAutotargetForced(UUID id, UUID targetUuid, String name, boolean sable) {
         ComputingPolicy policy = cachedComputingPolicy(id);
         return policy.powered() && !policy.allowlistIsWhitelist()
-                && matchesAllowlist(policy, targetUuid, name, sable);
+                && matchesAllowlist(policy, name, sable);
     }
 
-    private static boolean matchesAllowlist(ComputingPolicy policy, UUID targetUuid, String name, boolean sable) {
-        if (!sable) return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
+    private static boolean matchesAllowlist(ComputingPolicy policy, String name, boolean sable) {
+        if (!sable) {
+            return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
+        }
         return policy.sableNames().stream().anyMatch(name::equalsIgnoreCase);
     }
 
@@ -431,7 +450,9 @@ public class RadarNetworkManager {
         return this.computingPolicyCache.computeIfAbsent(id, ignored -> {
             ComputingResolution resolution = cachedComputingResolution(id);
             ComputingBlockEntity computer = resolution.active();
-            if (computer == null || !computer.isElectricallyOperational()) return ComputingPolicy.EMPTY;
+            if (computer == null || !computer.isElectricallyOperational()) {
+                return ComputingPolicy.EMPTY;
+            }
             return new ComputingPolicy(true, true, computer.targetingMask(), computer.displayMask(),
                     computer.allowlistIsWhitelist(), computer.allowlistPlayerNames(),
                     computer.allowlistSableNames(),
@@ -440,19 +461,23 @@ public class RadarNetworkManager {
     }
 
     public void invalidateComputingCache(UUID id) {
-        if (id == null) return;
+        if (id == null) {
+            return;
+        }
         this.computingResolutionCache.remove(id);
         this.computingPolicyCache.remove(id);
         this.runtime(id).markSettingsChanged();
     }
 
+    // Ровно один загруженный и корректно подключённый блок становится авторитетным;
+    // сортировка делает результат независимым от порядка загрузки чанков.
     public ComputingResolution resolveComputingBlock(UUID id) {
         if (!controlConsumersAllowed(id)) {
             return new ComputingResolution(null, false);
         }
         List<ComputingBlockEntity> computers = new ArrayList<>();
         this.runtime(id).loadedLinks().stream()
-                .sorted(java.util.Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
+                .sorted(Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
                         .thenComparingLong(pos -> pos.pos().asLong()))
                 .forEach(linkPos -> {
                     ServerLevel level = this.server.getLevel(linkPos.dimension());
@@ -503,6 +528,7 @@ public class RadarNetworkManager {
         this.computingPolicyCache.remove(id);
     }
 
+    // Контроллер принадлежит максимум одной сети: новая привязка удаляет устаревшие записи остальных.
     private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         RadarNetworkRecord record = this.ensureNetwork(id);
         for (RadarNetworkRecord other : this.savedData.records()) {
@@ -538,6 +564,8 @@ public class RadarNetworkManager {
         return removed;
     }
 
+    // Сначала сохраняем пригодные leases, затем применяем releases: это не даёт промежуточной
+    // очистке tickets зависеть от порядка обхода нескольких мониторов.
     private void reconcileConsumerLeases(UUID id) {
         RadarNetworkRuntime runtime = this.runtime(id);
         List<LeaseDecision> releases = new ArrayList<>();
@@ -649,6 +677,7 @@ public class RadarNetworkManager {
         }
     }
 
+    // В runtime хранится один ticket-anchor на сеть; смена выбранного radar link атомарно заменяет регион.
     private void applyTicketsIfNeeded(UUID id, GlobalPos radarLinkPos) {
         RadarNetworkRuntime runtime = this.runtime(id);
         RadarNetworkChunkLoadState state = runtime.chunkLoadState();
@@ -708,9 +737,10 @@ public class RadarNetworkManager {
         if (level == null) {
             return false;
         }
-        net.minecraft.world.phys.Vec3 consumerWorldPos = RadarWorldPoseResolver.worldPosition(
+        // Сохранённые позиции локальны для мира/Sable, но дальность Link измеряется в мировом пространстве.
+        Vec3 consumerWorldPos = RadarWorldPoseResolver.worldPosition(
                 level, consumerLinkPos.pos());
-        net.minecraft.world.phys.Vec3 radarWorldPos = RadarWorldPoseResolver.worldPosition(
+        Vec3 radarWorldPos = RadarWorldPoseResolver.worldPosition(
                 level, radarLinkPos.pos());
         long max = RadarConstants.radarLinkMaxConnectionDistanceBlocks();
         return consumerWorldPos.distanceToSqr(radarWorldPos) <= (double) max * max;

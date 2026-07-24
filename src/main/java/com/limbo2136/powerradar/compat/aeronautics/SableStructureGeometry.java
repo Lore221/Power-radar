@@ -4,7 +4,7 @@ import java.util.function.UnaryOperator;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Geometry-only Sable sample; deliberately performs no velocity query. */
+/** Геометрический снимок Sable без намеренно более дорогого запроса скорости. */
 public record SableStructureGeometry(
         AABB localBounds,
         Vec3 localCenter,

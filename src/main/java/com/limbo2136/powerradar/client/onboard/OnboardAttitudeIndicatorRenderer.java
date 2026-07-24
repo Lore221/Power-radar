@@ -29,6 +29,7 @@ final class OnboardAttitudeIndicatorRenderer {
     private static final float WINDOW_MAX_Z = 14.0F * SOURCE_PIXEL;
 
     // Полоса лежит на полпикселя ниже верхней грани window и не перекрывает его стрелку.
+    // Все UV-константы ниже заданы в пикселях авторской текстуры 21x52 и нормализуются при записи вершины.
     private static final float STRIP_QUAD_Y = 4.5F * SOURCE_PIXEL;
     private static final float STRIP_TEXTURE_WIDTH = 21.0F;
     private static final float STRIP_TEXTURE_HEIGHT = 52.0F;
@@ -38,6 +39,7 @@ final class OnboardAttitudeIndicatorRenderer {
     private static final float STRIP_PIXELS_PER_QUARTER_TURN = 13.0F;
 
     // OBJ уже утоплен на полпикселя под окном; его собственный центр Y задан в Blockbench как -1.5.
+    // При изменении опорной точки в Blockbench синхронно обновить SPHERE_PIVOT_Y без переноса геометрии.
     private static final float SPHERE_PIVOT_Y = -1.5F * SOURCE_PIXEL;
     // Эти знаки связывают оси OBJ с прямой индикацией «ВсВС»; менять их при переориентации модели.
     private static final float SPHERE_BANK_SIGN = 1.0F;
@@ -63,7 +65,7 @@ final class OnboardAttitudeIndicatorRenderer {
         event.register(ModelResourceLocation.standalone(SPHERE_MODEL_LOCATION));
     }
 
-    // Switch заставит явно реализовать каждый новый вариант, добавленный в enum конфигурации.
+    // switch-выражение заставит явно реализовать каждый новый вариант enum конфигурации.
     RenderState prepare(
             OnboardComputerBlockEntity computer,
             Direction facing,
@@ -93,7 +95,8 @@ final class OnboardAttitudeIndicatorRenderer {
             RenderState state
     ) {
         poseStack.pushPose();
-        // Северная сторона корпуса направлена вперёд и противоположна общей ориентации модулей.
+        // Авторская коррекция: сторона north корпуса направлена вперёд и противоположна ориентации модулей.
+        // Если направление модели housing изменится, корректировать нужно именно этот поворот на 180°.
         poseStack.translate(0.5D, 0.0D, 0.5D);
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
         poseStack.translate(-0.5D, 0.0D, -0.5D);
@@ -109,7 +112,7 @@ final class OnboardAttitudeIndicatorRenderer {
         poseStack.popPose();
     }
 
-    // Центрирует OBJ в окне и вращает его вокруг авторского pivot, не перестраивая геометрию модели.
+    // Центрирует OBJ в окне и вращает его вокруг авторской опорной точки без перестройки геометрии.
     private void renderSphere(
             OnboardComputerBlockEntity computer,
             PoseStack poseStack,
@@ -120,6 +123,8 @@ final class OnboardAttitudeIndicatorRenderer {
     ) {
         poseStack.pushPose();
         poseStack.translate(0.5D, SPHERE_PIVOT_Y, 0.5D);
+        // Порядок вызовов фиксирован: крен вокруг Y модели, затем тангаж вокруг X модели.
+        // Положительные знаки дают прямую «ВсВС»; перестановка осей изменит показания.
         poseStack.mulPose(Axis.YP.rotationDegrees(transform.bankDegrees * SPHERE_BANK_SIGN));
         poseStack.mulPose(Axis.XP.rotationDegrees(transform.pitchDegrees * SPHERE_PITCH_SIGN));
         poseStack.translate(0.0D, -SPHERE_PIVOT_Y, 0.0D);
@@ -145,7 +150,8 @@ final class OnboardAttitudeIndicatorRenderer {
         return result;
     }
 
-    // Прямая индикация «ВсВС»: крен вращает UV, а тангаж двигает выборку вдоль полосы.
+    // Прямая индикация «ВсВС»: положительный крен вращает UV в плюс, а положительный
+    // тангаж уменьшает V центра выборки и сдвигает видимую часть вдоль полосы.
     private static void renderStrip(
             PoseStack poseStack,
             VertexConsumer consumer,
@@ -184,6 +190,7 @@ final class OnboardAttitudeIndicatorRenderer {
             int packedLight,
             int packedOverlay
     ) {
+        // Знаки выбирают угол квадратной UV-выборки 13x13; затем выборка вращается вокруг U=10.5.
         float sourceX = horizontalSign * STRIP_SAMPLE_RADIUS_PIXELS;
         float sourceY = verticalSign * STRIP_SAMPLE_RADIUS_PIXELS;
         float rotatedX = sourceX * cosine - sourceY * sine;

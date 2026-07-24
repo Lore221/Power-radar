@@ -8,6 +8,10 @@ import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Измеренный трек времени выполнения: координаты в блоках, скорость в блоках/тик,
+ * ускорение в блоках/тик². Состояние не сохраняется в NBT.
+ */
 public class RadarTargetTrack implements TrackedTargetView {
     private static final double ACCELERATION_SMOOTHING = 0.35;
     private static final double SABLE_ACCELERATION_SMOOTHING = 0.65;
@@ -284,7 +288,7 @@ public class RadarTargetTrack implements TrackedTargetView {
             boolean nextHasVelocity,
             long gameTime
     ) {
-        if (!supportsAccelerationLead(category) || !this.hasVelocity || !nextHasVelocity || gameTime <= this.lastSeenGameTime) {
+        if (!this.hasVelocity || !nextHasVelocity || gameTime <= this.lastSeenGameTime) {
             resetAcceleration();
             return;
         }
@@ -312,10 +316,6 @@ public class RadarTargetTrack implements TrackedTargetView {
         this.accelerationY = 0.0;
         this.accelerationZ = 0.0;
         this.hasAcceleration = false;
-    }
-
-    private static boolean supportsAccelerationLead(RadarTargetCategory category) {
-        return true;
     }
 
     private static double clampAcceleration(double value) {

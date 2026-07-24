@@ -35,6 +35,8 @@ public final class RadarDisplayStructureResolver {
             return;
         }
 
+        // reason оставлен в сигнатуре, чтобы вызовы жизненного цикла явно называли источник сверки.
+        // Результат при этом зависит только от текущего состояния мира.
         List<RadarMonitorControllerBlockEntity> controllers = findNearbyControllers(level, changedPos);
         List<RadarDisplayStructure> standaloneDisplays = RadarDisplayStructureScanner.findStandaloneAround(level, changedPos);
         if (controllers.isEmpty()) {
@@ -69,7 +71,14 @@ public final class RadarDisplayStructureResolver {
             claimedPanels.addAll(candidate.positions());
         }
 
-        applyPanelStates(level, changedPos, oldPanels, selections, conflicted, claimedPanels, standaloneDisplays);
+        applyPanelStates(
+                level,
+                changedPos,
+                oldPanels,
+                selections,
+                conflicted,
+                claimedPanels,
+                standaloneDisplays);
     }
 
     public static DisplayOwnerResult resolveActiveOwner(Level level, BlockPos displayPos) {
@@ -149,7 +158,9 @@ public final class RadarDisplayStructureResolver {
         List<Map.Entry<RadarMonitorControllerBlockEntity, RadarDisplayStructure>> entries = List.copyOf(selections.entrySet());
         for (int i = 0; i < entries.size(); i++) {
             for (int j = i + 1; j < entries.size(); j++) {
-                if (RadarDisplayStructureScanner.overlaps(entries.get(i).getValue().positions(), entries.get(j).getValue().positions())) {
+                if (RadarDisplayStructureScanner.overlaps(
+                        entries.get(i).getValue().positions(),
+                        entries.get(j).getValue().positions())) {
                     conflicted.add(entries.get(i).getKey());
                     conflicted.add(entries.get(j).getKey());
                 }
@@ -185,6 +196,8 @@ public final class RadarDisplayStructureResolver {
             touched.addAll(candidate.positions());
         }
         RadarDisplayStructureScanner.addNearbyDisplays(level, changedPos, touched);
+        // setBlock вызывает lifecycle callbacks повторно, поэтому весь пакет изменений
+        // выполняется под единым reentrancy-guard и всегда снимает его в finally.
         applyingDisplayStates = true;
         try {
             for (BlockPos pos : touched) {
@@ -220,7 +233,11 @@ public final class RadarDisplayStructureResolver {
         }
     }
 
-    private static void applyStandalonePanelStates(Level level, BlockPos changedPos, List<RadarDisplayStructure> standaloneDisplays) {
+    private static void applyStandalonePanelStates(
+            Level level,
+            BlockPos changedPos,
+            List<RadarDisplayStructure> standaloneDisplays
+    ) {
         HashSet<BlockPos> touched = new HashSet<>();
         for (RadarDisplayStructure candidate : standaloneDisplays) {
             touched.addAll(candidate.positions());
@@ -281,7 +298,9 @@ public final class RadarDisplayStructureResolver {
                 }
             }
         }
-        controllers.sort(Comparator.comparing(RadarMonitorControllerBlockEntity::getBlockPos, RadarDisplayStructureResolver::compareBlockPos));
+        controllers.sort(Comparator.comparing(
+                RadarMonitorControllerBlockEntity::getBlockPos,
+                RadarDisplayStructureResolver::compareBlockPos));
         return controllers;
     }
 
@@ -300,7 +319,7 @@ public final class RadarDisplayStructureResolver {
         return level.isLoaded(pos);
     }
 
-    private static int compareBlockPos(BlockPos first, BlockPos second) {
+    static int compareBlockPos(BlockPos first, BlockPos second) {
         int y = Integer.compare(second.getY(), first.getY());
         if (y != 0) {
             return y;

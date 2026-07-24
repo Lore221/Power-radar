@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.targeting;
 
 import net.minecraft.world.phys.Vec3;
 
-/** Shared analytic form of CBC's discrete linear-drag integration contract. */
+/** Общая аналитическая форма дискретного порядка интегрирования CBC с линейным сопротивлением. */
 public final class LinearDragTrajectory {
     private static final int ROOT_NEWTON_ITERATIONS = 8;
     private static final int ROOT_FALLBACK_ITERATIONS = 24;
@@ -33,8 +33,8 @@ public final class LinearDragTrajectory {
     }
 
     /**
-     * Continuous analytic coefficients for one axis of CBC's discrete trajectory.
-     * The acceleration is signed in axis units per tick squared (gravity is negative Y).
+     * Непрерывные аналитические коэффициенты одной оси дискретной траектории CBC.
+     * Ускорение знаковое, в единицах оси на тик²; гравитация передаётся как отрицательное Y.
      */
     public static AxisTrajectory axisTrajectory(
             double initialPosition,
@@ -134,6 +134,7 @@ public final class LinearDragTrajectory {
         if (!supported(drag) || maximumTicks <= 0.0 || lowerPlaneHeight > upperPlaneHeight) {
             return null;
         }
+        // Сначала находим вершину, затем решаем обе плоскости только на нисходящей ветви.
         VerticalContext context = verticalContext(
                 initialPosition.y, initialVelocity.y, gravity, drag);
         Double peakTicks = descendingPeakTicks(context, maximumTicks);
@@ -316,7 +317,7 @@ public final class LinearDragTrajectory {
     public record TrajectoryState(Vec3 position, Vec3 velocity) {
     }
 
-    /** Position = constant + linear*t + quadratic*t^2 + exponential*exp(logarithm*t). */
+    /** Положение = initial + linear*t + quadratic*t² + exponential*(exp(logarithm*t) - 1). */
     public record AxisTrajectory(
             double initial,
             double constant,

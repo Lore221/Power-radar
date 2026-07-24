@@ -18,6 +18,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Эфемерный серверный координатор угроз, назначений и ожидаемых запусков.
+ * Состояние разделено по MinecraftServer и UUID сети, а контроллеры — ещё по измерению и Sable.
+ */
 public final class InterceptionCoordinator {
     private static final long DEFAULT_THREAT_TTL_TICKS = 20L;
     private static final long THREAT_TTL_SAFETY_MARGIN_TICKS = 10L;
@@ -28,9 +32,7 @@ public final class InterceptionCoordinator {
     private static final long DESTRUCTION_CHANCE_TTL_TICKS = 1200L;
     private static final long CONTROLLER_SNAPSHOT_TTL_TICKS = 20L;
     private static final long REJECTED_ASSIGNMENT_TTL_TICKS = 8L;
-    private static final long OBSERVED_DIRECTION_TTL_TICKS = 1200L;
     private static final double PENDING_LAUNCH_BIND_DISTANCE = 20.0;
-    private static final double INCOMING_DIRECTION_HISTORY_WEIGHT = 0.75;
     private static final double RESERVATION_STEAL_MARGIN_TICKS = 2.0;
     private static final double TARGET_SWITCH_MARGIN_TICKS = 3.0;
     private static final Map<MinecraftServer, ServerState> SERVERS = new WeakHashMap<>();
@@ -80,6 +82,7 @@ public final class InterceptionCoordinator {
             List<ThreatSnapshot> threatSnapshots,
             long threatTtlTicks
     ) {
+        // Публикация корня авторитетна: отсутствующие UUID снимаются немедленно, TTL лишь страхует пропуски.
         long gameTime = level.getGameTime();
         long expiresAt = gameTime + sanitizeThreatTtl(threatTtlTicks);
         NetworkState network = network(level.getServer(), networkId);
@@ -107,8 +110,6 @@ public final class InterceptionCoordinator {
             if (previous == null) {
                 network.threatRevision++;
                 changed = true;
-                observeIncomingDirection(
-                        authoritativeLevel(level), network, snapshot.referencePosition(), threatUuid, gameTime);
             }
         }
         if (retainOnlyPublishedThreats(network.threats, publishedThreats)) {
@@ -270,6 +271,7 @@ public final class InterceptionCoordinator {
         NetworkState network = network(level.getServer(), networkId);
         cleanup(network, gameTime);
 
+        // Резервацию можно забрать только при заметно более раннем перехвате; текущая цель имеет гистерезис.
         ThreatBid currentBid = null;
         ThreatBid bestBid = null;
         for (ThreatBid bid : bids) {
@@ -343,7 +345,7 @@ public final class InterceptionCoordinator {
         cleanupAssignments(server, level.getGameTime());
         NetworkState network = network(level.getServer(), networkId);
         network.pendingLaunches.put(controllerKey(level, controllerPos),
-                new PendingLaunch(level.dimension(), muzzlePos, threatUuid,
+                new PendingLaunch(muzzlePos, threatUuid,
                         level.getGameTime() + PENDING_LAUNCH_TTL_TICKS));
     }
 
@@ -373,7 +375,7 @@ public final class InterceptionCoordinator {
                     continue;
                 }
                 if (best == null || distance < best.distanceSqr) {
-                    best = new PendingCandidate(networkEntry.getKey(), network, entry.getKey(), launch, distance);
+                    best = new PendingCandidate(networkEntry.getKey(), launch, distance);
                 }
             }
         }
@@ -511,6 +513,7 @@ public final class InterceptionCoordinator {
     }
 
     private static void cleanup(NetworkState network, long gameTime) {
+        // Все ссылки на исчезнувшие угрозы удаляются в том же проходе, чтобы не оставлять сиротские аренды.
         boolean threatsRemoved = network.threats.entrySet().removeIf(
                 entry -> entry.getValue().expiresAt < gameTime);
         if (threatsRemoved) {
@@ -523,7 +526,6 @@ public final class InterceptionCoordinator {
         network.controllers.entrySet().removeIf(entry -> entry.getValue().expiresAt < gameTime);
         network.rejections.entrySet().removeIf(entry -> entry.getValue() < gameTime
                 || !network.threats.containsKey(entry.getKey().threatUuid));
-        network.observedDirections.entrySet().removeIf(entry -> entry.getValue() < gameTime);
         network.assignments.entrySet().removeIf(entry ->
                 !network.controllers.containsKey(entry.getKey())
                         || !network.threats.containsKey(entry.getValue()));
@@ -554,6 +556,7 @@ public final class InterceptionCoordinator {
             return;
         }
 
+        // Угрозы сначала образуют слоты по срочности, затем каждый слот получает самый дешёвый контроллер.
         int controllerCount = availableControllers.size();
         List<UUID> slots = new ArrayList<>(controllerCount);
         for (int index = 0; index < controllerCount; index++) {
@@ -667,34 +670,6 @@ public final class InterceptionCoordinator {
                 .add(threat.referenceAcceleration.scale(0.5D * elapsedTicks * elapsedTicks));
     }
 
-    private static void observeIncomingDirection(
-            ServerLevel level,
-            NetworkState network,
-            Vec3 referencePosition,
-            UUID threatUuid,
-            long gameTime
-    ) {
-        if (network.observedDirections.putIfAbsent(
-                threatUuid, gameTime + OBSERVED_DIRECTION_TTL_TICKS) != null) {
-            return;
-        }
-        net.minecraft.world.entity.Entity entity = level.getEntity(threatUuid);
-        if (entity == null || !entity.isAlive()) {
-            return;
-        }
-        Vec3 delta = entity.position().subtract(referencePosition);
-        if (delta.x * delta.x + delta.z * delta.z < 1.0E-6) {
-            return;
-        }
-        float incomingYaw = normalize360(
-                (float) (Math.toDegrees(Math.atan2(delta.z, delta.x)) + 270.0));
-        double radians = Math.toRadians(incomingYaw);
-        network.incomingDirectionX =
-                network.incomingDirectionX * INCOMING_DIRECTION_HISTORY_WEIGHT + Math.cos(radians);
-        network.incomingDirectionZ =
-                network.incomingDirectionZ * INCOMING_DIRECTION_HISTORY_WEIGHT + Math.sin(radians);
-    }
-
     private static void cleanupAssignments(ServerState server, long gameTime) {
         server.interceptorTargets.entrySet().removeIf(entry -> entry.getValue().expiresAt < gameTime);
     }
@@ -720,9 +695,6 @@ public final class InterceptionCoordinator {
         private final Map<InterceptionControllerKey, ControllerState> controllers = new HashMap<>();
         private final Map<InterceptionControllerKey, UUID> assignments = new HashMap<>();
         private final Map<ControllerThreat, Long> rejections = new HashMap<>();
-        private final Map<UUID, Long> observedDirections = new HashMap<>();
-        private double incomingDirectionX;
-        private double incomingDirectionZ;
         private long threatRevision;
     }
 
@@ -809,7 +781,6 @@ public final class InterceptionCoordinator {
     }
 
     private record PendingLaunch(
-            ResourceKey<Level> dimension,
             Vec3 muzzlePos,
             UUID threatUuid,
             long expiresAt
@@ -818,8 +789,6 @@ public final class InterceptionCoordinator {
 
     private record PendingCandidate(
             UUID networkId,
-            NetworkState network,
-            InterceptionControllerKey controllerPos,
             PendingLaunch launch,
             double distanceSqr
     ) {

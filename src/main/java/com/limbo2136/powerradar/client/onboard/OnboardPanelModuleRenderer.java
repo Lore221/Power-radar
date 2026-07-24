@@ -243,6 +243,7 @@ final class OnboardPanelModuleRenderer {
     }
 
     private static void applyPanelTransform(PoseStack poseStack, Direction facing) {
+        // Порядок матриц: поворот блока вокруг центра, затем наклон авторской панели вокруг её высоты.
         poseStack.translate(0.5D, 0.5D, 0.5D);
         poseStack.mulPose(Axis.YP.rotationDegrees(modelYawDegrees(facing)));
         poseStack.translate(-0.5D, -0.5D, -0.5D);

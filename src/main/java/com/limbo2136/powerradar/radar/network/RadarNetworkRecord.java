@@ -5,6 +5,10 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.GlobalPos;
 
+/**
+ * Сериализуемая топология логической сети. Имена полей и версия схемы являются контрактом мира;
+ * вычисленная во время выполнения политика карт сюда не переносится.
+ */
 public class RadarNetworkRecord {
     public static final int SCHEMA_VERSION = 4;
 

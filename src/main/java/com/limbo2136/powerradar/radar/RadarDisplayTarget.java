@@ -4,6 +4,7 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
 
+/** Компактный серверный снимок цели для отображения; возраст выражен в тиках. */
 public record RadarDisplayTarget(
         @Nullable UUID targetUuid,
         int targetId,
@@ -78,6 +79,7 @@ public record RadarDisplayTarget(
     }
 
     public String stableSelectionKey() {
+        // UUID — основная личность; составной ключ нужен лишь объектам без стабильного UUID.
         if (this.targetUuid != null) {
             return "uuid:" + this.targetUuid;
         }

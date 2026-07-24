@@ -6,6 +6,7 @@ import java.util.Set;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.world.level.ChunkPos;
 
+/** Несериализуемое состояние одного набора региональных tickets во время выполнения. */
 public class RadarNetworkChunkLoadState {
     private final Set<GlobalPos> activeConsumerLeaseLinks = new HashSet<>();
     private final Set<ChunkPos> appliedChunks = new HashSet<>();

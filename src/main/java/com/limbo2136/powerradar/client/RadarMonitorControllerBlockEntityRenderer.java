@@ -36,6 +36,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
+/** Рисует многоблочный монитор в нормализованных экранных UV и переводит их на грань блоков. */
 @OnlyIn(Dist.CLIENT)
 public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRenderer<RadarMonitorControllerBlockEntity> {
     private static final ResourceLocation SCREEN_BASE =
@@ -72,6 +73,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final int COVERAGE_ALPHA = 255;
     private static final int SHELL_ALARM_ZONE_ALPHA = 32;
     private static final int SABLE_SILHOUETTE_FILL_ALPHA = 144;
+    // Ключи BlockPos действительны только внутри cachedLevel; смена объекта уровня очищает кэш.
     private final Map<BlockPos, InWorldBlipCache> blipCaches = new HashMap<>();
     private Level cachedLevel;
     private boolean renderWithoutFrameInset;
@@ -129,6 +131,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     ) {
         this.renderWithoutFrameInset = withoutFrameInset;
         if (controller.getLevel() != this.cachedLevel) {
+            // Сравнение по ссылке покрывает переподключение в то же измерение и координаты.
             this.blipCaches.clear();
             this.cachedLevel = controller.getLevel();
         }
@@ -155,6 +158,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         float backgroundMin = screenBackgroundMin(size);
         float backgroundMax = screenBackgroundMax(size);
         float projectionRadius = screenProjectionRadius(size);
+        // Порядок отправки геометрии: фон, сетка, зоны, покрытия, силуэты, затем метки и рамки.
         drawMatrixQuad(poseStack, bufferSource, SCREEN_BASE, facing, relativeOrigin, size,
                 backgroundMin, backgroundMin, backgroundMax, backgroundMax,
                 255, 255, 255, 255, screenLight, BASE_FACE_OFFSET);
@@ -427,6 +431,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
 
     @Override
     public AABB getRenderBoundingBox(RadarMonitorControllerBlockEntity controller) {
+        // Контроллер может стоять на краю экрана; бесконечные границы сохраняют видимость панели.
         return controller.activeOrigin() != null && controller.activeSize() > 0
                 ? AABB.INFINITE
                 : controller.getRenderBoundingBox();
@@ -490,6 +495,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             RadarBlipSprite blipSprite = RadarBlipSprite.forCategory(blip.category());
             drawBlipLayer(poseStack, bufferSource, facing, relativeOrigin, size, blip.center(), half,
                     blipSprite, blipColor, alpha, packedLight, blipFaceOffset);
+            // Второй alpha-проход чуть выше усиливает авторские пиксели с alpha=32 без смещения иконки.
             drawBlipLayer(poseStack, bufferSource, facing, relativeOrigin, size, blip.center(), half,
                     blipSprite, blipColor, alpha, packedLight,
                     blipFaceOffset + BLIP_ALPHA_REINFORCEMENT_OFFSET);
@@ -806,6 +812,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         polygon.add(new TexturedScreenVertex(topLeft.u(), topLeft.v(), textureMinU, textureMinV));
         float contentMin = screenContentMin(size);
         float contentMax = screenContentMax(size);
+        // Sutherland-Hodgman последовательно обрезает left/right/top/bottom в экранных UV 0..1.
         polygon = clipPolygon(polygon, 0, contentMin, contentMax);
         polygon = clipPolygon(polygon, 1, contentMin, contentMax);
         polygon = clipPolygon(polygon, 2, contentMin, contentMax);
@@ -1011,6 +1018,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             float faceOffset
     ) {
         Direction right = com.limbo2136.powerradar.block.RadarDisplayStructureResolver.right(facing);
+        // Экранная U растёт вправо по display, экранная V — вниз; мировой Y использует (1 - V).
         float u = point.u() * size;
         float v = (1.0F - point.v()) * size;
         float x = origin.getX();

@@ -89,6 +89,7 @@ public final class SableSilhouetteClientCache {
     private static void ensureLevelSession() {
         ClientLevel currentLevel = Minecraft.getInstance().level;
         if (currentLevel != levelSession) {
+            // Сравнение объекта уровня по ссылке учитывает переподключение в то же измерение.
             SNAPSHOTS.clear();
             PENDING_REQUESTS.clear();
             updateVersion = 0L;

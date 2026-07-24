@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.radar;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 
+/** Имена значений сохраняются в NBT и передаются монитором; переименование требует миграции. */
 public enum RadarScanMode {
     GROUND,
     SKY,

@@ -67,19 +67,50 @@ public final class PowerRadarServerConfig {
     private PowerRadarServerConfig() {
     }
 
-    public static int radarScanUpdateIntervalTicks() { return value(RADAR_SCAN_UPDATE_INTERVAL_TICKS); }
-    public static int structureValidationIntervalTicks() { return value(STRUCTURE_VALIDATION_INTERVAL_TICKS); }
-    public static int staleTrackExpirationTicks() { return value(STALE_TRACK_EXPIRATION_TICKS); }
-    public static int entityQuerySliceSize() { return value(ENTITY_QUERY_SLICE_SIZE); }
-    public static boolean detectPassiveMobsByDefault() { return value(DETECT_PASSIVE_MOBS_BY_DEFAULT); }
-    public static int radarLinkMaxConnectionDistanceBlocks() { return value(RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS); }
-    public static boolean radarLinkForceLoadEnabled() { return value(RADAR_LINK_FORCELOAD_ENABLED); }
-    public static int radarLinkForceLoadRadiusChunks() { return value(RADAR_LINK_FORCELOAD_RADIUS_CHUNKS); }
-    public static double autocannonMinFiringDistanceBlocks() { return value(AUTOCANNON_MIN_FIRING_DISTANCE_BLOCKS); }
-    public static double bigCannonMinFiringDistanceBlocks() { return value(BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS); }
+    public static int radarScanUpdateIntervalTicks() {
+        return value(RADAR_SCAN_UPDATE_INTERVAL_TICKS);
+    }
+
+    public static int structureValidationIntervalTicks() {
+        return value(STRUCTURE_VALIDATION_INTERVAL_TICKS);
+    }
+
+    public static int staleTrackExpirationTicks() {
+        return value(STALE_TRACK_EXPIRATION_TICKS);
+    }
+
+    public static int entityQuerySliceSize() {
+        return value(ENTITY_QUERY_SLICE_SIZE);
+    }
+
+    public static boolean detectPassiveMobsByDefault() {
+        return value(DETECT_PASSIVE_MOBS_BY_DEFAULT);
+    }
+
+    public static int radarLinkMaxConnectionDistanceBlocks() {
+        return value(RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS);
+    }
+
+    public static boolean radarLinkForceLoadEnabled() {
+        return value(RADAR_LINK_FORCELOAD_ENABLED);
+    }
+
+    public static int radarLinkForceLoadRadiusChunks() {
+        return value(RADAR_LINK_FORCELOAD_RADIUS_CHUNKS);
+    }
+
+    public static double autocannonMinFiringDistanceBlocks() {
+        return value(AUTOCANNON_MIN_FIRING_DISTANCE_BLOCKS);
+    }
+
+    public static double bigCannonMinFiringDistanceBlocks() {
+        return value(BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS);
+    }
+
     public static double interceptionShellDestructionProbability() {
         return value(INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY);
     }
+
     public static double manualInterceptionFuzeDistanceBlocks() {
         return value(MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS);
     }

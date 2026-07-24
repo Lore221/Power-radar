@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.GlobalPos;
 
+/** Загружаемое состояние сети: ссылки, leases, ревизии и производные снимки без NBT-владения. */
 public class RadarNetworkRuntime {
     private final Set<GlobalPos> loadedLinks = new HashSet<>();
     private final Map<GlobalPos, GlobalPos> monitorLinkToMonitorPos = new HashMap<>();
@@ -52,6 +53,7 @@ public class RadarNetworkRuntime {
     }
 
     public void markSettingsChanged() {
+        // Одна ревизия инвалидирует и политику потребителей, и производный снимок монитора.
         this.settingsRevision++;
         invalidateDisplaySnapshots();
     }

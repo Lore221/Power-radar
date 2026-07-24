@@ -7,7 +7,7 @@ import java.util.List;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** Exact time-interval intersection for an analytic CBC trajectory and a translating AABB. */
+/** Точное пересечение временных интервалов аналитической траектории CBC и движущегося AABB. */
 final class AnalyticMovingAabbIntersection {
     private static final double TIME_TOLERANCE = 1.0E-7D;
     private static final double ROOT_VALUE_TOLERANCE = 1.0E-8D;
@@ -72,6 +72,7 @@ final class AnalyticMovingAabbIntersection {
             return Result.INDETERMINATE;
         }
 
+        // Сфера только дёшево отвергает далёкие траектории; окончательное решение дают интервалы трёх осей.
         double sphereRadius = Math.sqrt(
                 square(bounds.getXsize())
                         + square(bounds.getYsize())
@@ -148,7 +149,7 @@ final class AnalyticMovingAabbIntersection {
                 : ClosestApproachResult.INSIDE;
     }
 
-    /** Half of d(distance^2)/dt as an exponential polynomial with at most seven roots. */
+    /** Половина d(distance²)/dt как экспоненциальный полином максимум с семью корнями. */
     private static ExponentialPolynomial distanceDerivative(RelativeTrajectory trajectory) {
         Vec3 constant = trajectory.coefficients(Coefficient.CONSTANT);
         Vec3 linear = trajectory.coefficients(Coefficient.LINEAR);
@@ -240,9 +241,9 @@ final class AnalyticMovingAabbIntersection {
     }
 
     /**
-     * Isolates every real root by recursively finding the critical points of a normalized
-     * exponential polynomial. Normalization multiplies the function by a positive exponential,
-     * preserving roots while reducing the highest-exponent polynomial degree on differentiation.
+     * Изолирует каждый вещественный корень через рекурсивный поиск критических точек нормализованного
+     * экспоненциального полинома. Нормализация умножает функцию на положительную экспоненту,
+     * сохраняя корни и уменьшая степень старшего экспоненциального члена после дифференцирования.
      */
     private static RootResult roots(
             ExponentialPolynomial source,

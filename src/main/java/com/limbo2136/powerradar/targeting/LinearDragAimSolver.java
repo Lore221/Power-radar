@@ -3,9 +3,9 @@ package com.limbo2136.powerradar.targeting;
 import com.limbo2136.powerradar.api.weapon.WeaponBallistics;
 
 /**
- * Solves the two pitch branches of the discrete linear-drag trajectory used by CBC.
- * The height, its pitch derivatives, and the horizontal hit time are evaluated from
- * the same geometric-series equations as the tick simulation in {@link TargetLeadSolver}.
+ * Решает две ветви угла возвышения для дискретной траектории CBC с линейным сопротивлением.
+ * Высота, её производные по углу и время горизонтального попадания вычисляются по тем же
+ * геометрическим рядам, что и тиковая симуляция в {@link TargetLeadSolver}.
  */
 public final class LinearDragAimSolver {
     private static final int MAX_PROJECTILE_TICKS = 600;
@@ -63,10 +63,10 @@ public final class LinearDragAimSolver {
     }
 
     /**
-     * Attempts the lifetime-truncated, single-root path used only by autocannons.
-     * A non-negative derivative at the upper reachable pitch proves that the
-     * permitted part of the trajectory has not passed its peak, so there is no
-     * high branch to search. {@code null} asks the caller to use the full solver.
+     * Пробует усечённый временем жизни путь с одним корнем, предназначенный для автопушек.
+     * Неотрицательная производная у верхнего достижимого угла доказывает, что разрешённая
+     * часть траектории ещё не прошла максимум и высокой ветви нет. {@code null} требует
+     * от вызывающего кода перейти к полному решателю.
      */
     public static Roots solveAutocannonLowArc(
             double minimumPitchDegrees,
@@ -117,6 +117,7 @@ public final class LinearDragAimSolver {
             return null;
         }
 
+        // Лимит жизни сначала сужает достижимый диапазон углов, не меняя саму формулу полёта.
         int maximumTicks = ballistics.hasLifetimeLimit()
                 ? Math.min(MAX_PROJECTILE_TICKS, Math.max(1, ballistics.lifetimeTicks() + 1))
                 : MAX_PROJECTILE_TICKS;
@@ -153,6 +154,7 @@ public final class LinearDragAimSolver {
     }
 
     private static Evaluation solvePeak(Evaluation low, Evaluation high, Context context) {
+        // Ньютон работает только внутри скобки; при выходе или плоской производной используется бисекция.
         Evaluation current = evaluate((low.pitchRadians() + high.pitchRadians()) * 0.5, context);
         for (int iteration = 0; iteration < MAX_NEWTON_ITERATIONS; iteration++) {
             if (!current.reachable()) {

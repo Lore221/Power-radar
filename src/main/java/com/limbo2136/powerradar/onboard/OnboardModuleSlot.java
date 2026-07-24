@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.onboard;
 
 import javax.annotation.Nullable;
 
-/** Four 4x4 model-pixel areas surrounding the central 8x8 Onboard screen. */
+/** Четыре области 4x4 модельных пикселя вокруг центрального экрана Onboard 8x8. */
 public enum OnboardModuleSlot {
     FRONT_MIN_X(0, 1),
     REAR_MIN_X(0, 6),

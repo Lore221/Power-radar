@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 
-/** Server-owned supplemental geometry snapshot. It is intentionally not sent to monitors yet. */
+/** Серверный снимок дополнительной геометрии, передаваемый отдельно от частых данных целей. */
 public record SableSilhouetteSnapshot(
         ResourceLocation dimensionId,
         UUID structureUuid,

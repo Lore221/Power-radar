@@ -1,30 +1,28 @@
 package com.limbo2136.powerradar.client;
 
-import com.limbo2136.powerradar.PowerRadar;
-import com.simibubi.create.foundation.item.TooltipHelper;
-import net.createmod.catnip.gui.element.GuiGameElement;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.CARDS;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.ICONS;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.TEXTURE_SIZE;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.blitSmallButtonBackground;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.contains;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.renderCardPreview;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.smallButtonSourceX;
+
 import com.limbo2136.powerradar.network.TargetingCardOpenPayload;
 import com.limbo2136.powerradar.network.TargetingCardSavePayload;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.registry.ModItems;
+import com.simibubi.create.foundation.item.TooltipHelper;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class TargetingCardScreen extends Screen {
-    private static final ResourceLocation CARDS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/cards.png");
-    private static final ResourceLocation ICONS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
-    private static final int TEXTURE_SIZE = 256;
     private static final int GUI_WIDTH = 213;
     private static final int GUI_HEIGHT = 98;
     private static final int TOTAL_WIDTH = 245;
@@ -90,10 +88,11 @@ public class TargetingCardScreen extends Screen {
         renderOptionButton(graphics, 1, 33, mouseX, mouseY);
         renderSaveButton(graphics, mouseX, mouseY);
 
-        ItemStack card = new ItemStack(this.displayCard ? ModItems.DISPLAY_CARD.get() : ModItems.TARGETING_CARD.get());
-        var cardRender = GuiGameElement.of(card);
-        cardRender.at(this.left + GUI_WIDTH + 8, this.top + GUI_HEIGHT - 52, -200.0F);
-        cardRender.scale(4.0D).render(graphics);
+        renderCardPreview(
+                graphics,
+                new ItemStack(this.displayCard ? ModItems.DISPLAY_CARD.get() : ModItems.TARGETING_CARD.get()),
+                this.left + GUI_WIDTH + 8,
+                this.top + GUI_HEIGHT - 52);
 
         renderHoveredTooltip(graphics, mouseX, mouseY);
     }
@@ -118,9 +117,8 @@ public class TargetingCardScreen extends Screen {
         boolean hovered = contains(mouseX, mouseY, x, y, 18, 18);
         boolean isPressed = this.pressed.type == ButtonType.OPTION && this.pressed.index == index;
         boolean selected = this.option == index;
-        int sourceX = isPressed ? 156 : hovered ? 138 : selected ? 174 : 120;
-        graphics.blit(ICONS, x, y, 18, 18, (float) sourceX, 0.0F,
-                18, 18, TEXTURE_SIZE, TEXTURE_SIZE);
+        int sourceX = smallButtonSourceX(true, selected, hovered, isPressed);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         int iconX = index == 0 ? 224 : 240;
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, (float) iconX, 32.0F,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
@@ -130,9 +128,8 @@ public class TargetingCardScreen extends Screen {
         int x = this.left + 181;
         int y = this.top + 75;
         boolean hovered = contains(mouseX, mouseY, x, y, 18, 18);
-        int sourceX = hovered ? 138 : 120;
-        graphics.blit(ICONS, x, y, 18, 18, (float) sourceX, 0.0F,
-                18, 18, TEXTURE_SIZE, TEXTURE_SIZE);
+        int sourceX = smallButtonSourceX(true, false, hovered, false);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, 240.0F, 0.0F,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
     }
@@ -186,23 +183,23 @@ public class TargetingCardScreen extends Screen {
         }
         for (int i = 0; i < CATEGORY_X.length; i++) {
             if (contains(mouseX, mouseY, this.left + CATEGORY_X[i], this.top + 28, 30, 30)) {
-                playButtonSound();
+                RadarCardScreenTheme.playButtonSound(this.minecraft);
                 this.pressed = new PressedButton(ButtonType.CATEGORY, i);
                 return true;
             }
         }
         if (contains(mouseX, mouseY, this.left + 15, this.top + 75, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             this.pressed = new PressedButton(ButtonType.OPTION, 0);
             return true;
         }
         if (contains(mouseX, mouseY, this.left + 33, this.top + 75, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             this.pressed = new PressedButton(ButtonType.OPTION, 1);
             return true;
         }
         if (contains(mouseX, mouseY, this.left + 181, this.top + 75, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             saveAndClose();
             return true;
         }
@@ -251,17 +248,6 @@ public class TargetingCardScreen extends Screen {
         this.stateSaved = true;
         PacketDistributor.sendToServer(new TargetingCardSavePayload(
                 this.snapshot.hand(), this.displayCard ? 1 : 0, this.filterMask, this.option));
-    }
-
-    private void playButtonSound() {
-        if (this.minecraft != null) {
-            this.minecraft.getSoundManager().play(
-                    SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0F));
-        }
-    }
-
-    private static boolean contains(double mouseX, double mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
     private enum ButtonType {

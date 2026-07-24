@@ -12,6 +12,7 @@ final class RadarCoverageSprite {
     private static final ResourceLocation OVERVIEW_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_overview_octagon.png");
 
+    // Координаты конусов привязаны к авторским областям icons.png; логический центр — (64, 64).
     private static final RadarCoverageSprite CONE_60 = centeredCone(1, 193, 63, 62);
     private static final RadarCoverageSprite CONE_90 = centeredCone(67, 193, 92, 62);
     private static final RadarCoverageSprite CONE_120 = centeredCone(1, 113, 110, 62);

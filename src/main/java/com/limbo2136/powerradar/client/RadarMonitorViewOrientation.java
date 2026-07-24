@@ -1,18 +1,19 @@
 package com.limbo2136.powerradar.client;
 
 import com.limbo2136.powerradar.block.RadarMonitorControllerBlock;
+import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
-import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 
 public final class RadarMonitorViewOrientation {
     private RadarMonitorViewOrientation() {
     }
 
     public static float viewYawDegrees(RadarMonitorDisplayData displayData) {
+        // Fixed-north использует серверный yaw вида; block-aligned привязывает верх карты к блоку.
         if (!PowerRadarClientConfig.monitorBlockAlignedView()) {
             return displayData.monitorViewYawDegrees();
         }
@@ -31,6 +32,7 @@ public final class RadarMonitorViewOrientation {
             RadarMonitorDisplayData displayData,
             RadarMonitorBlockPosePayload.MonitorPose monitorPose
     ) {
+        // На движущемся Sable block-aligned следует интерполированной позе, а fixed-north её игнорирует.
         if (PowerRadarClientConfig.monitorBlockAlignedView() && monitorPose != null) {
             return monitorPose.yawDegrees();
         }

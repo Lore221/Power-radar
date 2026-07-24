@@ -21,6 +21,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 
+/**
+ * Авторитетное хранилище топологии в SavedData основного мира. Миграции выполняются строго
+ * последовательно, а записи будущих версий сохраняются без нормализации их NBT.
+ */
 public class RadarNetworkSavedData extends SavedData {
     public static final String NAME = "power_radar_networks";
     private static final String NETWORKS_KEY = "PowerRadarNetworks";
@@ -178,6 +182,7 @@ public class RadarNetworkSavedData extends SavedData {
             return MigrationResult.invalid("negative schema version " + schemaVersion);
         }
 
+        // Нельзя перескакивать версии: каждый шаг отвечает только за добавленный им контракт.
         boolean changed = false;
         while (schemaVersion < RadarNetworkRecord.SCHEMA_VERSION) {
             switch (schemaVersion) {

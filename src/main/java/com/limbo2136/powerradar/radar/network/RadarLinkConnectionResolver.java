@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class RadarLinkConnectionResolver {
+    // Кэш сглаживает частые опросы соседей, но не заменяет серверную проверку блока и направления.
     private static final int DEFAULT_CACHE_TTL_TICKS = 5;
     private static final Map<ServerLevel, Map<BlockPos, CachedResolution>> CACHE = new WeakHashMap<>();
 

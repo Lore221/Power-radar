@@ -11,11 +11,17 @@ public final class PowerRadarDebugOptions {
     }
 
     public static boolean scanOptimizationLogging() {
-        return enabled(SCAN_OPTIMIZATION_LOGGING, "power_radar.scanOptimizationDebug", "POWER_RADAR_SCAN_OPTIMIZATION_DEBUG");
+        return enabled(
+                SCAN_OPTIMIZATION_LOGGING,
+                "power_radar.scanOptimizationDebug",
+                "POWER_RADAR_SCAN_OPTIMIZATION_DEBUG");
     }
 
     public static boolean radarLinkLeaseLogging() {
-        return enabled(RADAR_LINK_LEASE_LOGGING, "power_radar.radarLinkLeaseDebug", "POWER_RADAR_LINK_LEASE_DEBUG");
+        return enabled(
+                RADAR_LINK_LEASE_LOGGING,
+                "power_radar.radarLinkLeaseDebug",
+                "POWER_RADAR_LINK_LEASE_DEBUG");
     }
 
     public static boolean targetSystemBugReportLogging() {

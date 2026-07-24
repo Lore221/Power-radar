@@ -5,6 +5,10 @@ import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Неизменяемое представление измеренного трека, а не ссылка на живую сущность.
+ * Положение измеряется в блоках, скорость — в блоках/тик, ускорение — в блоках/тик².
+ */
 public interface TrackedTargetView {
     @Nullable
     UUID targetUuid();

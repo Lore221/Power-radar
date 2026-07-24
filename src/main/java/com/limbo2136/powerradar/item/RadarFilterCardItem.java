@@ -1,28 +1,29 @@
 package com.limbo2136.powerradar.item;
 
+import com.limbo2136.powerradar.network.AllowlistCardOpenPayload;
+import com.limbo2136.powerradar.network.TargetingCardOpenPayload;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.registry.ModDataComponents;
-import com.limbo2136.powerradar.network.TargetingCardOpenPayload;
-import com.limbo2136.powerradar.network.AllowlistCardOpenPayload;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import java.util.List;
 import net.neoforged.neoforge.network.PacketDistributor;
-import net.minecraft.server.level.ServerPlayer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Locale;
 
 public class RadarFilterCardItem extends Item {
     private static final String PLAYER_PREFIX = "P\t";
     private static final String SABLE_PREFIX = "S\t";
     private static final String SABLE_QUERY_PREFIX = "Q\t";
+    private static final int MAX_ALLOWLIST_NAMES = 1024;
+    private static final int MAX_NAME_LENGTH = 64;
 
     public record AllowlistData(
             List<String> playerNames,
@@ -40,6 +41,7 @@ public class RadarFilterCardItem extends Item {
             return List.copyOf(lines);
         }
     }
+
     public enum Kind {
         TARGETING,
         DISPLAY,
@@ -73,7 +75,7 @@ public class RadarFilterCardItem extends Item {
 
     public static AllowlistData allowlistData(ItemStack stack) {
         return decodeAllowlistLines(
-                java.util.Arrays.asList(allowlist(stack).split("\\n")),
+                Arrays.asList(allowlist(stack).split("\\n")),
                 allowlistSableMode(stack));
     }
 
@@ -81,7 +83,9 @@ public class RadarFilterCardItem extends Item {
         LinkedHashMap<String, String> players = new LinkedHashMap<>();
         LinkedHashMap<String, String> sables = new LinkedHashMap<>();
         for (String rawLine : lines == null ? List.<String>of() : lines) {
-            if (rawLine == null || rawLine.isBlank()) continue;
+            if (rawLine == null || rawLine.isBlank()) {
+                continue;
+            }
             if (rawLine.startsWith(PLAYER_PREFIX)) {
                 putName(players, rawLine.substring(PLAYER_PREFIX.length()));
                 continue;
@@ -94,7 +98,9 @@ public class RadarFilterCardItem extends Item {
                 // Старый формат связывал имя с UUID. UUID намеренно отбрасывается:
                 // после переименования табличкой список должен искать именно текущее имя Sable.
                 String[] parts = rawLine.split("\\t", 3);
-                if (parts.length != 3) continue;
+                if (parts.length != 3) {
+                    continue;
+                }
                 putName(sables, parts[2]);
                 continue;
             }
@@ -109,15 +115,19 @@ public class RadarFilterCardItem extends Item {
 
     private static void putName(LinkedHashMap<String, String> target, String rawName) {
         String name = sanitizeName(rawName);
-        if (!name.isEmpty() && target.size() < 1024) {
+        if (!name.isEmpty() && target.size() < MAX_ALLOWLIST_NAMES) {
             target.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
         }
     }
 
     private static String sanitizeName(String rawName) {
-        if (rawName == null) return "";
+        if (rawName == null) {
+            return "";
+        }
         String name = rawName.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim();
-        return name.length() <= 64 ? name : name.substring(0, 64).trim();
+        return name.length() <= MAX_NAME_LENGTH
+                ? name
+                : name.substring(0, MAX_NAME_LENGTH).trim();
     }
 
     public static boolean allowlistSableMode(ItemStack stack) {
@@ -161,9 +171,4 @@ public class RadarFilterCardItem extends Item {
         return InteractionResultHolder.pass(stack);
     }
 
-    @Override
-    public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target,
-                                                   InteractionHand hand) {
-        return InteractionResult.PASS;
-    }
 }

@@ -7,6 +7,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
+/** Невидимый серверный маркер активной радарной структуры для обычного контура сканирования. */
 public final class RadarStructureEntity extends Entity {
     private BlockPos controllerPos = BlockPos.ZERO;
 
@@ -33,6 +34,7 @@ public final class RadarStructureEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
+        // Ключ ControllerPos является частью сохранённых миров; его имя должно оставаться стабильным.
         this.controllerPos = BlockPos.of(tag.getLong("ControllerPos"));
     }
 

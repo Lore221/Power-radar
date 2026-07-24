@@ -64,7 +64,7 @@ public final class RadarScanner {
         targetCache.validateStaleTracks(context.level(), context.gameTime());
     }
 
-    /** Refreshes acquired tracks directly, without another spatial entity query. */
+    /** Обновляет уже захваченные треки напрямую, без повторного пространственного запроса сущностей. */
     public static int refreshTrackedEntities(
             RadarScanProfile profile,
             RadarScanContext context,
@@ -105,6 +105,7 @@ public final class RadarScanner {
         boolean mobs = profiles.stream().anyMatch(profile -> profile.detectPassiveMobs() || profile.detectHostileMobs());
         boolean unknown = profiles.stream().anyMatch(RadarScanProfile::detectUnknown);
         int typedQueries = (players ? 1 : 0) + (projectiles ? 1 : 0) + (mobs ? 1 : 0) + (unknown ? 1 : 0);
+        // При трёх и более группах один широкий запрос дешевле нескольких почти одинаковых выборок.
         if (typedQueries >= 3) {
             return level.getEntities((Entity) null, searchBox, Entity::isAlive);
         }
@@ -229,6 +230,7 @@ public final class RadarScanner {
     }
 
     public static RadarStructure validateStructure(ServerLevel level, BlockPos controllerPos) {
+        // Обзорный радар — вертикальная колонна модулей; направленный — связная плоскость панелей.
         BlockPos processorPos = controllerPos.above();
         BlockState processorState = level.getBlockState(processorPos);
 
@@ -354,6 +356,7 @@ public final class RadarScanner {
             RadarTargetCategory category,
             @Nullable RadarTargetTrack track
     ) {
+        // Все кинематические величины снимка остаются в блоках, блоках/тик и блоках/тик².
         Vec3 pos = entity.position();
         Vec3 velocity = displayVelocity(entity, category);
         double width = entity.getBbWidth();

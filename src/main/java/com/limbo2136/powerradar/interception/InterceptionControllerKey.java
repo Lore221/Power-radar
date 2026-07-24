@@ -7,10 +7,10 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
 /**
- * Stable runtime identity for an interception controller.
+ * Стабильная личность контроллера перехвата во время выполнения.
  *
- * <p>Sable sublevels share the parent dimension and may reuse local block coordinates, so a
- * {@code GlobalPos} alone cannot distinguish controllers installed on different structures.</p>
+ * <p>Подуровни Sable разделяют родительское измерение и могут повторять локальные координаты,
+ * поэтому одного {@code GlobalPos} недостаточно для контроллеров на разных структурах.</p>
  */
 public record InterceptionControllerKey(
         ResourceKey<Level> dimension,

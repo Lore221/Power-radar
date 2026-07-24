@@ -69,6 +69,7 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     @Override
     public void write(CompoundTag tag) {
         super.write(tag);
+        // Имена полей уже сохраняются в мире через CEE и являются совместимым форматом устройства.
         tag.putBoolean("BridgeEnabled", this.bridgeEnabled);
         tag.putDouble("ResistanceOhms", this.resistanceOhms);
         tag.putDouble("ConstantPowerWatts", this.constantPowerWatts);
@@ -130,6 +131,7 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
         if (voltage < -0.001D) {
             return PowerRadarCeeState.REVERSE_POLARITY;
         }
+        // restart и overvoltageRecovery создают гистерезис относительно обычных minimum/maximum.
         if (this.electricalState == PowerRadarCeeState.OVERVOLTAGE) {
             return voltage <= voltages.overvoltageRecovery()
                     ? PowerRadarCeeState.POWERED

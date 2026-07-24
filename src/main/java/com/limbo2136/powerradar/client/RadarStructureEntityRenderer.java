@@ -13,6 +13,7 @@ public final class RadarStructureEntityRenderer extends EntityRenderer<RadarStru
 
     @Override
     public ResourceLocation getTextureLocation(RadarStructureEntity entity) {
+        // Маркер намеренно невидим; рендерер нужен лишь для регистрации клиентского типа сущности.
         return TextureAtlas.LOCATION_BLOCKS;
     }
 }

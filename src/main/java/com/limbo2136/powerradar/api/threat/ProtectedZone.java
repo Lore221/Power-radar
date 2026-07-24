@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+/** Неподвижная квадратная зона защиты; линейные размеры заданы в блоках. */
 public record ProtectedZone(BlockPos origin, double sideBlocks, double verticalMarginBlocks) {
     public AABB horizontalBounds() {
         Vec3 center = Vec3.atCenterOf(this.origin);

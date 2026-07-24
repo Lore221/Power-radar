@@ -49,3 +49,6 @@ tmp_*/
 ### Working asset sources (runtime assets belong in src/) ###
 new textures/
 текстуры/
+
+### Local maintainer notes ###
+/POWER_RADAR_EDITING_GUIDE.txt

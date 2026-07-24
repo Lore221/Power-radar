@@ -1,6 +1,9 @@
 {
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
+	"ambientocclusion": false,
+	"render_type": "minecraft:cutout",
+	"texture_size": [48, 48],
 	"textures": {
 		"0": "power_radar:block/radar_link",
 		"1": "power_radar:block/radar_controller",
@@ -14,7 +17,7 @@
 			"faces": {
 				"north": {"uv": [10.66667, 0.66667, 16, 5.33333], "texture": "#1"},
 				"east": {"uv": [8.33333, 11, 13, 15.66667], "texture": "#1"},
-				"south": {"uv": [10.66667, 6, 16, 10.33333], "texture": "#1"},
+				"south": {"uv": [10.66667, 6, 16, 10.66666], "texture": "#1"},
 				"west": {"uv": [8.33333, 11, 13, 15.66667], "texture": "#1"},
 				"up": {"uv": [10.66667, 6, 16, 10.66667], "texture": "#1"},
 				"down": {"uv": [10.66667, 6, 16, 10.66667], "texture": "#1"}

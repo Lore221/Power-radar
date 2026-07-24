@@ -1,13 +1,13 @@
 package com.limbo2136.powerradar.client;
 
-import com.limbo2136.powerradar.network.RadarMonitorBlockTargetsPayload;
 import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
+import com.limbo2136.powerradar.network.RadarMonitorBlockTargetsPayload;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
-import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
-import com.limbo2136.powerradar.radar.RadarMonitorDisplayTargetCache;
 import com.limbo2136.powerradar.radar.RadarDisplayCoverage;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarId;
+import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.RadarMonitorDisplayTargetCache;
 import com.limbo2136.powerradar.radar.RadarOrientationState;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +22,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 
 @OnlyIn(Dist.CLIENT)
 public final class RadarMonitorClientState {
+    // BlockPos достаточно только внутри одной ClientLevel-сессии; смена объекта уровня очищает всю карту.
     private static final Map<BlockPos, Entry> STATES = new HashMap<>();
     @Nullable
     private static ClientLevel levelSession;
@@ -76,6 +77,7 @@ public final class RadarMonitorClientState {
     private static void ensureLevelSession() {
         ClientLevel currentLevel = Minecraft.getInstance().level;
         if (currentLevel != levelSession) {
+            // Сравнение объекта по ссылке защищает переподключение в то же измерение и координаты.
             STATES.clear();
             levelSession = currentLevel;
         }
@@ -142,6 +144,7 @@ public final class RadarMonitorClientState {
         private void applyStatic(RadarMonitorDisplayData staticData, long nextRevision) {
             RadarMonitorDisplayData mergedData = staticData;
             if (this.sourceDisplayData != null && staticData.targets().isEmpty()) {
+                // Пустой список static-пакета не удаляет цели до прихода парного targets-пакета.
                 mergedData = staticData.withTargets(
                         this.sourceDisplayData.targets(),
                         this.sourceDisplayData.lastScanGameTime(),
@@ -152,6 +155,7 @@ public final class RadarMonitorClientState {
 
         private void applyPose(RadarMonitorBlockPosePayload payload) {
             Minecraft minecraft = Minecraft.getInstance();
+            // Переход начинается с реально отрисованной позы в момент приёма, а не с границы tick.
             float receivePartialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(false);
             double receiveTime = clientRenderTime(receivePartialTick, payload.serverGameTime());
             if (payload.monitorPose() != null) {
@@ -162,6 +166,7 @@ public final class RadarMonitorClientState {
                 if (this.lastMonitorPoseSample != null && elapsedTicks > 0L) {
                     RadarMonitorBlockPosePayload.MonitorPose last = this.lastMonitorPoseSample;
                     RadarMonitorBlockPosePayload.MonitorPose next = payload.monitorPose();
+                    // Координатная разность за серверные тики переводится в блоки/с.
                     nextVelocity = new Vec3(
                             next.originX() - last.originX(),
                             next.originY() - last.originY(),

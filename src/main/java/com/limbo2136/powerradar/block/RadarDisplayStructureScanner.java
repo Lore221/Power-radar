@@ -1,6 +1,8 @@
 package com.limbo2136.powerradar.block;
 
+import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,6 +35,8 @@ final class RadarDisplayStructureScanner {
         }
 
         ArrayList<RadarDisplayStructure> ordered = sortByAssemblyPriority(candidates.values());
+        // Уже записанная форма имеет приоритет: соседняя панель не должна незаметно
+        // поглотить существующий дисплей при очередной сверке.
         ArrayList<RadarDisplayStructure> persisted = new ArrayList<>();
         for (RadarDisplayStructure candidate : ordered) {
             if (candidate.size() > 1 && matchesStoredShape(level, candidate)) {
@@ -69,12 +73,14 @@ final class RadarDisplayStructureScanner {
         return List.copyOf(selected);
     }
 
-    private static ArrayList<RadarDisplayStructure> sortByAssemblyPriority(java.util.Collection<RadarDisplayStructure> candidates) {
+    private static ArrayList<RadarDisplayStructure> sortByAssemblyPriority(
+            Collection<RadarDisplayStructure> candidates
+    ) {
         ArrayList<RadarDisplayStructure> ordered = new ArrayList<>(candidates);
         ordered.sort(Comparator
                 .comparingInt(RadarDisplayStructure::size)
                 .reversed()
-                .thenComparing(RadarDisplayStructure::origin, RadarDisplayStructureScanner::compareBlockPos)
+                .thenComparing(RadarDisplayStructure::origin, RadarDisplayStructureResolver::compareBlockPos)
                 .thenComparing(candidate -> candidate.facing().ordinal()));
         return ordered;
     }
@@ -132,8 +138,10 @@ final class RadarDisplayStructureScanner {
         return List.copyOf(positions);
     }
 
-    static void addNearbyDisplays(Level level, BlockPos changedPos, java.util.Collection<BlockPos> output) {
-        for (int x = -RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS; x <= RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS; x++) {
+    static void addNearbyDisplays(Level level, BlockPos changedPos, Collection<BlockPos> output) {
+        for (int x = -RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS;
+                x <= RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS;
+                x++) {
             for (int y = -RadarDisplayStructureResolver.MAX_SIZE; y <= RadarDisplayStructureResolver.MAX_SIZE; y++) {
                 for (int z = -RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS; z <= RadarDisplayStructureResolver.CONTROLLER_SCAN_RADIUS; z++) {
                     BlockPos pos = changedPos.offset(x, y, z);
@@ -141,7 +149,7 @@ final class RadarDisplayStructureScanner {
                         continue;
                     }
                     BlockState state = level.getBlockState(pos);
-                    if (state.is(com.limbo2136.powerradar.registry.ModBlocks.RADAR_DISPLAY.get())) {
+                    if (state.is(ModBlocks.RADAR_DISPLAY.get())) {
                         output.add(pos);
                     }
                 }
@@ -187,18 +195,6 @@ final class RadarDisplayStructureScanner {
         }
         RadarDisplayStructure structure = new RadarDisplayStructure(origin, size, facing, Set.copyOf(positions));
         return structure.assembled() ? Optional.of(structure) : Optional.empty();
-    }
-
-    private static int compareBlockPos(BlockPos first, BlockPos second) {
-        int y = Integer.compare(second.getY(), first.getY());
-        if (y != 0) {
-            return y;
-        }
-        int x = Integer.compare(second.getX(), first.getX());
-        if (x != 0) {
-            return x;
-        }
-        return Integer.compare(second.getZ(), first.getZ());
     }
 
     private record StandaloneCandidateKey(BlockPos origin, int size, Direction facing) {

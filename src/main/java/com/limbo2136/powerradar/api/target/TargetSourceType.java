@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.api.target;
 
 import com.limbo2136.powerradar.radar.RadarTargetSourceKind;
 
+/** Физический источник контакта; он намеренно точнее общей классификации цели. */
 public enum TargetSourceType {
     ENTITY,
     PROJECTILE,

@@ -13,8 +13,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Caches whether one block belongs to Sable, then samples only that known structure's motion.
- * A new block-entity instance performs one new containment lookup.
+ * Один раз определяет принадлежность блока Sable, затем измеряет движение только этой структуры.
+ * Новый экземпляр блочной сущности выполняет новое определение контейнера.
  */
 public final class MovingProtectedZoneTracker {
     private boolean placementInitialized;
@@ -39,6 +39,7 @@ public final class MovingProtectedZoneTracker {
             AABB stationaryBounds,
             double sableTotalExpansionPercent
     ) {
+        // Быстрый этап использует кэшированную геометрию либо временную малую зону вокруг блока.
         initializePlacement(level, blockPos);
         if (this.structureUuid == null) {
             return new MovingProtectedZone(
@@ -88,6 +89,7 @@ public final class MovingProtectedZoneTracker {
             MovingProtectedZone broadPhaseZone,
             double sableTotalExpansionPercent
     ) {
+        // Блоки перечитываются не чаще интервала, но пространственная поза обновляется для каждого снимка.
         if (!broadPhaseZone.onSable() || this.structureUuid == null) {
             return broadPhaseZone;
         }
@@ -164,6 +166,7 @@ public final class MovingProtectedZoneTracker {
         }
         long gameTime = zone.sampleGameTime();
         Vec3 velocity = zone.velocity();
+        // Ускорение выводится из последовательных снимков и сбрасывается после большого разрыва времени.
         boolean reset = this.previousGameTime == Long.MIN_VALUE
                 || gameTime <= this.previousGameTime
                 || gameTime - this.previousGameTime

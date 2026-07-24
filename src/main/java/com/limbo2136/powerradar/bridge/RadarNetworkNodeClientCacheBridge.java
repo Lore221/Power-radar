@@ -5,7 +5,9 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 
+/** Нейтральный по стороне шлюз к клиентскому кэшу узлов радарной сети. */
 public final class RadarNetworkNodeClientCacheBridge {
+    // NO_OP сохраняет границу сторон при загрузке общих block entity на сервере.
     private static Handler handler = Handler.NO_OP;
 
     private RadarNetworkNodeClientCacheBridge() {

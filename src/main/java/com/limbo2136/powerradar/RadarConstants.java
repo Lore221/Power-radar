@@ -1,6 +1,8 @@
 package com.limbo2136.powerradar;
 
 public final class RadarConstants {
+    // Для конфигурируемых параметров публичные поля задают значения по умолчанию,
+    // а актуальные серверные значения читаются через методы в конце класса.
     public static final int SECTOR_RADAR_GROUND_ANGLE_DEGREES = 90;
     public static final int SECTOR_RADAR_ENTITY_QUERY_SLICE_SIZE = 256;
 
@@ -13,6 +15,7 @@ public final class RadarConstants {
     public static final int RADAR_MONITOR_BLIP_FADE_DELAY_TICKS = 20;
     public static final int RADAR_MONITOR_BLIP_FADE_TICKS = 40;
 
+    // Интервалы синхронизации дисплея и жизненного цикла радарной сети.
     public static final int RADAR_MONITOR_UPDATE_INTERVAL_TICKS = 5;
     public static final int RADAR_MONITOR_BLOCK_UPDATE_INTERVAL_TICKS = 5;
     public static final int RADAR_MONITOR_STRUCTURE_RECONCILE_INTERVAL_TICKS = 100;
@@ -30,6 +33,7 @@ public final class RadarConstants {
     public static final int INTERCEPTION_NETWORK_OUTLINE_COLOR_B = 0xFFB347;
     public static final int RADAR_DISPLAY_LINK_REFRESH_INTERVAL_TICKS = 5;
 
+    // Общий масштаб атласа контактов для GUI и дисплея в мире.
     public static final float RADAR_DISPLAY_CONTENT_SCALE = 0.88F;
     public static final float RADAR_BLIP_RENDER_SCALE = 0.5F;
     public static final float RADAR_BLIP_CELL_TEXTURE_RATIO = 11.0F / 128.0F * RADAR_BLIP_RENDER_SCALE;

@@ -35,7 +35,9 @@ public record AllowlistCardSavePayload(
     private static List<String> readStrings(RegistryFriendlyByteBuf buffer) {
         int count = Math.min(buffer.readVarInt(), 1024);
         ArrayList<String> values = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) values.add(buffer.readUtf(64));
+        for (int i = 0; i < count; i++) {
+            values.add(buffer.readUtf(64));
+        }
         return List.copyOf(values);
     }
 

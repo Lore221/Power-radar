@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.radar;
 
+/** Опорный угол и скорость вращения в градусах и градусах/тик на указанное серверное время. */
 public record RadarOrientationState(
         RadarStructureType structureType,
         float referenceYawDegrees,

@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -48,6 +49,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.neoforged.fml.ModList;
 
 public class InterceptionControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
+    // Времена заданы в серверных тиках, углы — в градусах, скорости — в блоках за тик.
     private static final int MAX_INTERCEPTION_TICKS = 240;
     private static final int MIN_INTERCEPTION_TICKS = 4;
     private static final int INTERCEPT_COARSE_STEP_TICKS = 3;
@@ -66,6 +68,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private static final long AIM_ANGLE_RESYNC_TICKS = 40L;
     private static final long MOUNT_CACHE_RESYNC_TICKS = 40L;
 
+    // Синхронизируемые питание, команда наведения и итоговый краснокаменный выход.
     private boolean readyToFire;
     private double powerVoltageVolts;
     private double currentAmps;
@@ -80,6 +83,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private float currentPitchDegrees;
     private double interceptTicks;
     private Status status = Status.NO_NETWORK;
+
+    // Назначение угрозы и burst-окно принадлежат runtime-координатору и не сохраняются в NBT.
     private String lastNetworkStatus = "NO_NETWORK";
     private String lastSolveReason = "startup";
     private long lastClientSyncGameTime = Long.MIN_VALUE;
@@ -89,6 +94,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private UUID burstThreatUuid;
     private Vec3 burstAimPoint;
     private long burstEndsAtGameTime = Long.MIN_VALUE;
+
+    // Кэши CBC ограничивают дорогую инспекцию установки и периодически сверяются с живым mount.
     private BlockPos lastMissingWeaponMountPos;
     private long lastMissingWeaponMountGameTime = Long.MIN_VALUE;
     private BlockPos estimatedAimMountPos;
@@ -102,6 +109,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private BlockPos cachedWeaponKindMountPos;
     private WeaponKind cachedWeaponKind;
     private long lastWeaponKindCacheGameTime = Long.MIN_VALUE;
+
+    // Поза дула и feed-forward выражены в мировых координатах, включая движение Sable.
     private Vec3 lastWorldMuzzle;
     private long lastWorldMuzzleGameTime = Long.MIN_VALUE;
     private Vec3 worldMuzzleVelocity = Vec3.ZERO;
@@ -116,7 +125,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         super(ModBlockEntities.INTERCEPTION_CONTROLLER.get(), pos, state);
     }
 
-    public void setInterceptionNetworkId(UUID networkId) {
+    public void setInterceptionNetworkId(@Nullable UUID networkId) {
         if (java.util.Objects.equals(this.interceptionNetworkId, networkId)) {
             return;
         }
@@ -131,6 +140,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         sendData();
     }
 
+    @Nullable
     public UUID interceptionNetworkId() {
         return this.interceptionNetworkId;
     }
@@ -207,6 +217,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private void tickServer(ServerLevel level, BlockState state) {
+        // Расчёт решения отделён от применения приводов и публикации фронта сигнала.
         Solution solution = solve(level, state);
         this.desiredYawDegrees = solution.desiredYaw;
         this.desiredPitchDegrees = solution.desiredPitch;
@@ -248,6 +259,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private Solution solve(ServerLevel level, BlockState state) {
+        // Сначала проверяются неизменяемые контракты: интеграция, сеть и питание.
         if (!ModList.get().isLoaded("createbigcannons")) {
             this.lastSolveReason = "cbc-missing";
             releaseAssignment(level);
@@ -284,6 +296,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
         Direction facing = state.getValue(InterceptionControllerBlock.FACING);
         BlockPos mountPos = this.worldPosition.relative(facing);
+        // Снимок контроллера публикуется после проверки живого autocannon и его боеприпаса.
         Optional<WeaponMount> cannonOptional = inspectWeaponMount(level, mountPos);
         if (cannonOptional.isEmpty()) {
             this.lastSolveReason = "no-cbc-mount";
@@ -377,6 +390,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 threatSnapshot.drag(),
                 threatSnapshot.quadraticDrag());
         if (burstActiveFor(this.assignedThreatUuid, gameTime)) {
+            // После первого готового выстрела точка фиксируется на короткое burst-окно,
+            // чтобы серия autocannon не дёргалась между соседними решениями.
             if (hasPassedReference(trackedPosition, trackedVelocity, threatReference, 0.0D)) {
                 clearBurst();
                 rejectAssignment(level);
@@ -419,6 +434,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     0.0);
         }
         clearBurst();
+        // Вне burst-окна решение заново учитывает движение угрозы, платформы и время наведения.
         Intercept intercept = findIntercept(
                 launchMuzzle,
                 threatReference,
@@ -553,6 +569,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             double acceleration,
             boolean preAim
     ) {
+        // Линейное сопротивление допускает быстрый аналитический прогноз позиции снаряда.
         Intercept fastIntercept = findLinearDragIntercept(
                 muzzle,
                 threatReference,
@@ -569,6 +586,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             return fastIntercept;
         }
 
+        // Для квадратичного/вырожденного drag сохраняется точная пошаговая симуляция CBC.
         Vec3 position = shellPosition;
         Vec3 velocity = shellVelocity;
         Intercept best = Intercept.UNREACHABLE;
@@ -654,6 +672,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             return Intercept.UNREACHABLE;
         }
 
+        // Грубые дешёвые пробы находят смены знака ошибки времени и область её минимума.
         Intercept best = Intercept.UNREACHABLE;
         List<Intercept> window = preAim ? new ArrayList<>() : List.of();
         List<CheapTimingSample> samples = new ArrayList<>();
@@ -862,6 +881,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             double highTick,
             double pitchHint
     ) {
+        // Первые итерации используют секущую внутри bracket, остальные гарантированно сужают его пополам.
         double low = lowTick;
         double high = highTick;
         Intercept lowIntercept = evaluateLinearDragInterceptAt(
@@ -973,34 +993,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 acceleration);
         double signedError = approximateFlightTicks + aimTicks - targetTicks;
         return new CheapTimingSample(targetTicks, signedError, Math.abs(signedError), false);
-    }
-
-    private static Intercept evaluateLinearDragInterceptAt(
-            Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
-            Vec3 shellPosition,
-            Vec3 shellVelocity,
-            ShellAlarmCbcCompat.Ballistics shellBallistics,
-            WeaponBallistics interceptorBallistics,
-            float currentYaw,
-            float currentPitch,
-            double maxStep,
-            double acceleration,
-            double targetTicks
-    ) {
-        return evaluateLinearDragInterceptAt(
-                muzzle,
-                threatReference,
-                shellPosition,
-                shellVelocity,
-                shellBallistics,
-                interceptorBallistics,
-                currentYaw,
-                currentPitch,
-                maxStep,
-                acceleration,
-                targetTicks,
-                Double.NaN);
     }
 
     private static Intercept evaluateLinearDragInterceptAt(
@@ -1213,6 +1205,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private AimStep applyAim(ServerLevel level, Solution solution) {
+        // Ограниченный по ускорению привод получает feed-forward к текущей угловой ошибке.
         double maxStep = maxStepDegreesPerTick();
         double acceleration = aimAccelerationDegreesPerTickSquared();
         AimFeedForward feedForward = updateAimFeedForward(solution, level.getGameTime(), maxStep);
@@ -1540,6 +1533,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        // Имена NBT и enum Status являются совместимым форматом мира и update tag.
         super.write(tag, registries, clientPacket);
         tag.putBoolean("ReadyToFire", this.readyToFire);
         tag.putDouble("PowerVoltage", this.powerVoltageVolts);

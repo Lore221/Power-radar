@@ -6,7 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-/** Module kinds accepted by the compact four-slot Onboard Computer panel. */
+/** Типы модулей, допустимые в компактной четырёхслотовой панели Onboard Computer. */
 public enum OnboardModuleType {
     COMPASS,
     ALTIMETER,

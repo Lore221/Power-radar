@@ -13,6 +13,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 
+/**
+ * Серверный кэш треков времени выполнения с сохранением порядка первого добавления.
+ * Вторичный индекс по типу источника обязан обновляться атомарно с основным отображением.
+ */
 public final class RadarTargetCache {
     private final LinkedHashMap<TargetKey, RadarTargetTrack> tracks = new LinkedHashMap<>();
     private final EnumMap<TargetSourceType, LinkedHashMap<TargetKey, RadarTargetTrack>> tracksBySource =

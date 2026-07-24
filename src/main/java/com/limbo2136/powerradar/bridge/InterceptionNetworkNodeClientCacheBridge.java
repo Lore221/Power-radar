@@ -5,7 +5,9 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 
+/** Нейтральный по стороне шлюз к клиентскому кэшу узлов сети перехвата. */
 public final class InterceptionNetworkNodeClientCacheBridge {
+    // NO_OP не даёт общему коду загружать клиентские классы на выделенном сервере.
     private static Handler handler = Handler.NO_OP;
 
     private InterceptionNetworkNodeClientCacheBridge() {

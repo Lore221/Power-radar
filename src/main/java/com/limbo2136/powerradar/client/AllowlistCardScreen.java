@@ -1,35 +1,33 @@
 package com.limbo2136.powerradar.client;
 
-import com.limbo2136.powerradar.PowerRadar;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.CARDS;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.ICONS;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.TEXTURE_SIZE;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.blitSmallButtonBackground;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.contains;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.renderCardPreview;
+import static com.limbo2136.powerradar.client.RadarCardScreenTheme.smallButtonSourceX;
+
+import com.limbo2136.powerradar.item.RadarFilterCardItem;
+import com.limbo2136.powerradar.item.RadarFilterCardItem.AllowlistData;
 import com.limbo2136.powerradar.network.AllowlistCardOpenPayload;
 import com.limbo2136.powerradar.network.AllowlistCardSavePayload;
 import com.limbo2136.powerradar.registry.ModItems;
-import com.limbo2136.powerradar.item.RadarFilterCardItem;
-import com.limbo2136.powerradar.item.RadarFilterCardItem.AllowlistData;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import net.createmod.catnip.gui.element.GuiGameElement;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class AllowlistCardScreen extends Screen {
-    private static final ResourceLocation CARDS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/cards.png");
-    private static final ResourceLocation ICONS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
-    private static final int TEXTURE_SIZE = 256;
     private static final int GUI_WIDTH = 240;
     private static final int GUI_HEIGHT = 86;
     private static final int TOTAL_WIDTH = 272;
@@ -95,7 +93,9 @@ public class AllowlistCardScreen extends Screen {
 
         renderSableButton(graphics, mouseX, mouseY);
         renderCandidate(graphics);
-        if (this.sableMode) renderSableName(graphics);
+        if (this.sableMode) {
+            renderSableName(graphics);
+        }
         renderListActionButton(graphics, ButtonType.ADD, 182, 224, 16, mouseX, mouseY);
         renderListActionButton(graphics, ButtonType.REMOVE, 200, 240, 16, mouseX, mouseY);
         renderModeButton(graphics, 0, 38, mouseX, mouseY);
@@ -103,10 +103,11 @@ public class AllowlistCardScreen extends Screen {
         renderSaveButton(graphics, mouseX, mouseY);
         graphics.renderItem(new ItemStack(Items.NAME_TAG), this.left + 16, this.top + 63);
 
-        ItemStack card = new ItemStack(ModItems.ALLOWLIST_CARD.get());
-        var cardRender = GuiGameElement.of(card);
-        cardRender.at(this.left + GUI_WIDTH + 8, this.top + GUI_HEIGHT - 52, -200.0F);
-        cardRender.scale(4.0D).render(graphics);
+        renderCardPreview(
+                graphics,
+                new ItemStack(ModItems.ALLOWLIST_CARD.get()),
+                this.left + GUI_WIDTH + 8,
+                this.top + GUI_HEIGHT - 52);
 
         renderHoveredTooltip(graphics, mouseX, mouseY);
     }
@@ -116,16 +117,20 @@ public class AllowlistCardScreen extends Screen {
         int y = this.top + 27;
         boolean hovered = contains(mouseX, mouseY, x, y, 18, 18);
         boolean isPressed = this.pressed.type == ButtonType.SABLE;
-        int sourceX = isPressed ? 156 : hovered ? 138 : this.sableMode ? 174 : 120;
-        blitSmallBackground(graphics, x, y, sourceX);
+        int sourceX = smallButtonSourceX(true, this.sableMode, hovered, isPressed);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, 224.0F, 0.0F,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
     }
 
     private void renderCandidate(GuiGraphics graphics) {
-        if (this.sableMode) return;
+        if (this.sableMode) {
+            return;
+        }
         String candidate = candidateName();
-        if (candidate == null) return;
+        if (candidate == null) {
+            return;
+        }
         String fitted = this.font.plainSubstrByWidth(candidate, 131);
         graphics.drawString(this.font, fitted, this.left + 42, this.top + 32, 0x404040, false);
     }
@@ -155,8 +160,8 @@ public class AllowlistCardScreen extends Screen {
         boolean active = type == ButtonType.ADD ? canAddCandidate() : canRemoveCandidate();
         boolean hovered = active && contains(mouseX, mouseY, x, y, 18, 18);
         boolean isPressed = active && this.pressed.type == type;
-        int sourceX = active ? isPressed ? 156 : hovered ? 138 : 120 : 192;
-        blitSmallBackground(graphics, x, y, sourceX);
+        int sourceX = smallButtonSourceX(active, false, hovered, isPressed);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, (float) iconU, (float) iconV,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
     }
@@ -166,8 +171,8 @@ public class AllowlistCardScreen extends Screen {
         int y = this.top + 62;
         boolean hovered = contains(mouseX, mouseY, x, y, 18, 18);
         boolean isPressed = this.pressed.type == ButtonType.MODE && this.pressed.index == index;
-        int sourceX = isPressed ? 156 : hovered ? 138 : this.option == index ? 174 : 120;
-        blitSmallBackground(graphics, x, y, sourceX);
+        int sourceX = smallButtonSourceX(true, this.option == index, hovered, isPressed);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         int iconU = index == 0 ? 224 : 240;
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, (float) iconU, 32.0F,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
@@ -176,15 +181,11 @@ public class AllowlistCardScreen extends Screen {
     private void renderSaveButton(GuiGraphics graphics, int mouseX, int mouseY) {
         int x = this.left + 208;
         int y = this.top + 62;
-        int sourceX = contains(mouseX, mouseY, x, y, 18, 18) ? 138 : 120;
-        blitSmallBackground(graphics, x, y, sourceX);
+        int sourceX = smallButtonSourceX(
+                true, false, contains(mouseX, mouseY, x, y, 18, 18), false);
+        blitSmallButtonBackground(graphics, x, y, sourceX);
         graphics.blit(ICONS, x + 1, y + 1, 16, 16, 240.0F, 0.0F,
                 16, 16, TEXTURE_SIZE, TEXTURE_SIZE);
-    }
-
-    private static void blitSmallBackground(GuiGraphics graphics, int x, int y, int sourceX) {
-        graphics.blit(ICONS, x, y, 18, 18, (float) sourceX, 0.0F,
-                18, 18, TEXTURE_SIZE, TEXTURE_SIZE);
     }
 
     private void renderHoveredTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -222,31 +223,33 @@ public class AllowlistCardScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+        if (button != 0) {
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
         if (contains(mouseX, mouseY, this.left + 15, this.top + 27, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             this.pressed = new PressedButton(ButtonType.SABLE, -1);
             return true;
         }
         if (canAddCandidate() && contains(mouseX, mouseY, this.left + 182, this.top + 27, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             this.pressed = new PressedButton(ButtonType.ADD, -1);
             return true;
         }
         if (canRemoveCandidate() && contains(mouseX, mouseY, this.left + 200, this.top + 27, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             this.pressed = new PressedButton(ButtonType.REMOVE, -1);
             return true;
         }
         for (int i = 0; i < 2; i++) {
             if (contains(mouseX, mouseY, this.left + 38 + i * 18, this.top + 62, 18, 18)) {
-                playButtonSound();
+                RadarCardScreenTheme.playButtonSound(this.minecraft);
                 this.pressed = new PressedButton(ButtonType.MODE, i);
                 return true;
             }
         }
         if (contains(mouseX, mouseY, this.left + 208, this.top + 62, 18, 18)) {
-            playButtonSound();
+            RadarCardScreenTheme.playButtonSound(this.minecraft);
             saveAndClose();
             return true;
         }
@@ -269,14 +272,20 @@ public class AllowlistCardScreen extends Screen {
                 }
             }
             case ADD -> {
-                if (contains(mouseX, mouseY, this.left + 182, this.top + 27, 18, 18)) addCandidate();
+                if (contains(mouseX, mouseY, this.left + 182, this.top + 27, 18, 18)) {
+                    addCandidate();
+                }
             }
             case REMOVE -> {
-                if (contains(mouseX, mouseY, this.left + 200, this.top + 27, 18, 18)) removeCandidate();
+                if (contains(mouseX, mouseY, this.left + 200, this.top + 27, 18, 18)) {
+                    removeCandidate();
+                }
             }
             case MODE -> {
                 int x = 38 + released.index * 18;
-                if (contains(mouseX, mouseY, this.left + x, this.top + 62, 18, 18)) this.option = released.index;
+                if (contains(mouseX, mouseY, this.left + x, this.top + 62, 18, 18)) {
+                    this.option = released.index;
+                }
             }
             default -> {
             }
@@ -296,16 +305,22 @@ public class AllowlistCardScreen extends Screen {
     }
 
     private String candidateName() {
-        if (this.sableMode) return sanitizeCandidate(this.sableNameBox.getValue());
+        if (this.sableMode) {
+            return sanitizeCandidate(this.sableNameBox.getValue());
+        }
         return this.playerIndex < 0 || this.playerIndex >= this.onlinePlayers.size()
                 ? null : this.onlinePlayers.get(this.playerIndex);
     }
 
     private void addCandidate() {
         String candidate = candidateName();
-        if (candidate == null) return;
+        if (candidate == null) {
+            return;
+        }
         if (this.sableMode) {
-            if (!containsSableName(candidate)) this.storedSableNames.add(candidate);
+            if (!containsSableName(candidate)) {
+                this.storedSableNames.add(candidate);
+            }
             this.sableNameBox.setValue("");
         } else if (this.storedPlayerNames.stream().noneMatch(candidate::equalsIgnoreCase)) {
             this.storedPlayerNames.add(candidate);
@@ -328,7 +343,9 @@ public class AllowlistCardScreen extends Screen {
 
     private void removeCandidate() {
         String candidate = candidateName();
-        if (candidate == null) return;
+        if (candidate == null) {
+            return;
+        }
         if (this.sableMode) {
             this.storedSableNames.removeIf(candidate::equalsIgnoreCase);
             this.sableNameBox.setValue("");
@@ -339,7 +356,9 @@ public class AllowlistCardScreen extends Screen {
 
     private void saveAndClose() {
         saveState();
-        if (this.minecraft != null) this.minecraft.setScreen(null);
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(null);
+        }
     }
 
     @Override
@@ -349,7 +368,9 @@ public class AllowlistCardScreen extends Screen {
     }
 
     private void saveState() {
-        if (this.stateSaved) return;
+        if (this.stateSaved) {
+            return;
+        }
         this.stateSaved = true;
         AllowlistData data = new AllowlistData(this.storedPlayerNames, this.storedSableNames);
         PacketDistributor.sendToServer(new AllowlistCardSavePayload(
@@ -367,21 +388,14 @@ public class AllowlistCardScreen extends Screen {
     }
 
     private static String sanitizeCandidate(String value) {
-        if (value == null) return null;
-        String sanitized = value.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim();
-        if (sanitized.isEmpty()) return null;
-        return sanitized.length() <= 64 ? sanitized : sanitized.substring(0, 64).trim();
-    }
-
-    private void playButtonSound() {
-        if (this.minecraft != null) {
-            this.minecraft.getSoundManager().play(
-                    SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), 1.0F));
+        if (value == null) {
+            return null;
         }
-    }
-
-    private static boolean contains(double mouseX, double mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        String sanitized = value.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').trim();
+        if (sanitized.isEmpty()) {
+            return null;
+        }
+        return sanitized.length() <= 64 ? sanitized : sanitized.substring(0, 64).trim();
     }
 
     private enum ButtonType {

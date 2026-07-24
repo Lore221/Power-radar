@@ -27,7 +27,7 @@ final class OnboardPartialModelRenderer {
         render(model, computer, poseStack, consumer, packedLight, packedOverlay, RenderType.cutoutMipped());
     }
 
-    // Полупрозрачные шкалы требуют согласованных буфера и render type, иначе альфа станет вырезкой.
+    // Полупрозрачные шкалы требуют согласованных буфера и типа рендера, иначе альфа станет вырезкой.
     void renderTranslucent(
             PartialModel model,
             OnboardComputerBlockEntity computer,

@@ -35,6 +35,7 @@ final class SableStructureScanner {
     private static final int REBUILD_CYCLE_TICKS = 200;
     private static final int CACHE_TTL_TICKS = 6_000;
     private static final int MIN_REBUILD_WORK_PER_TICK = 4_096;
+    // Кэш принадлежит экземпляру сервера; слабый ключ не удерживает завершённую локальную сессию.
     private static final Map<MinecraftServer, SilhouetteCache> CACHES = new WeakHashMap<>();
 
     private SableStructureScanner() {
@@ -73,6 +74,7 @@ final class SableStructureScanner {
         }
         AABB localAabb = localAabb(localBounds);
         Vec3 localCenter = localCenter(localBounds);
+        // localBounds остаётся в пространстве plot, worldBounds строится по всем восьми углам текущей позы.
         return Optional.of(new SableStructureGeometry(
                 localAabb,
                 localCenter,
@@ -105,6 +107,7 @@ final class SableStructureScanner {
             return Optional.empty();
         }
         Vec3 worldOrigin = serverSubLevel.logicalPose().transformPosition(localCenter);
+        // Множитель 0,05 переводит скорость Sable в используемые радаром блоки/tick.
         Vec3 velocity = Sable.HELPER
                 .getVelocity(serverSubLevel.getLevel(), serverSubLevel, localCenter)
                 .scale(0.05D);
@@ -136,6 +139,7 @@ final class SableStructureScanner {
         SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
         return subLevel != null && !subLevel.isRemoved();
     }
+
     private static SableStructureObservation observe(ServerSubLevel serverSubLevel) {
         BoundingBox3ic localBounds = serverSubLevel.getPlot().getBoundingBox();
         if (!valid(localBounds)) {
@@ -233,6 +237,7 @@ final class SableStructureScanner {
                 this.entries.put(key, entry);
             }
             if (entry.snapshot == null) {
+                // Первый запрос строится сразу, чтобы монитор не ждал начала следующего фонового цикла.
                 BuildTask immediate = createTask(level, key);
                 if (immediate != null) {
                     immediate.finishImmediately();
@@ -270,6 +275,7 @@ final class SableStructureScanner {
         }
 
         private void beginNextCycle(MinecraftServer server, long gameTime) {
+            // Набор текущего цикла фиксируется снимком, а новые обнаружения переходят в следующий.
             this.cycleStart = gameTime;
             this.currentUpdateSet = Set.copyOf(this.nextUpdateSet);
             this.nextUpdateSet = new LinkedHashSet<>();
@@ -359,6 +365,7 @@ final class SableStructureScanner {
                 return new BuildTask(key, 0.0D, 0.0D, List.of());
             }
             List<SectionCursor> sections = new ArrayList<>();
+            // Секции сортируются по локальным координатам plot для воспроизводимого результата.
             for (PlotChunkHolder holder : subLevel.getPlot().getLoadedChunks()) {
                 LevelChunk chunk = holder.getChunk();
                 LevelChunkSection[] chunkSections = chunk.getSections();
@@ -450,6 +457,7 @@ final class SableStructureScanner {
             int start = this.index;
             int end = Math.min(4_096, this.index + budget);
             for (; this.index < end; this.index++) {
+                // Индекс секции разворачивается в локальный Minecraft-порядок X, Z, Y.
                 int localX = this.index & 15;
                 int localZ = (this.index >>> 4) & 15;
                 int localY = (this.index >>> 8) & 15;

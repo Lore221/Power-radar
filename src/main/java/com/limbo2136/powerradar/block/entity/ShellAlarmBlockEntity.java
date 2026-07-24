@@ -6,15 +6,16 @@ import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.radar.RadarDataSource;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
+import com.limbo2136.powerradar.block.ShellAlarmBlock;
+import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.bridge.ShellAlarmIconBridge;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
-import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
-import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
-import com.limbo2136.powerradar.bridge.ShellAlarmIconBridge;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
@@ -25,20 +26,22 @@ import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
-import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
+import com.google.common.collect.ImmutableList;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
-import com.simibubi.create.foundation.blockEntity.behaviour.CenteredSideValueBoxTransform;
+import com.simibubi.create.foundation.blockEntity.behaviour.ValueBoxTransform;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBehaviour.ValueSettings;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBoard;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsFormatter;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.INamedIconOptions;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.ScrollOptionBehaviour;
 import com.simibubi.create.foundation.gui.AllIcons;
-import com.google.common.collect.ImmutableList;
+import dev.engine_room.flywheel.lib.transform.TransformStack;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -47,8 +50,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import net.createmod.catnip.math.AngleHelper;
+import net.createmod.catnip.math.VecHelper;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -57,6 +63,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -104,7 +112,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         setChanged();
     }
 
-    public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state,
+    public static void serverTick(Level level, BlockPos pos, BlockState state,
                                   ShellAlarmBlockEntity alarm) {
         if (level instanceof ServerLevel serverLevel) {
             alarm.tick();
@@ -113,6 +121,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private void tickServer(ServerLevel level, BlockState state) {
+        // Геометрию и принадлежность Sable инициализируем лениво: поиск структуры выполняется
+        // один раз на экземпляр BE, а последующие снимки переиспользуют сохранённую привязку.
         if (this.protectedZone == null) {
             this.protectedZone = this.protectedZoneTracker.broadPhaseZone(
                     level,
@@ -143,6 +153,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         UUID connectedNetworkId = null;
         RadarDataSource controller = null;
 
+        // Радарная сеть остаётся источником снимков, а независимый interception UUID — каналом
+        // публикации угроз. Электропитание и наличие обоих контрактов проверяются отдельно.
         if (powered && this.networkId != null) {
             RadarNetworkManager.ControllersResolution resolution = RadarNetworkManager.get(level.getServer())
                     .resolveControllersForConsumer(this.networkId, globalPos());
@@ -160,6 +172,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
         long radarScanGameTime = controller.lastScanGameTime();
         long previousRadarScanGameTime = this.lastProcessedRadarScanGameTime;
+        // Оценка угроз привязана к публикациям радара, поэтому один снимок нельзя считать повторно
+        // на каждом серверном тике.
         if (radarScanGameTime == previousRadarScanGameTime) {
             return;
         }
@@ -186,6 +200,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         shellCount = tracks.size();
         MovingProtectedZone zone = this.protectedZone;
         MovingProtectedZone initialZone = zone;
+        // Дорогие геометрия и кинематика Sable обновляются поэтапно только для снарядов,
+        // прошедших дешёвую широкую фазу на текущем снимке радара.
         List<TrackedTargetView> candidateTracks = tracks.stream()
                 .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
                         projectileLevel,
@@ -241,6 +257,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         this.trackedShellCount = shellCount;
         UUID interceptionChannelId = this.interceptionNetworkId;
         if (powered && this.networkConnected && connectedNetworkId != null && interceptionChannelId != null) {
+            // Публикация — полный авторитетный снимок: отсутствие UUID немедленно отзывает
+            // прежнюю угрозу и связанные с ней назначения перехватчиков.
             Set<UUID> dangerousShells = new HashSet<>();
             List<ThreatSnapshot> threatSnapshots = new ArrayList<>();
             for (Map.Entry<UUID, ThreatEvaluation> entry : this.evaluations.entrySet()) {
@@ -329,6 +347,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private void clearInactiveState(ServerLevel level, BlockState state) {
+        // При потере любого обязательного источника сразу снимаем локальный сигнал и оценки.
         boolean changed = !this.evaluations.isEmpty() || this.trackedShellCount != 0 || this.alarmActive;
         this.evaluations.clear();
         this.trackedShellCount = 0;
@@ -341,6 +360,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Делегирует единственную физическую модель общему evaluator и сохраняет диагностический снимок.
     private ThreatEvaluation trajectoryThreatens(
             ServerLevel level,
             TrackedTargetView track,
@@ -468,6 +488,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return worldLevel == null ? level : worldLevel;
     }
 
+    // Маркер отражает активную станцию для других радаров и живёт только на стороне сервера.
     private void syncRadarStructureEntityState(ServerLevel level, boolean active) {
         if (active == this.radarStructureEntityActive) {
             return;
@@ -521,6 +542,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Логическая радарная сеть и interception-сеть намеренно имеют разные UUID и жизненные циклы.
     public void initializeNetwork(UUID networkId) {
         if (networkId == null || !(this.level instanceof ServerLevel serverLevel)) {
             return;
@@ -575,6 +597,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Выгрузка чанка снимает только runtime-регистрацию; постоянное членство удаляется при разрушении.
     @Override
     public void clearRemoved() {
         super.clearRemoved();
@@ -635,7 +658,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private GlobalPos globalPos() {
-        return GlobalPos.of(this.level == null ? net.minecraft.world.level.Level.OVERWORLD : this.level.dimension(),
+        return GlobalPos.of(this.level == null ? Level.OVERWORLD : this.level.dimension(),
                 this.worldPosition);
     }
 
@@ -664,6 +687,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Имена NBT ниже являются совместимым форматом мира и клиентского update tag.
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
@@ -727,6 +751,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Старое квадратное поле ProtectionRadius мигрирует в ширину/глубину, не меняя высоту по умолчанию.
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
@@ -829,6 +854,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
+    // Один Create-behaviour хранит обе формы настройки, но показывает только режим текущего носителя.
     private static class ShellAlarmDimensionsBehaviour extends ScrollOptionBehaviour<ShellAlarmSettingsOption> {
         private int width = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS;
         private int depth = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS;
@@ -838,7 +864,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         private ShellAlarmDimensionsBehaviour(
                 Component label,
                 SmartBlockEntity blockEntity,
-                CenteredSideValueBoxTransform transform
+                ValueBoxTransform transform
         ) {
             super(ShellAlarmSettingsOption.class, label, blockEntity, transform);
         }
@@ -975,15 +1001,51 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
     }
 
-    private static class ShellAlarmDimensionsTransform extends CenteredSideValueBoxTransform {
-        private ShellAlarmDimensionsTransform() {
-            super((state, direction) -> direction == state.getValue(
-                    com.limbo2136.powerradar.block.ShellAlarmBlock.FACING));
+    private static class ShellAlarmDimensionsTransform extends ValueBoxTransform {
+        // Координаты повторяют верхнюю грань элемента 2,13,0 -> 14,14,12 из shell_alarm.json.
+        // При изменении модели синхронно обнови точку, pivot и угол ниже.
+        private static final Vec3 PANEL_POINT = voxel(8.0D, 14.0D, 6.0D);
+        private static final Vec3 PANEL_PIVOT = voxel(8.0D, 15.0D, 0.0D);
+        private static final float PANEL_MODEL_TILT_DEGREES = -25.0F;
+        private static final float VALUE_BOX_X_ROTATION_DEGREES = 90.0F + PANEL_MODEL_TILT_DEGREES;
+
+        @Override
+        public Vec3 getLocalOffset(LevelAccessor level, BlockPos pos, BlockState state) {
+            Vec3 panelPosition = rotateAroundX(PANEL_POINT, PANEL_PIVOT, PANEL_MODEL_TILT_DEGREES);
+            Direction facing = state.getValue(ShellAlarmBlock.FACING);
+            return VecHelper.rotateCentered(
+                panelPosition,
+                AngleHelper.horizontalAngle(facing) + 180.0F,
+                Direction.Axis.Y
+            );
+        }
+
+        @Override
+        public void rotate(LevelAccessor level, BlockPos pos, BlockState state, PoseStack poseStack) {
+            Direction facing = state.getValue(ShellAlarmBlock.FACING);
+            TransformStack.of(poseStack)
+                    .rotateYDegrees(AngleHelper.horizontalAngle(facing) + 180.0F)
+                    .rotateXDegrees(VALUE_BOX_X_ROTATION_DEGREES);
         }
 
         @Override
         public float getScale() {
             return 0.55F;
+        }
+
+        // Применяет к точке тот же локальный X-поворот вокруг pivot, что задан элементу модели.
+        private static Vec3 rotateAroundX(Vec3 point, Vec3 pivot, float angleDegrees) {
+            double radians = Math.toRadians(angleDegrees);
+            double cosine = Math.cos(radians);
+            double sine = Math.sin(radians);
+            Vec3 relative = point.subtract(pivot);
+            double y = relative.y * cosine - relative.z * sine;
+            double z = relative.y * sine + relative.z * cosine;
+            return pivot.add(relative.x, y, z);
+        }
+
+        private static Vec3 voxel(double x, double y, double z) {
+            return new Vec3(x / 16.0D, y / 16.0D, z / 16.0D);
         }
     }
 }

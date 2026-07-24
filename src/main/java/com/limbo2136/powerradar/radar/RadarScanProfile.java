@@ -2,6 +2,10 @@ package com.limbo2136.powerradar.radar;
 
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 
+/**
+ * Неизменяемый профиль одного прохода сканирования. Дальность и смещения выражены в блоках,
+ * сектор — в градусах; фильтр обнаружения применяется до появления трека в кэше.
+ */
 public record RadarScanProfile(
         RadarProfileType radarType,
         RadarStructureType structureType,

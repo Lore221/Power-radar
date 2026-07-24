@@ -14,6 +14,10 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
 
+/**
+ * Упорядоченное объединение нескольких радаров. Первый источник остаётся первичным для
+ * идентичности и покрытия, а цели дедуплицируются по UUID в порядке первого появления.
+ */
 public final class CombinedRadarDataSource implements RadarTargetingDataSource {
     private final List<? extends RadarTargetingDataSource> sources;
 

@@ -9,7 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
 
-/** Shared CEE implementation for two-terminal blocks with a fixed internal resistance. */
+/** Общая CEE-реализация двухконтактных блоков с постоянным внутренним сопротивлением. */
 public abstract class PowerRadarCeeResistiveDevice extends SimpleElectricalDevice {
     private double voltageVolts;
     private double currentAmps;
@@ -45,6 +45,7 @@ public abstract class PowerRadarCeeResistiveDevice extends SimpleElectricalDevic
     @Override
     public void write(CompoundTag tag) {
         super.write(tag);
+        // Эти ключи принадлежат сохранённому формату CEE-устройства и не должны переименовываться.
         tag.putDouble("PowerVoltage", this.voltageVolts);
         tag.putDouble("CurrentAmps", this.currentAmps);
         tag.putDouble("PowerWatts", this.powerWatts);

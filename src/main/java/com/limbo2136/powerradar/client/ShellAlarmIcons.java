@@ -22,6 +22,7 @@ public final class ShellAlarmIcons {
     }
 
     public static AllIcons dimensions() {
+        // Публичное имя вызывается отражением из ShellAlarmIconBridge.
         return DIMENSIONS;
     }
 

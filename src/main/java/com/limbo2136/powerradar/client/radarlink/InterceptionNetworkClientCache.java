@@ -13,6 +13,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
 public final class InterceptionNetworkClientCache {
+    // Кэш используется только для контуров и очищается RadarLinkClientOutlineHandler при смене ClientLevel.
     private static final Map<ResourceKey<Level>, Map<UUID, Set<BlockPos>>> NODES_BY_LEVEL = new HashMap<>();
     private static final Map<ResourceKey<Level>, Map<BlockPos, UUID>> NETWORK_BY_POS = new HashMap<>();
 

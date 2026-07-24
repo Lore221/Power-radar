@@ -12,6 +12,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
+/** Фасад необязательной интеграции; прямые Sable-вызовы допустимы только за этой границей. */
 public final class SableRadarIntegration {
     private static final boolean SABLE_LOADED = ModList.get().isLoaded("sable");
     private static final boolean AERONAUTICS_LOADED = ModList.get().isLoaded("aeronautics");
@@ -44,6 +45,7 @@ public final class SableRadarIntegration {
                         level, containingPos, worldDirection, partialTick)
                 : worldDirection;
     }
+
     public static List<SableStructureObservation> loadedStructures(ServerLevel level) {
         return SABLE_LOADED ? SableStructureScanner.loadedStructures(level) : List.of();
     }
@@ -101,6 +103,7 @@ public final class SableRadarIntegration {
     public static Optional<UUID> containingStructureUuid(ServerLevel level, BlockPos pos) {
         return SABLE_LOADED ? SableStructureScanner.containingStructureUuid(level, pos) : Optional.empty();
     }
+
     public static void markDetected(ServerLevel level, SableStructureObservation observation, long gameTime) {
         if (SABLE_LOADED) {
             SableStructureScanner.markDetected(level, observation.structureUuid(), gameTime);

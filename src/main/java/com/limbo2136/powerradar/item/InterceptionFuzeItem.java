@@ -22,9 +22,13 @@ import rbasamoyai.createbigcannons.munitions.fuzes.FuzeItem;
 
 public class InterceptionFuzeItem extends FuzeItem {
     private static final double DETECTION_RANGE_BLOCKS = 20.0;
+    private static final double DETECTION_RANGE_SQR = DETECTION_RANGE_BLOCKS * DETECTION_RANGE_BLOCKS;
     private static final double HALF_CONE_ANGLE_DEGREES = 30.0;
+    private static final double MINIMUM_DIRECTION_DOT = Math.cos(Math.toRadians(HALF_CONE_ANGLE_DEGREES));
     private static final double MIN_DIRECTION_LENGTH_SQR = 1.0E-6;
     private static final int MIN_ARMING_TICKS = 2;
+
+    // Эти имена хранят состояние на сущности снаряда и являются совместимым NBT-контрактом.
     private static final String MANUAL_MODE_TAG = "PowerRadarManualInterceptionFuze";
     private static final String TRAVELLED_DISTANCE_TAG = "PowerRadarInterceptionFuzeTravelled";
     private static final String LAST_X_TAG = "PowerRadarInterceptionFuzeLastX";
@@ -40,6 +44,7 @@ public class InterceptionFuzeItem extends FuzeItem {
         if (!(projectile.level() instanceof ServerLevel level)) {
             return false;
         }
+        // Пройденный путь обновляется до взведения, чтобы ручной airburst отсчитывался от выстрела.
         double travelledDistance = updateTravelledDistance(projectile);
         if (projectile.tickCount < MIN_ARMING_TICKS) {
             return false;
@@ -54,6 +59,7 @@ public class InterceptionFuzeItem extends FuzeItem {
             targetUuid = InterceptionCoordinator.bindInterceptor(level, interceptorUuid, projectile.position());
         }
         if (targetUuid == null) {
+            // Снаряд без назначения один раз переходит в ручной режим и больше не ищет цель.
             projectileData.putBoolean(MANUAL_MODE_TAG, true);
             if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
                 PowerRadar.LOGGER.info(
@@ -76,7 +82,7 @@ public class InterceptionFuzeItem extends FuzeItem {
         }
         Vec3 toTarget = target.position().subtract(projectile.position());
         double distanceSqr = toTarget.lengthSqr();
-        if (distanceSqr > DETECTION_RANGE_BLOCKS * DETECTION_RANGE_BLOCKS
+        if (distanceSqr > DETECTION_RANGE_SQR
                 || distanceSqr < MIN_DIRECTION_LENGTH_SQR) {
             return false;
         }
@@ -87,15 +93,15 @@ public class InterceptionFuzeItem extends FuzeItem {
         if (forward.lengthSqr() < MIN_DIRECTION_LENGTH_SQR) {
             return false;
         }
-        double minimumDot = Math.cos(Math.toRadians(HALF_CONE_ANGLE_DEGREES));
         double directionDot = forward.normalize().dot(toTarget.normalize());
         logFuze(projectile, targetUuid, target, "tracking", Math.sqrt(distanceSqr), directionDot);
-        if (directionDot < minimumDot) {
+        if (directionDot < MINIMUM_DIRECTION_DOT) {
             return false;
         }
+        // Основная и дополнительные угрозы используют один rollDestruction-контракт координатора.
         InterceptionCoordinator.DestructionRoll destruction =
                 attemptThreatDestruction(level, targetUuid, target);
-        destroyAdditionalThreatsInCone(level, projectile, targetUuid, minimumDot);
+        destroyAdditionalThreatsInCone(level, projectile, targetUuid, MINIMUM_DIRECTION_DOT);
         logFuze(
                 projectile,
                 targetUuid,
@@ -119,8 +125,7 @@ public class InterceptionFuzeItem extends FuzeItem {
         if (travelledDistance < airburstDistance) {
             return false;
         }
-        double minimumDot = Math.cos(Math.toRadians(HALF_CONE_ANGLE_DEGREES));
-        int candidates = destroyLiveThreatsInCone(level, projectile, minimumDot);
+        int candidates = destroyLiveThreatsInCone(level, projectile, MINIMUM_DIRECTION_DOT);
         if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
             PowerRadar.LOGGER.info(
                     "[PowerRadar BugReport][Interception][Fuze] interceptor={} state=manual-detonated pos={} velocity={} travelledDistance={} airburstDistance={} coneCandidates={}",
@@ -245,7 +250,7 @@ public class InterceptionFuzeItem extends FuzeItem {
             Vec3 toThreat,
             double minimumDot
     ) {
-        return distanceSqr <= DETECTION_RANGE_BLOCKS * DETECTION_RANGE_BLOCKS
+        return distanceSqr <= DETECTION_RANGE_SQR
                 && distanceSqr >= MIN_DIRECTION_LENGTH_SQR
                 && normalizedForward.dot(toThreat.normalize()) >= minimumDot;
     }

@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.api.target;
 
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 
+/** Потребительская классификация цели без зависимости от конкретной реализации трекера. */
 public enum TargetClassification {
     PLAYER,
     PASSIVE_MOB,

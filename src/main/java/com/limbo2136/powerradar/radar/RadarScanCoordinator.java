@@ -19,7 +19,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 
-/** Shares expensive world candidate queries while preserving one authoritative track cache per radar. */
+/**
+ * Объединяет дорогие запросы кандидатов в мире, сохраняя отдельный авторитетный кэш каждого радара.
+ * Порядок заявок внутри одного серверного тика остаётся порядком их поступления.
+ */
 public final class RadarScanCoordinator {
     private static final double MAX_SHARED_UNION_RATIO = 0.90D;
     private static final Map<ServerLevel, List<RadarScanRequest>> PENDING = new WeakHashMap<>();
@@ -53,6 +56,8 @@ public final class RadarScanCoordinator {
 
     private static void processLevel(ServerLevel level, List<RadarScanRequest> requests) {
         long start = PowerRadarDebugOptions.scanOptimizationLogging() ? System.nanoTime() : 0L;
+
+        // Этап 1: разворачиваем заявки в пространственные срезы и объединяем только выгодные пересечения.
         List<SliceWork> work = new ArrayList<>();
         for (RadarScanRequest request : requests) {
             if (request.discoveryProfile() == null) {
@@ -73,6 +78,8 @@ public final class RadarScanCoordinator {
         Map<RadarScanRequest, Set<TargetKey>> seenByRequest = new IdentityHashMap<>();
         int entityCandidates = 0;
         int sableCandidates = 0;
+
+        // Этап 2: общий запрос даёт кандидатов, но точное покрытие и запись трека выполняются отдельно.
         for (SharedBatch batch : batches) {
             List<RadarScanProfile> profiles = batch.profiles();
             List<Entity> entities = RadarScanner.queryCandidates(level, batch.queryBox(), profiles);
@@ -111,6 +118,7 @@ public final class RadarScanCoordinator {
             }
         }
 
+        // Этап 3: публикация обновляет уже захваченные сущности и выполняет очистку каждого кэша.
         for (RadarScanRequest request : requests) {
             if (!request.publish()) {
                 continue;

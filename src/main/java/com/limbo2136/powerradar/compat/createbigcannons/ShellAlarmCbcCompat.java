@@ -4,6 +4,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import net.minecraft.world.entity.Entity;
 
+/** Извлекает баллистику CBC отражением и сохраняет прежние безопасные значения при дрейфе API. */
 public final class ShellAlarmCbcCompat {
     private ShellAlarmCbcCompat() {
     }

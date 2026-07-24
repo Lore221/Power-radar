@@ -1,10 +1,12 @@
 package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.RadarConstants;
+import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.radar.network.RadarLinkEndpointRole;
 import com.limbo2136.powerradar.radar.network.RadarLinkReconcileResult;
+import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
@@ -48,6 +50,8 @@ public class RadarLinkBlockEntity extends BlockEntity {
             link.startupSafetyTicks--;
             return;
         }
+        // После безопасной задержки сначала восстанавливается runtime-регистрация,
+        // затем привязка блока перед лицевой стороной и периодическая force-load сверка.
         if (link.needsRuntimeRegister || !link.runtimeRegisteredLoaded) {
             link.registerLoaded(serverLevel);
             link.needsRuntimeRegister = false;
@@ -114,19 +118,14 @@ public class RadarLinkBlockEntity extends BlockEntity {
         GlobalPos newEndpointPos = GlobalPos.of(serverLevel.dimension(), frontPos);
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
 
-        if (frontState.getBlock() instanceof com.limbo2136.powerradar.block.RadarControllerBlock
+        if (frontState.getBlock() instanceof RadarControllerBlock
                 && serverLevel.getBlockEntity(frontPos) instanceof RadarControllerBlockEntity) {
             if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
                 manager.detachMonitorFromLink(this.networkId, linkGlobalPos);
             }
             RadarLinkReconcileResult result = manager.attachControllerFromLink(this.networkId, linkGlobalPos, newEndpointPos);
-            if (result == RadarLinkReconcileResult.CONTROLLER_ATTACHED) {
-                this.endpointRole = RadarLinkEndpointRole.RADAR_CONTROLLER;
-                this.endpointPos = newEndpointPos;
-            } else {
-                this.endpointRole = RadarLinkEndpointRole.RADAR_CONTROLLER;
-                this.endpointPos = newEndpointPos;
-            }
+            this.endpointRole = RadarLinkEndpointRole.RADAR_CONTROLLER;
+            this.endpointPos = newEndpointPos;
             syncChanged();
             return result;
         }
@@ -139,7 +138,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             this.endpointPos = newEndpointPos;
             syncChanged();
             if (manager.resolveControllersForConsumer(this.networkId, linkGlobalPos).status()
-                    == com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus.OUT_OF_RANGE) {
+                    == RadarNetworkConnectionStatus.OUT_OF_RANGE) {
                 return RadarLinkReconcileResult.OUT_OF_RANGE;
             }
             return RadarLinkReconcileResult.MONITOR_ATTACHED;
@@ -253,6 +252,8 @@ public class RadarLinkBlockEntity extends BlockEntity {
         } catch (IllegalArgumentException exception) {
             this.endpointRole = RadarLinkEndpointRole.NONE;
         }
+        // EndpointPos проверяется заново после загрузки: сохранённые координаты не могут
+        // считаться авторитетными после поворота блока или изменения соседнего endpoint.
         this.endpointPos = null;
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
@@ -281,14 +282,10 @@ public class RadarLinkBlockEntity extends BlockEntity {
         if (this.networkId == null) {
             return;
         }
-        if (this.endpointRole == RadarLinkEndpointRole.RADAR_CONTROLLER) {
-            manager.detachControllerFromLink(this.networkId, linkGlobalPos);
-        } else if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
+        if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
             manager.detachMonitorFromLink(this.networkId, linkGlobalPos);
-            manager.detachControllerFromLink(this.networkId, linkGlobalPos);
-        } else {
-            manager.detachControllerFromLink(this.networkId, linkGlobalPos);
         }
+        manager.detachControllerFromLink(this.networkId, linkGlobalPos);
     }
 
     private GlobalPos globalPos() {

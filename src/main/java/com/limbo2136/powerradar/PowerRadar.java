@@ -1,12 +1,5 @@
 package com.limbo2136.powerradar;
 
-import com.limbo2136.powerradar.registry.ModBlockEntities;
-import com.limbo2136.powerradar.registry.ModBlocks;
-import com.limbo2136.powerradar.registry.ModCreativeTabs;
-import com.limbo2136.powerradar.registry.ModDataComponents;
-import com.limbo2136.powerradar.registry.ModItems;
-import com.limbo2136.powerradar.registry.ModEntities;
-import com.limbo2136.powerradar.registry.ModSounds;
 import com.limbo2136.powerradar.client.PowerRadarClientConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.create.PowerRadarMovementChecks;
@@ -14,10 +7,18 @@ import com.limbo2136.powerradar.compat.create.PowerRadarStressValues;
 import com.limbo2136.powerradar.compat.create.display.PowerRadarDisplaySources;
 import com.limbo2136.powerradar.network.ModNetwork;
 import com.limbo2136.powerradar.radar.RadarScanCoordinator;
+import com.limbo2136.powerradar.registry.ModBlockEntities;
+import com.limbo2136.powerradar.registry.ModBlocks;
+import com.limbo2136.powerradar.registry.ModCreativeTabs;
+import com.limbo2136.powerradar.registry.ModDataComponents;
+import com.limbo2136.powerradar.registry.ModEntities;
+import com.limbo2136.powerradar.registry.ModItems;
+import com.limbo2136.powerradar.registry.ModSounds;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -43,10 +44,14 @@ public final class PowerRadar {
         ModCreativeTabs.register(modEventBus);
         ModNetwork.register(modEventBus);
         modEventBus.addListener(PowerRadarDisplaySources::setup);
-        modEventBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) -> event.enqueueWork(PowerRadarStressValues::register));
+        modEventBus.addListener(PowerRadar::onCommonSetup);
         PowerRadarMovementChecks.register();
         NeoForge.EVENT_BUS.addListener(PowerRadar::onServerTick);
         NeoForge.EVENT_BUS.addListener(PowerRadar::onServerStopped);
+    }
+
+    private static void onCommonSetup(FMLCommonSetupEvent event) {
+        event.enqueueWork(PowerRadarStressValues::register);
     }
 
     private static void onServerTick(ServerTickEvent.Post event) {

@@ -9,7 +9,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** Side-neutral geometry shared by module interaction and client outlines. */
+/** Независимая от стороны геометрия, общая для взаимодействия с модулями и клиентских контуров. */
 public final class OnboardPanelGeometry {
     public static final double PANEL_HEIGHT = 11.0D / 16.0D;
     public static final double PANEL_TILT_RADIANS = Math.toRadians(22.5D);
@@ -30,20 +30,23 @@ public final class OnboardPanelGeometry {
 
     @Nullable
     public static OnboardModuleSlot slotAt(BlockPos pos, Direction facing, BlockHitResult hit) {
-        Basis basis = basis(pos, facing);
-        Vec3 relative = hit.getLocation().subtract(basis.origin());
-        double panelX = relative.dot(basis.xAxis()) * PIXELS_PER_BLOCK;
-        double panelDepth = relative.dot(basis.depthAxis()) * PIXELS_PER_BLOCK;
-        return OnboardModuleSlot.at(panelX, panelDepth);
+        PanelCoordinates coordinates = panelCoordinates(pos, facing, hit);
+        return OnboardModuleSlot.at(coordinates.x(), coordinates.depth());
     }
 
     @Nullable
     public static OnboardModuleColumn columnAt(BlockPos pos, Direction facing, BlockHitResult hit) {
+        PanelCoordinates coordinates = panelCoordinates(pos, facing, hit);
+        return OnboardModuleColumn.at(coordinates.x(), coordinates.depth());
+    }
+
+    // Проецирует мировую точку клика на наклонную плоскость панели в модельных пикселях.
+    private static PanelCoordinates panelCoordinates(BlockPos pos, Direction facing, BlockHitResult hit) {
         Basis basis = basis(pos, facing);
         Vec3 relative = hit.getLocation().subtract(basis.origin());
         double panelX = relative.dot(basis.xAxis()) * PIXELS_PER_BLOCK;
         double panelDepth = relative.dot(basis.depthAxis()) * PIXELS_PER_BLOCK;
-        return OnboardModuleColumn.at(panelX, panelDepth);
+        return new PanelCoordinates(panelX, panelDepth);
     }
 
     public static VoxelShape selectionShape(Direction facing, int installedModuleMask) {
@@ -92,7 +95,7 @@ public final class OnboardPanelGeometry {
                 shape = addBox(shape, facing, 0.0D, 0.0D, 0.0D, 16.0D, 11.0D, 16.0D);
                 shape = addBox(shape, facing, 0.0D, 11.0D, 10.0D, 16.0D, 15.21D, 16.0D);
 
-                // Eleven narrow steps closely follow the model's -22.5-degree panel.
+                // Одиннадцать узких ступеней приближают наклон панели модели в -22,5 градуса.
                 for (int depthPixel = 0; depthPixel < 11; depthPixel++) {
                     double minDepth = depthPixel * COS_TILT;
                     double maxDepth = (depthPixel + 1.0D) * COS_TILT;
@@ -173,5 +176,8 @@ public final class OnboardPanelGeometry {
     }
 
     private record Basis(Vec3 origin, Vec3 xAxis, Vec3 depthAxis, Vec3 normal) {
+    }
+
+    private record PanelCoordinates(double x, double depth) {
     }
 }

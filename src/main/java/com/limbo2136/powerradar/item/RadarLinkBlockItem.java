@@ -1,7 +1,6 @@
 package com.limbo2136.powerradar.item;
 
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
-import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarLinkReconcileResult;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModDataComponents;
@@ -9,6 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -23,7 +23,6 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.core.BlockPos;
 
 public class RadarLinkBlockItem extends BlockItem {
     public RadarLinkBlockItem(Block block, Item.Properties properties) {
@@ -82,12 +81,11 @@ public class RadarLinkBlockItem extends BlockItem {
         UUID stackNetworkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
         boolean tuned = stackNetworkId != null;
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
-        boolean created = !tuned || !manager.networkExists(stackNetworkId);
         UUID networkId = tuned ? stackNetworkId : manager.createNetwork();
         link.initializeNetwork(networkId, player);
         RadarLinkReconcileResult reconcileResult = link.reconcileFacingEndpoint(player);
         if (player != null) {
-            player.displayClientMessage(messageFor(created && !tuned, reconcileResult), true);
+            player.displayClientMessage(messageFor(!tuned, reconcileResult), true);
         }
         return result;
     }
@@ -100,12 +98,11 @@ public class RadarLinkBlockItem extends BlockItem {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        tooltip.add(Component.translatable(stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get())
+        boolean tuned = stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+        tooltip.add(Component.translatable(tuned
                 ? "tooltip.power_radar.radar_link.tuned"
                 : "tooltip.power_radar.radar_link.untuned")
-                .withStyle(stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get())
-                        ? ChatFormatting.GOLD
-                        : ChatFormatting.GRAY));
+                .withStyle(tuned ? ChatFormatting.GOLD : ChatFormatting.GRAY));
     }
 
     private static Component messageFor(boolean newNetwork, RadarLinkReconcileResult result) {

@@ -5,8 +5,6 @@ import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
 import com.limbo2136.powerradar.block.RadarDisplayStructureResolver;
-import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
@@ -70,12 +68,25 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         java.util.Arrays.fill(this.modules, ItemStack.EMPTY);
     }
 
-    public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, OnboardComputerBlockEntity computer) {
-        if (!(level instanceof ServerLevel serverLevel)) return;
+    public static void serverTick(
+            net.minecraft.world.level.Level level,
+            BlockPos pos,
+            BlockState state,
+            OnboardComputerBlockEntity computer
+    ) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        // Сначала восстанавливаем локальные сети и состояние панели, затем запускаем
+        // общий цикл монитора и только после него публикуем угрозы текущего снимка радара.
         computer.validateLodestoneModules(serverLevel);
-        if (computer.networkId == null) computer.createOwnNetwork(serverLevel);
+        if (computer.networkId == null) {
+            computer.createOwnNetwork(serverLevel);
+        }
         computer.ensureOnboardNetworkRole(serverLevel);
-        if (computer.interceptionNetworkId == null) computer.createOwnInterceptionNetwork();
+        if (computer.interceptionNetworkId == null) {
+            computer.createOwnInterceptionNetwork();
+        }
         computer.updateDisplayStructure(pos, 1, state.getValue(OnboardComputerBlock.FACING),
                 RadarDisplayStructureResolver.StructureStatus.ACTIVE);
         RadarMonitorControllerBlockEntity.tick(serverLevel, pos, state, computer);
@@ -83,8 +94,8 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     }
 
     private void validateLodestoneModules(ServerLevel level) {
-        // Installed stacks do not receive Item.inventoryTick(), so reproduce the
-        // vanilla tracker invalidation at a low, staggered rate.
+        // Установленные стаки не получают Item.inventoryTick(), поэтому ванильная
+        // проверка lodestone выполняется редко и со сдвигом по позиции блока.
         if (Math.floorMod(level.getGameTime() + this.worldPosition.asLong(), 20L) != 0L) {
             return;
         }
@@ -125,8 +136,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                 || !this.protectedZone.onSable()
                 || resolvedRadarControllers().isEmpty()) {
             this.lastProcessedThreatScanGameTime = Long.MIN_VALUE;
-            clearPublishedThreats(level);
-            setAlarmActive(level, state, false);
+            deactivateShellAlarm(level, state);
             return;
         }
 
@@ -138,14 +148,14 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
         this.lastProcessedThreatScanGameTime = scanGameTime;
 
+        // Геометрия Sable обновляется только на новом авторитетном снимке радара.
         this.protectedZone = this.protectedZoneTracker.broadPhaseZone(
                 level,
                 this.worldPosition,
                 new AABB(this.worldPosition),
                 10.0D);
         if (this.protectedZone == null) {
-            clearPublishedThreats(level);
-            setAlarmActive(level, state, false);
+            deactivateShellAlarm(level, state);
             return;
         }
 
@@ -160,6 +170,8 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         radar.forEachTrackedTargetBySource(TargetSourceType.CBC_BIG_CANNON_PROJECTILE, tracks::add);
         List<ThreatSnapshot> threats = new ArrayList<>();
         MovingProtectedZone initialZone = zone;
+        // Дорогие геометрия и кинематика конструкции нужны только кандидатам,
+        // прошедшим дешёвую широкую фазу по последнему снимку.
         List<TrackedTargetView> candidateTracks = tracks.stream()
                 .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
                         projectileLevel,
@@ -172,8 +184,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             this.protectedZone = zone;
         }
         if (zone == null) {
-            clearPublishedThreats(level);
-            setAlarmActive(level, state, false);
+            deactivateShellAlarm(level, state);
             return;
         }
         if (!candidateTracks.isEmpty()) {
@@ -181,8 +192,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             this.protectedZone = zone;
         }
         if (zone == null) {
-            clearPublishedThreats(level);
-            setAlarmActive(level, state, false);
+            deactivateShellAlarm(level, state);
             return;
         }
         MovingProtectedZone sampledZone = zone;
@@ -198,8 +208,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             this.protectedZone = zone;
         }
         if (zone == null) {
-            clearPublishedThreats(level);
-            setAlarmActive(level, state, false);
+            deactivateShellAlarm(level, state);
             return;
         }
         MovingProtectedZone evaluatedZone = zone;
@@ -222,6 +231,11 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                         radarScanIntervalTicks(scanGameTime, previousScanGameTime)));
         this.publishedThreats = !threats.isEmpty();
         setAlarmActive(level, state, !threats.isEmpty());
+    }
+
+    private void deactivateShellAlarm(ServerLevel level, BlockState state) {
+        clearPublishedThreats(level);
+        setAlarmActive(level, state, false);
     }
 
     @Nullable
@@ -310,7 +324,10 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         return this.networkId;
     }
 
-    @Nullable public UUID networkId() { return this.networkId; }
+    @Nullable
+    public UUID networkId() {
+        return this.networkId;
+    }
 
     public UUID ensureInterceptionNetworkId() {
         if (this.interceptionNetworkId == null && this.level instanceof ServerLevel) {
@@ -325,7 +342,9 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     }
 
     private void createOwnNetwork(ServerLevel serverLevel) {
-        if (this.networkId != null) return;
+        if (this.networkId != null) {
+            return;
+        }
         createNewOwnNetwork(serverLevel);
     }
 
@@ -365,27 +384,31 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         sendData();
     }
 
-    @Override public void onLoad() {
+    @Override
+    public void onLoad() {
         super.onLoad();
         RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
         InterceptionNetworkNodeClientCacheBridge.onLoaded(
                 this.level, this.worldPosition, this.interceptionNetworkId);
     }
 
-    @Override public void clearRemoved() {
+    @Override
+    public void clearRemoved() {
         super.clearRemoved();
         RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
         InterceptionNetworkNodeClientCacheBridge.onLoaded(
                 this.level, this.worldPosition, this.interceptionNetworkId);
     }
 
-    @Override public void remove() {
+    @Override
+    public void remove() {
         RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         InterceptionNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         super.remove();
     }
 
-    @Override public void onChunkUnloaded() {
+    @Override
+    public void onChunkUnloaded() {
         RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         InterceptionNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         super.onChunkUnloaded();
@@ -530,10 +553,18 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         return List.copyOf(removed);
     }
 
-    @Override protected UUID directNetworkId() { return this.networkId; }
-    @Override protected boolean usesDisplayStructureResolver() { return false; }
+    @Override
+    protected UUID directNetworkId() {
+        return this.networkId;
+    }
 
-    @Override public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+    @Override
+    protected boolean usesDisplayStructureResolver() {
+        return false;
+    }
+
+    @Override
+    public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.ONBOARD_COMPUTER)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
@@ -554,9 +585,12 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         return true;
     }
 
-    @Override protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+    @Override
+    protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
-        if (this.networkId != null) tag.putUUID(NETWORK_TAG, this.networkId);
+        if (this.networkId != null) {
+            tag.putUUID(NETWORK_TAG, this.networkId);
+        }
         if (this.interceptionNetworkId != null) {
             tag.putUUID(INTERCEPTION_NETWORK_TAG, this.interceptionNetworkId);
         }
@@ -582,7 +616,8 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
     }
 
-    @Override protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+    @Override
+    protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         UUID oldNetworkId = this.networkId;
         UUID oldInterceptionNetworkId = this.interceptionNetworkId;
         super.read(tag, registries, clientPacket);

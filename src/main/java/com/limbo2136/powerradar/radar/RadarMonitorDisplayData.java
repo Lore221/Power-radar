@@ -9,6 +9,10 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * Серверный DTO монитора. Списки являются снимками; игровые решения не должны опираться
+ * на клиентские копии этого объекта.
+ */
 public record RadarMonitorDisplayData(
         BlockPos monitorPos,
         RadarNetworkConnectionStatus connectionStatus,

@@ -31,6 +31,7 @@ final class RadarMonitorRenderTypes extends RenderType {
                 state);
     });
     private static final Function<ResourceLocation, RenderType> TRANSLUCENT_COVERAGE = Util.memoize(texture -> {
+        // Покрытие проходит проверку глубины, но пишет только цвет и не скрывает следующие слои.
         CompositeState state = CompositeState.builder()
                 .setShaderState(RENDERTYPE_ENTITY_TRANSLUCENT_EMISSIVE_SHADER)
                 .setTextureState(new TextureStateShard(texture, false, false))
