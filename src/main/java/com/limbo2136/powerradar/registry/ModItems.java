@@ -30,10 +30,10 @@ public final class ModItems {
             "surface_radar_controller",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.SURFACE_RADAR_CONTROLLER.get(), new Item.Properties(),
                     Target.RADAR_CONTROLLER));
-    public static final DeferredItem<BlockItem> COMPUTING_BLOCK = ITEMS.register(
-            "computing_block",
-            () -> new PowerRadarElectricalBlockItem(ModBlocks.COMPUTING_BLOCK.get(), new Item.Properties(),
-                    Target.COMPUTING_BLOCK));
+    public static final DeferredItem<BlockItem> LOGIC_DOCK = ITEMS.register(
+            "logic_dock",
+            () -> new PowerRadarElectricalBlockItem(ModBlocks.LOGIC_DOCK.get(), new Item.Properties(),
+                    Target.LOGIC_DOCK));
     public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = ITEMS.register(
             "onboard_computer", () -> new OnboardComputerBlockItem(ModBlocks.ONBOARD_COMPUTER.get(), new Item.Properties()));
     public static final DeferredItem<RadarFilterCardItem> TARGETING_CARD = ITEMS.register(

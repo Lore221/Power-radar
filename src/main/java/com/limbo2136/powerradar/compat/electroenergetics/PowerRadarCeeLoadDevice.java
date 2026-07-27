@@ -121,33 +121,8 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
     protected abstract PowerRadarElectricalParameters.LoadVoltageRange voltageRange();
 
     private PowerRadarCeeState resolveElectricalState(double voltage) {
-        PowerRadarElectricalParameters.LoadVoltageRange voltages = voltageRange();
-        if (!this.bridgeEnabled) {
-            return PowerRadarCeeState.INVALID_STRUCTURE;
-        }
-        if (!Double.isFinite(voltage)) {
-            voltage = 0.0;
-        }
-        if (voltage < -0.001D) {
-            return PowerRadarCeeState.REVERSE_POLARITY;
-        }
-        // restart и overvoltageRecovery создают гистерезис относительно обычных minimum/maximum.
-        if (this.electricalState == PowerRadarCeeState.OVERVOLTAGE) {
-            return voltage <= voltages.overvoltageRecovery()
-                    ? PowerRadarCeeState.POWERED
-                    : PowerRadarCeeState.OVERVOLTAGE;
-        }
-        if (voltage > voltages.maximum()) {
-            return PowerRadarCeeState.OVERVOLTAGE;
-        }
-        if (this.electricalState == PowerRadarCeeState.UNDERVOLTAGE || this.electricalState == PowerRadarCeeState.INVALID_STRUCTURE) {
-            return voltage >= voltages.restart()
-                    ? PowerRadarCeeState.POWERED
-                    : PowerRadarCeeState.UNDERVOLTAGE;
-        }
-        return voltage >= voltages.minimum()
-                ? PowerRadarCeeState.POWERED
-                : PowerRadarCeeState.UNDERVOLTAGE;
+        return PowerRadarCeeLoadMath.resolveState(
+                this.bridgeEnabled, this.electricalState, voltage, voltageRange());
     }
 
     private double calculateResistanceOhms() {

@@ -9,7 +9,7 @@ import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
-import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -34,9 +34,9 @@ public final class ModBlockEntities {
                     .of(RadarMonitorControllerBlockEntity::new, ModBlocks.RADAR_MONITOR_CONTROLLER.get())
                     .build(null));
 
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ComputingBlockEntity>> COMPUTING_BLOCK =
-            BLOCK_ENTITIES.register("computing_block", () -> BlockEntityType.Builder
-                    .of(ComputingBlockEntity::new, ModBlocks.COMPUTING_BLOCK.get())
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LogicDockBlockEntity>> LOGIC_DOCK =
+            BLOCK_ENTITIES.register("logic_dock", () -> BlockEntityType.Builder
+                    .of(LogicDockBlockEntity::new, ModBlocks.LOGIC_DOCK.get())
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OnboardComputerBlockEntity>> ONBOARD_COMPUTER =

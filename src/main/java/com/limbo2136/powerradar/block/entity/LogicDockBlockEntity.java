@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.Containers;
@@ -24,7 +25,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInformation {
+public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInformation {
+    private static final String CARD_PRESENCE_MASK_TAG = "CardPresenceMask";
     private static final int TARGETING_CARD_SLOT = 0;
     private static final int DISPLAY_CARD_SLOT = 1;
     private static final int ALLOWLIST_CARD_SLOT = 2;
@@ -32,8 +34,8 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
     private final ItemStack[] cards = {ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY};
     private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
 
-    public ComputingBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.COMPUTING_BLOCK.get(), pos, state);
+    public LogicDockBlockEntity(BlockPos pos, BlockState state) {
+        super(ModBlockEntities.LOGIC_DOCK.get(), pos, state);
     }
 
     @Override
@@ -48,10 +50,10 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
             net.minecraft.world.level.Level level,
             BlockPos pos,
             BlockState state,
-            ComputingBlockEntity computer
+            LogicDockBlockEntity dock
     ) {
         if (level instanceof ServerLevel serverLevel) {
-            PowerRadarCeeIntegration.configureComputingLoad(serverLevel, pos);
+            PowerRadarCeeIntegration.configureLogicDockLoad(serverLevel, pos);
         }
     }
 
@@ -78,6 +80,10 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
         }
         cardsChanged();
         return true;
+    }
+
+    public boolean hasCard(int slot) {
+        return slot >= 0 && slot < this.cards.length && !this.cards[slot].isEmpty();
     }
 
     public void extractCard(Player player, int requestedSlot) {
@@ -162,19 +168,19 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
-        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.COMPUTING_BLOCK)) {
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.LOGIC_DOCK)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.computing_block")
+                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.logic_dock")
                         .withStyle(ChatFormatting.GOLD));
                 case CARD_SLOTS -> {
                     for (int i = 0; i < this.cards.length; i++) {
-                        tooltip.add(Component.translatable("goggles.power_radar.computing_block.slot." + i,
+                        tooltip.add(Component.translatable("goggles.power_radar.logic_dock.slot." + i,
                                 this.cards[i].isEmpty()
-                                        ? Component.translatable("goggles.power_radar.computing_block.empty")
+                                        ? Component.translatable("goggles.power_radar.logic_dock.empty")
                                         : this.cards[i].getHoverName()));
                     }
                 }
@@ -194,29 +200,33 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
         RadarLinkConnectionResolver.Resolution resolution =
                 RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, worldPosition);
         if (resolution.status() != RadarLinkConnectionResolver.Status.SINGLE || resolution.link().networkId() == null) {
-            tooltip.add(Component.translatable("goggles.power_radar.computing_block.disconnected"));
+            tooltip.add(Component.translatable("goggles.power_radar.logic_dock.disconnected"));
             return;
         }
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
         if (!manager.controlConsumersAllowed(resolution.link().networkId())) {
-            tooltip.add(Component.translatable("goggles.power_radar.computing_block.onboard_network"));
+            tooltip.add(Component.translatable("goggles.power_radar.logic_dock.onboard_network"));
             return;
         }
-        RadarNetworkManager.ComputingResolution computing = manager
-                .resolveComputingBlock(resolution.link().networkId());
-        tooltip.add(Component.translatable(computing.conflict()
-                ? "goggles.power_radar.computing_block.conflict"
-                : "goggles.power_radar.computing_block.connected"));
+        RadarNetworkManager.LogicDockResolution dock = manager
+                .resolveLogicDock(resolution.link().networkId());
+        tooltip.add(Component.translatable(dock.conflict()
+                ? "goggles.power_radar.logic_dock.conflict"
+                : "goggles.power_radar.logic_dock.connected"));
     }
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        int presenceMask = 0;
         for (int i = 0; i < this.cards.length; i++) {
             if (!this.cards[i].isEmpty()) {
+                presenceMask |= 1 << i;
                 tag.put("Card" + i, this.cards[i].save(registries));
             }
         }
+        // Нулевая маска делает пакет непустым и явно сообщает клиенту об удалении последней карты.
+        tag.putByte(CARD_PRESENCE_MASK_TAG, (byte) presenceMask);
     }
 
     @Override
@@ -227,6 +237,16 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
                     ? ItemStack.parseOptional(registries, tag.getCompound("Card" + i))
                     : ItemStack.EMPTY;
         }
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        return saveWithoutMetadata(registries);
     }
 
     private int firstOccupiedSlot() {
@@ -254,7 +274,7 @@ public class ComputingBlockEntity extends BlockEntity implements IHaveGoggleInfo
                 RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, this.worldPosition);
         if (resolution.status() == RadarLinkConnectionResolver.Status.SINGLE
                 && resolution.link().networkId() != null) {
-            RadarNetworkManager.get(serverLevel.getServer()).invalidateComputingCache(resolution.link().networkId());
+            RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(resolution.link().networkId());
         }
     }
 }

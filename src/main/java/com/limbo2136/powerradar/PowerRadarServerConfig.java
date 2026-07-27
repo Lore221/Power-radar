@@ -58,7 +58,7 @@ public final class PowerRadarServerConfig {
                 .comment(
                         "Distance travelled before an unassigned interception fuze performs a manual airburst.",
                         "Automatically assigned interceptor shells continue to detonate from their tracked target.")
-                .defineInRange("manual_fuze_distance_blocks", 50.0D, 1.0D, 100_000.0D);
+                .defineInRange("manual_fuze_distance_blocks", 100.0D, 1.0D, 100_000.0D);
         builder.pop();
 
         SPEC = builder.build();

@@ -30,6 +30,7 @@ public class InterceptionFuzeItem extends FuzeItem {
 
     // Эти имена хранят состояние на сущности снаряда и являются совместимым NBT-контрактом.
     private static final String MANUAL_MODE_TAG = "PowerRadarManualInterceptionFuze";
+    private static final String AUTOMATIC_ASSIGNMENT_TAG = "PowerRadarAutomaticInterceptionFuze";
     private static final String TRAVELLED_DISTANCE_TAG = "PowerRadarInterceptionFuzeTravelled";
     private static final String LAST_X_TAG = "PowerRadarInterceptionFuzeLastX";
     private static final String LAST_Y_TAG = "PowerRadarInterceptionFuzeLastY";
@@ -46,19 +47,26 @@ public class InterceptionFuzeItem extends FuzeItem {
         }
         // Пройденный путь обновляется до взведения, чтобы ручной airburst отсчитывался от выстрела.
         double travelledDistance = updateTravelledDistance(projectile);
-        if (projectile.tickCount < MIN_ARMING_TICKS) {
-            return false;
-        }
         UUID interceptorUuid = projectile.getUUID();
         CompoundTag projectileData = projectile.getPersistentData();
         if (projectileData.getBoolean(MANUAL_MODE_TAG)) {
             return tickManualAirburst(level, projectile, travelledDistance);
         }
-        UUID targetUuid = InterceptionCoordinator.interceptorTarget(level, interceptorUuid);
-        if (targetUuid == null) {
+        boolean wasAutomaticallyAssigned = projectileData.getBoolean(AUTOMATIC_ASSIGNMENT_TAG);
+        UUID targetUuid = wasAutomaticallyAssigned
+                ? null
+                : InterceptionCoordinator.interceptorTarget(level, interceptorUuid);
+        if (targetUuid == null && !wasAutomaticallyAssigned) {
             targetUuid = InterceptionCoordinator.bindInterceptor(level, interceptorUuid, projectile.position());
         }
-        if (targetUuid == null) {
+        if (targetUuid != null) {
+            projectileData.putBoolean(AUTOMATIC_ASSIGNMENT_TAG, true);
+            wasAutomaticallyAssigned = true;
+        }
+        if (projectile.tickCount < MIN_ARMING_TICKS) {
+            return false;
+        }
+        if (!wasAutomaticallyAssigned) {
             // Снаряд без назначения один раз переходит в ручной режим и больше не ищет цель.
             projectileData.putBoolean(MANUAL_MODE_TAG, true);
             if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
@@ -72,11 +80,19 @@ public class InterceptionFuzeItem extends FuzeItem {
             }
             return false;
         }
+        if (targetUuid == null) {
+            targetUuid = InterceptionCoordinator.interceptorTarget(level, interceptorUuid);
+        }
+        if (targetUuid == null) {
+            // Автоматически назначенный снаряд не должен подрываться после исчезновения своей цели.
+            return false;
+        }
         Entity target = level.getEntity(targetUuid);
         if (!(target instanceof AbstractBigCannonProjectile)
                 || target == projectile
                 || !target.isAlive()) {
             InterceptionCoordinator.clearInterceptor(level.getServer(), interceptorUuid);
+            // После потери назначенной цели снаряд продолжает штатный баллистический полёт.
             logFuze(projectile, targetUuid, target, "target-invalid", 0.0, 0.0);
             return false;
         }

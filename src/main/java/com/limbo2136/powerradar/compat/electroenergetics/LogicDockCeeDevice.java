@@ -2,20 +2,20 @@ package com.limbo2136.powerradar.compat.electroenergetics;
 
 import com.george_vi.electroenergetics.devices.device.DevicesSavedData;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
-import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-public class ComputingBlockCeeDevice extends PowerRadarCeeLoadDevice {
-    private ComputingBlockEntity blockEntity;
+public class LogicDockCeeDevice extends PowerRadarCeeLoadDevice {
+    private LogicDockBlockEntity blockEntity;
 
-    public ComputingBlockCeeDevice(Level level, BlockPos pos, DevicesSavedData data, SimulatedDeviceType<?> type) {
+    public LogicDockCeeDevice(Level level, BlockPos pos, DevicesSavedData data, SimulatedDeviceType<?> type) {
         super(level, pos, data, type);
     }
 
     public void configureLoad() {
-        setLoad(true, PowerRadarElectricalParameters.Ratings.computingBlockPowerWatts(),
+        setLoad(true, PowerRadarElectricalParameters.Ratings.logicDockPowerWatts(),
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
                 PowerRadarElectricalParameters.Voltages.monitor().nominal());
     }
@@ -27,13 +27,13 @@ public class ComputingBlockCeeDevice extends PowerRadarCeeLoadDevice {
 
     @Override
     protected void publishSnapshot() {
-        ComputingBlockEntity computer = loadedBlockEntity();
-        if (computer != null) {
-            computer.applyElectricalSnapshot(snapshot());
+        LogicDockBlockEntity dock = loadedBlockEntity();
+        if (dock != null) {
+            dock.applyElectricalSnapshot(snapshot());
         }
     }
 
-    private ComputingBlockEntity loadedBlockEntity() {
+    private LogicDockBlockEntity loadedBlockEntity() {
         if (this.blockEntity != null && !this.blockEntity.isRemoved()) {
             return this.blockEntity;
         }
@@ -42,8 +42,8 @@ public class ComputingBlockCeeDevice extends PowerRadarCeeLoadDevice {
             return null;
         }
         BlockEntity loaded = this.level.getBlockEntity(this.pos);
-        if (loaded instanceof ComputingBlockEntity computer) {
-            this.blockEntity = computer;
+        if (loaded instanceof LogicDockBlockEntity dock) {
+            this.blockEntity = dock;
         }
         return this.blockEntity;
     }

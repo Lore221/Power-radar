@@ -1,11 +1,15 @@
 package com.limbo2136.powerradar.client.radarlink;
 
+import com.george_vi.electroenergetics.content.electrical_panel.ElectricalPanelBlock;
+import com.george_vi.electroenergetics.content.electrical_panel.ElectricalPanelBlockEntity;
+import com.george_vi.electroenergetics.content.electrical_panel.attachments.PanelAttachment;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
+import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarLinkPanelAttachment;
 import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
@@ -13,6 +17,7 @@ import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.UUID;
 import net.createmod.catnip.animation.AnimationTickHolder;
+import net.createmod.catnip.math.VecHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -39,6 +44,7 @@ public final class RadarLinkClientOutlineHandler {
         if (player == null || level == null) {
             if (lastLevel != null) {
                 RadarLinkClientCache.clear();
+                PanelRadarLinkClientCache.clear();
                 InterceptionNetworkClientCache.clear();
                 lastLevel = null;
             }
@@ -46,6 +52,7 @@ public final class RadarLinkClientOutlineHandler {
         }
         if (lastLevel != level) {
             RadarLinkClientCache.clear();
+            PanelRadarLinkClientCache.clear();
             InterceptionNetworkClientCache.clear();
             lastLevel = level;
         }
@@ -90,6 +97,58 @@ public final class RadarLinkClientOutlineHandler {
                 continue;
             }
             outlineLink(level, pos, networkId, color);
+        }
+        outlinePanelLinks(player, level, networkId, color);
+    }
+
+    /** Подсвечивает только секцию Link, а не весь электрический щиток. */
+    private static void outlinePanelLinks(
+            LocalPlayer player,
+            ClientLevel level,
+            UUID networkId,
+            int color
+    ) {
+        for (PanelRadarLinkClientCache.LinkLocation location
+                : PanelRadarLinkClientCache.getLinks(level, networkId)) {
+            BlockPos panelPos = location.panelPos();
+            if (!level.isLoaded(panelPos)) {
+                PanelRadarLinkClientCache.unregister(level, location);
+                continue;
+            }
+            if (!(level.getBlockEntity(panelPos) instanceof ElectricalPanelBlockEntity panel)) {
+                PanelRadarLinkClientCache.unregister(level, location);
+                continue;
+            }
+            PanelAttachment attachment = panel.getAttachments()[location.slot().ordinal()];
+            if (!(attachment instanceof RadarLinkPanelAttachment link)) {
+                PanelRadarLinkClientCache.unregister(level, location);
+                continue;
+            }
+            UUID actualNetworkId = link.networkId();
+            if (!networkId.equals(actualNetworkId)) {
+                PanelRadarLinkClientCache.registerOrUpdate(
+                        level, panelPos, location.slot(), actualNetworkId);
+                continue;
+            }
+            if (player.distanceToSqr(Vec3.atCenterOf(panelPos)) > outlineRangeSquared()) {
+                continue;
+            }
+
+            Direction facing = panel.getBlockState().getValue(ElectricalPanelBlock.FACING);
+            AABB localBounds = location.slot().shape;
+            Vec3 lowerCorner = VecHelper.rotateCentered(
+                    localBounds.getMinPosition(), -facing.toYRot() + 180.0F, Direction.Axis.Y);
+            Vec3 upperCorner = VecHelper.rotateCentered(
+                    localBounds.getMaxPosition(), -facing.toYRot() + 180.0F, Direction.Axis.Y);
+            AABB worldBounds = new AABB(lowerCorner, upperCorner).move(panelPos);
+            CatnipOutlinerAdapter.showRadarLinkOutline(
+                    new PanelOutlineKey(
+                            level.dimension().location().toString(),
+                            networkId,
+                            panelPos.immutable(),
+                            location.slot().ordinal()),
+                    worldBounds,
+                    color);
         }
     }
 
@@ -193,5 +252,13 @@ public final class RadarLinkClientOutlineHandler {
     }
 
     private record OutlineKey(String kind, String dimension, UUID networkId, BlockPos pos) {
+    }
+
+    private record PanelOutlineKey(
+            String dimension,
+            UUID networkId,
+            BlockPos panelPos,
+            int slot
+    ) {
     }
 }

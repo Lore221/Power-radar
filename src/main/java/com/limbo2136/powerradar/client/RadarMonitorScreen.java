@@ -63,6 +63,7 @@ public class RadarMonitorScreen extends Screen {
     private static final int GUI_INNER_INSET_TEXTURE_PIXELS = 2;
     private static final int RADAR_SCREEN_TEXTURE_SIZE = 128;
     private static final int SHELL_ALARM_ZONE_ALPHA = 32;
+    private static final int SHELL_ALARM_ZONE_OUTLINE_ALPHA = 192;
     private static final int SABLE_SILHOUETTE_FILL_ALPHA = 144;
     private static final float SABLE_SILHOUETTE_LINE_HALF_WIDTH = 0.75F;
     private static final int SABLE_FRAME_PADDING_PIXELS = 4;
@@ -263,11 +264,16 @@ public class RadarMonitorScreen extends Screen {
                 this.spriteRenderer.drawBlip(graphics, blip, alpha, blipDrawSize(blip), palette, depth);
             }
         }
-        drawSableNames(graphics, partialTick, palette.sableSilhouette());
+        drawSableNames(graphics, partialTick, palette.sableSilhouette(), hoveredBlip);
         drawGridScaleOverlay(graphics);
     }
 
-    private void drawSableNames(GuiGraphics graphics, float partialTick, int color) {
+    private void drawSableNames(
+            GuiGraphics graphics,
+            float partialTick,
+            int color,
+            RadarBlipRenderData hoveredBlip
+    ) {
         int left = this.radarOriginX - this.radarRadius + RADAR_SCREEN_FRAME_PIXELS;
         int top = this.radarOriginY - this.radarRadius + RADAR_SCREEN_FRAME_PIXELS;
         int right = this.radarOriginX + this.radarRadius - RADAR_SCREEN_FRAME_PIXELS;
@@ -276,7 +282,8 @@ public class RadarMonitorScreen extends Screen {
         for (RadarBlipRenderData blip : this.blips) {
             if (blip.category() != RadarTargetCategory.SABLE_STRUCTURE
                     || blip.targetIndex() < 0
-                    || blip.targetIndex() >= this.displayData.targets().size()) {
+                    || blip.targetIndex() >= this.displayData.targets().size()
+                    || blip != hoveredBlip && !isSelectedBlip(blip)) {
                 continue;
             }
             RadarDisplayTarget target = this.displayData.targets().get(blip.targetIndex());
@@ -511,16 +518,33 @@ public class RadarMonitorScreen extends Screen {
                 halfWidth, halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
         SableSilhouetteProjection.Point fourth = SableSilhouetteProjection.projectOffset(
                 -halfWidth, halfDepth, 0.0F, viewYawDegrees(), unitsPerBlock);
+        GuiPoint firstPoint = new GuiPoint(centerX + first.x(), centerY + first.y());
+        GuiPoint secondPoint = new GuiPoint(centerX + second.x(), centerY + second.y());
+        GuiPoint thirdPoint = new GuiPoint(centerX + third.x(), centerY + third.y());
+        GuiPoint fourthPoint = new GuiPoint(centerX + fourth.x(), centerY + fourth.y());
         drawGuiSilhouetteQuads(
                 graphics,
                 graphics.pose().last().pose(),
                 List.of(new GuiSilhouetteQuad(
-                        new GuiPoint(centerX + first.x(), centerY + first.y()),
-                        new GuiPoint(centerX + second.x(), centerY + second.y()),
-                        new GuiPoint(centerX + third.x(), centerY + third.y()),
-                        new GuiPoint(centerX + fourth.x(), centerY + fourth.y()),
+                        firstPoint,
+                        secondPoint,
+                        thirdPoint,
+                        fourthPoint,
                         SHELL_ALARM_ZONE_ALPHA)),
                 color);
+        List<GuiSilhouetteQuad> outline = new ArrayList<>(4);
+        addLineQuad(outline, firstPoint, secondPoint, SHELL_ALARM_ZONE_OUTLINE_ALPHA);
+        addLineQuad(outline, secondPoint, thirdPoint, SHELL_ALARM_ZONE_OUTLINE_ALPHA);
+        addLineQuad(outline, thirdPoint, fourthPoint, SHELL_ALARM_ZONE_OUTLINE_ALPHA);
+        addLineQuad(outline, fourthPoint, firstPoint, SHELL_ALARM_ZONE_OUTLINE_ALPHA);
+        drawGuiSilhouetteQuads(graphics, graphics.pose().last().pose(), outline, color);
+    }
+
+    private static void addLineQuad(List<GuiSilhouetteQuad> quads, GuiPoint start, GuiPoint end, int alpha) {
+        GuiSilhouetteQuad quad = lineQuad(start, end, alpha);
+        if (quad != null) {
+            quads.add(quad);
+        }
     }
 
     private void drawRadarCoverage(

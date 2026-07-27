@@ -4,6 +4,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RadarFilterCardItemTest {
     @Test
@@ -24,5 +25,14 @@ class RadarFilterCardItemTest {
 
         assertEquals(List.of("Old Ship"), data.sableNames());
         assertEquals(List.of("Q\tOld Ship"), data.encodedLines());
+    }
+
+    @Test
+    void defaultSablePlaceholderIsNotAnAllowlistEntry() {
+        RadarFilterCardItem.AllowlistData data = RadarFilterCardItem.decodeAllowlistLines(
+                List.of("Q\tSable Structure", "Q\t sable structure "),
+                false);
+
+        assertTrue(data.sableNames().isEmpty());
     }
 }

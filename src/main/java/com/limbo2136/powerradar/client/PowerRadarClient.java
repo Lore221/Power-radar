@@ -1,7 +1,9 @@
 package com.limbo2136.powerradar.client;
 
 import com.limbo2136.powerradar.PowerRadar;
+import com.limbo2136.powerradar.bridge.AttitudeIndicatorPanelRenderBridge;
 import com.limbo2136.powerradar.client.onboard.OnboardComputerRenderer;
+import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
 import com.limbo2136.powerradar.client.radarlink.RadarLinkClientRuntime;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
@@ -18,11 +20,23 @@ public final class PowerRadarClient {
 
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        AttitudeIndicatorPanelRenderBridge.setHandler(
+                (attachment, panel, partialTicks, poseStack, buffers, packedLight, packedOverlay) ->
+                        PowerRadarPanelAttachmentRenderer.renderAttitudeIndicator(
+                                attachment,
+                                panel,
+                                partialTicks,
+                                (com.mojang.blaze3d.vertex.PoseStack) poseStack,
+                                (net.minecraft.client.renderer.MultiBufferSource) buffers,
+                                packedLight,
+                                packedOverlay));
         RadarLinkClientRuntime.init();
         MechanicalSirenClientAudioRuntime.init();
         event.registerBlockEntityRenderer(ModBlockEntities.OVERVIEW_MODULE.get(), OverviewModuleRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), RadarMonitorControllerBlockEntityRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.RADAR_LINK.get(), RadarLinkRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.LOGIC_DOCK.get(), LogicDockRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.ONBOARD_COMPUTER.get(), OnboardComputerRenderer::new);
         event.registerEntityRenderer(ModEntities.RADAR_STRUCTURE.get(), RadarStructureEntityRenderer::new);
     }
@@ -30,5 +44,8 @@ public final class PowerRadarClient {
     @SubscribeEvent
     public static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
         OnboardComputerRenderer.registerAdditionalModels(event);
+        RadarLinkRenderer.registerAdditionalModels(event);
+        LogicDockRenderer.registerAdditionalModels(event);
+        PowerRadarPanelAttachmentRenderer.registerAdditionalModels(event);
     }
 }

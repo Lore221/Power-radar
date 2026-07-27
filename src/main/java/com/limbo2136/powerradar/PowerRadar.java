@@ -2,6 +2,7 @@ package com.limbo2136.powerradar;
 
 import com.limbo2136.powerradar.client.PowerRadarClientConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
+import com.limbo2136.powerradar.compat.electroenergetics.panel.PowerRadarPanelAttachmentTypes;
 import com.limbo2136.powerradar.compat.create.PowerRadarMovementChecks;
 import com.limbo2136.powerradar.compat.create.PowerRadarStressValues;
 import com.limbo2136.powerradar.compat.create.display.PowerRadarDisplaySources;
@@ -36,6 +37,7 @@ public final class PowerRadar {
         ModBlocks.register(modEventBus);
         ModSounds.register(modEventBus);
         PowerRadarCeeDeviceTypes.register(modEventBus);
+        PowerRadarPanelAttachmentTypes.register(modEventBus);
         ModDataComponents.register(modEventBus);
         ModItems.register(modEventBus);
         ModEntities.register(modEventBus);

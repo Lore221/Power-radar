@@ -2,7 +2,7 @@
   "type": "minecraft:block",
   "pools": [{
     "rolls": 1,
-    "entries": [{ "type": "minecraft:item", "name": "power_radar:computing_block" }],
+    "entries": [{ "type": "minecraft:item", "name": "power_radar:logic_dock" }],
     "conditions": [{ "condition": "minecraft:survives_explosion" }]
   }]
 }

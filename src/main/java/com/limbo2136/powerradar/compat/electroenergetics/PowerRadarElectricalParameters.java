@@ -38,7 +38,8 @@ public final class PowerRadarElectricalParameters {
     private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 700.0D;
     private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 45.0D;
     private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 5.0D;
-    private static final double DEFAULT_COMPUTING_BLOCK_POWER_WATTS = 45.0D;
+    private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
+    private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 45.0D;
     private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 50.0D;
     private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 45.0D;
 
@@ -71,7 +72,8 @@ public final class PowerRadarElectricalParameters {
     private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
     private static ModConfigSpec.DoubleValue monitorControllerPowerWatts;
     private static ModConfigSpec.DoubleValue radarDisplayPowerWatts;
-    private static ModConfigSpec.DoubleValue computingBlockPowerWatts;
+    private static ModConfigSpec.DoubleValue panelRadarLinkPowerWatts;
+    private static ModConfigSpec.DoubleValue logicDockPowerWatts;
     private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
     private static ModConfigSpec.DoubleValue shellAlarmPowerWatts;
 
@@ -105,7 +107,7 @@ public final class PowerRadarElectricalParameters {
                 "After an overvoltage shutdown, the radar recovers only below this voltage.");
         builder.pop();
 
-        builder.comment("Shared low-voltage supply for monitors, the Computing Block, and OnBoard, in volts.")
+        builder.comment("Shared low-voltage supply for monitors, the Logic Dock, and OnBoard, in volts.")
                 .push("monitor");
         monitorNominalVoltage = voltage(builder, "nominal", DEFAULT_MONITOR_VOLTAGE.nominal(), 1.0D,
                 "Nominal voltage used to calculate the constant-power load.");
@@ -193,8 +195,10 @@ public final class PowerRadarElectricalParameters {
                 DEFAULT_MONITOR_CONTROLLER_POWER_WATTS, "Base power draw of the monitor controller.");
         radarDisplayPowerWatts = power(builder, "radar_display_power_watts",
                 DEFAULT_RADAR_DISPLAY_POWER_WATTS, "Additional power draw of each radar display block.");
-        computingBlockPowerWatts = power(builder, "computing_block_power_watts",
-                DEFAULT_COMPUTING_BLOCK_POWER_WATTS, "Computing Block power draw.");
+        panelRadarLinkPowerWatts = power(builder, "panel_radar_link_power_watts",
+                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS, "Power draw of a Radar Link installed in an electrical panel.");
+        logicDockPowerWatts = power(builder, "logic_dock_power_watts",
+                DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock power draw.");
         onboardComputerPowerWatts = power(builder, "onboard_computer_power_watts",
                 DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer power draw.");
         shellAlarmPowerWatts = power(builder, "shell_alarm_power_watts",
@@ -306,9 +310,14 @@ public final class PowerRadarElectricalParameters {
             return value(radarDisplayPowerWatts);
         }
 
-        public static double computingBlockPowerWatts() {
+        public static double panelRadarLinkPowerWatts() {
             ensureConfigDefined();
-            return value(computingBlockPowerWatts);
+            return value(panelRadarLinkPowerWatts);
+        }
+
+        public static double logicDockPowerWatts() {
+            ensureConfigDefined();
+            return value(logicDockPowerWatts);
         }
 
         public static double onboardComputerPowerWatts() {

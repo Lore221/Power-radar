@@ -34,7 +34,7 @@ class PowerRadarElectricalParametersTest {
         assertEquals(700.0D, PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts());
         assertEquals(45.0D, PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts());
         assertEquals(5.0D, PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts());
-        assertEquals(45.0D, PowerRadarElectricalParameters.Ratings.computingBlockPowerWatts());
+        assertEquals(45.0D, PowerRadarElectricalParameters.Ratings.logicDockPowerWatts());
         assertEquals(50.0D, PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts());
         assertEquals(45.0D, PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts());
     }

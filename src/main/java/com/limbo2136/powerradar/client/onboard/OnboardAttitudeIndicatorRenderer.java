@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.client.onboard;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
-import com.limbo2136.powerradar.client.PowerRadarClientConfig;
+import com.limbo2136.powerradar.client.instrument.AttitudeIndicatorAngleCache;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -15,10 +15,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ModelEvent;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
 
-/** Отрисовывает выбранный вариант механического авиагоризонта. */
+/** Отрисовывает компактный текстурный авиагоризонт OnBoard Computer. */
 final class OnboardAttitudeIndicatorRenderer {
     private static final float SOURCE_PIXEL = 1.0F / 16.0F;
 
@@ -38,21 +36,11 @@ final class OnboardAttitudeIndicatorRenderer {
     private static final float STRIP_LEVEL_V_CENTER_PIXELS = 19.5F;
     private static final float STRIP_PIXELS_PER_QUARTER_TURN = 13.0F;
 
-    // OBJ уже утоплен на полпикселя под окном; его собственный центр Y задан в Blockbench как -1.5.
-    // При изменении опорной точки в Blockbench синхронно обновить SPHERE_PIVOT_Y без переноса геометрии.
-    private static final float SPHERE_PIVOT_Y = -1.5F * SOURCE_PIXEL;
-    // Эти знаки связывают оси OBJ с прямой индикацией «ВсВС»; менять их при переориентации модели.
-    private static final float SPHERE_BANK_SIGN = 1.0F;
-    private static final float SPHERE_PITCH_SIGN = 1.0F;
-
     private static final ResourceLocation HOUSING_MODEL_LOCATION = ResourceLocation.fromNamespaceAndPath(
             PowerRadar.MOD_ID, "block/on_board_modules/attitude_indicator");
-    private static final ResourceLocation SPHERE_MODEL_LOCATION = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "block/on_board_modules/attitude_sphere");
     private static final ResourceLocation STRIP_TEXTURE = ResourceLocation.fromNamespaceAndPath(
             PowerRadar.MOD_ID, "textures/block/on_board_modules/attitude_strip.png");
     private static final PartialModel HOUSING_MODEL = PartialModel.of(HOUSING_MODEL_LOCATION);
-    private static final PartialModel SPHERE_MODEL = PartialModel.of(SPHERE_MODEL_LOCATION);
 
     private final OnboardPartialModelRenderer partialRenderer;
 
@@ -62,27 +50,17 @@ final class OnboardAttitudeIndicatorRenderer {
 
     static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
         event.register(ModelResourceLocation.standalone(HOUSING_MODEL_LOCATION));
-        event.register(ModelResourceLocation.standalone(SPHERE_MODEL_LOCATION));
     }
 
-    // switch-выражение заставит явно реализовать каждый новый вариант enum конфигурации.
     RenderState prepare(
             OnboardComputerBlockEntity computer,
             Direction facing,
             Vec3 localWorldUp,
             MultiBufferSource buffers
     ) {
-        Vector3f worldUp = moduleWorldUp(facing, localWorldUp);
-        return switch (PowerRadarClientConfig.attitudeIndicatorRenderMode()) {
-            case TEXTURE_STRIP -> new RenderState(
-                    PowerRadarClientConfig.AttitudeIndicatorRenderMode.TEXTURE_STRIP,
-                    OnboardAttitudeStripCache.sample(computer, worldUp),
-                    buffers.getBuffer(RenderType.entityCutoutNoCull(STRIP_TEXTURE)));
-            case OBJ_SPHERE -> new RenderState(
-                    PowerRadarClientConfig.AttitudeIndicatorRenderMode.OBJ_SPHERE,
-                    OnboardAttitudeStripCache.sample(computer, worldUp),
-                    null);
-        };
+        return new RenderState(
+                AttitudeIndicatorAngleCache.sample(computer, facing, localWorldUp),
+                buffers.getBuffer(RenderType.entityCutoutNoCull(STRIP_TEXTURE)));
     }
 
     // Применяет ориентацию модели, рисует полосу и затем неподвижный корпус со стрелкой.
@@ -101,53 +79,10 @@ final class OnboardAttitudeIndicatorRenderer {
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
         poseStack.translate(-0.5D, 0.0D, -0.5D);
 
-        switch (state.mode) {
-            case TEXTURE_STRIP -> renderStrip(
-                    poseStack, state.stripConsumer, packedLight, packedOverlay, state.stripTransform);
-            case OBJ_SPHERE -> renderSphere(
-                    computer, poseStack, moduleConsumer, packedLight, packedOverlay, state.stripTransform);
-        }
+        renderStrip(poseStack, state.stripConsumer, packedLight, packedOverlay, state.transform);
         this.partialRenderer.render(
                 HOUSING_MODEL, computer, poseStack, moduleConsumer, packedLight, packedOverlay);
         poseStack.popPose();
-    }
-
-    // Центрирует OBJ в окне и вращает его вокруг авторской опорной точки без перестройки геометрии.
-    private void renderSphere(
-            OnboardComputerBlockEntity computer,
-            PoseStack poseStack,
-            VertexConsumer consumer,
-            int packedLight,
-            int packedOverlay,
-            StripTransform transform
-    ) {
-        poseStack.pushPose();
-        poseStack.translate(0.5D, SPHERE_PIVOT_Y, 0.5D);
-        // Порядок вызовов фиксирован: крен вокруг Y модели, затем тангаж вокруг X модели.
-        // Положительные знаки дают прямую «ВсВС»; перестановка осей изменит показания.
-        poseStack.mulPose(Axis.YP.rotationDegrees(transform.bankDegrees * SPHERE_BANK_SIGN));
-        poseStack.mulPose(Axis.XP.rotationDegrees(transform.pitchDegrees * SPHERE_PITCH_SIGN));
-        poseStack.translate(0.0D, -SPHERE_PIVOT_Y, 0.0D);
-        this.partialRenderer.render(
-                SPHERE_MODEL, computer, poseStack, consumer, packedLight, packedOverlay);
-        poseStack.popPose();
-    }
-
-    // Переводит локальный мировой верх Sable в оси модели относительно направления блока.
-    private static Vector3f moduleWorldUp(Direction facing, Vec3 localWorldUp) {
-        Vector3f result = new Vector3f(
-                (float) localWorldUp.x,
-                (float) localWorldUp.y,
-                (float) localWorldUp.z);
-        if (result.lengthSquared() < 1.0E-6F) {
-            result.set(0.0F, 1.0F, 0.0F);
-        } else {
-            result.normalize();
-        }
-        Quaternionf blockFacingRotation = new Quaternionf()
-                .rotateY((float) Math.toRadians(OnboardPanelModuleRenderer.modelYawDegrees(facing)));
-        blockFacingRotation.conjugate().transform(result).normalize();
-        return result;
     }
 
     // Прямая индикация «ВсВС»: положительный крен вращает UV в плюс, а положительный
@@ -157,13 +92,13 @@ final class OnboardAttitudeIndicatorRenderer {
             VertexConsumer consumer,
             int packedLight,
             int packedOverlay,
-            StripTransform transform
+            AttitudeIndicatorAngleCache.Transform transform
     ) {
-        float angleRadians = (float) Math.toRadians(transform.bankDegrees);
+        float angleRadians = (float) Math.toRadians(transform.bankDegrees());
         float cosine = Mth.cos(angleRadians);
         float sine = Mth.sin(angleRadians);
         float vCenter = STRIP_LEVEL_V_CENTER_PIXELS
-                - transform.pitchDegrees / 90.0F * STRIP_PIXELS_PER_QUARTER_TURN;
+                - transform.pitchDegrees() / 90.0F * STRIP_PIXELS_PER_QUARTER_TURN;
         PoseStack.Pose pose = poseStack.last();
 
         emitStripVertex(pose, consumer, WINDOW_MIN_X, STRIP_QUAD_Y, WINDOW_MIN_Z,
@@ -207,12 +142,8 @@ final class OnboardAttitudeIndicatorRenderer {
 
     /** Общие данные режима, вычисленные один раз за отрисовку блока. */
     record RenderState(
-            PowerRadarClientConfig.AttitudeIndicatorRenderMode mode,
-            StripTransform stripTransform,
+            AttitudeIndicatorAngleCache.Transform transform,
             VertexConsumer stripConsumer
     ) {
-    }
-
-    record StripTransform(float bankDegrees, float pitchDegrees) {
     }
 }

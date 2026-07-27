@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import net.createmod.catnip.math.AngleHelper;
 import net.createmod.catnip.math.VecHelper;
 import net.minecraft.ChatFormatting;
@@ -471,11 +472,19 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return this.sableProtectionMode;
     }
 
-    public AABB displayProtectionBounds() {
-        MovingProtectedZone zone = this.protectedZone;
-        if (zone == null) {
-            return configuredGroundBounds();
+    @Nullable
+    public AABB displayProtectionBounds(ServerLevel level) {
+        MovingProtectedZone zone = this.protectedZoneTracker.broadPhaseZone(
+                level, this.worldPosition, configuredGroundBounds(), sableProtectionMarginPercent());
+        if (zone != null && zone.onSable()) {
+            // Монитору нужны актуальные мировые X/Z-габариты Sable даже при отсутствии снарядов.
+            zone = this.protectedZoneTracker.refreshGeometryIfDue(
+                    level, zone, sableProtectionMarginPercent());
         }
+        if (zone == null) {
+            return null;
+        }
+        this.protectedZone = zone;
         double margin = zone.safetyMarginPerSide();
         return zone.bounds().inflate(
                 zone.bounds().getXsize() * margin,

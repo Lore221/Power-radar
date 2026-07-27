@@ -24,6 +24,10 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class RadarLinkBlockEntity extends BlockEntity {
+    private static final String GREEN_PULSE_TAG = "GreenLampPulse";
+    private static final String RED_PULSE_TAG = "RedLampPulse";
+    private static final float LAMP_PULSE_DURATION_TICKS = 12.0F;
+
     @Nullable
     private UUID networkId;
     private RadarLinkEndpointRole endpointRole = RadarLinkEndpointRole.NONE;
@@ -34,6 +38,10 @@ public class RadarLinkBlockEntity extends BlockEntity {
     private boolean needsEndpointReconcile;
     private int startupSafetyTicks;
     private int ticksSinceReconcile;
+    private boolean sendGreenPulse;
+    private boolean sendRedPulse;
+    private long clientGreenPulseStart = Long.MIN_VALUE;
+    private long clientRedPulseStart = Long.MIN_VALUE;
 
     public RadarLinkBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.RADAR_LINK.get(), pos, blockState);
@@ -126,7 +134,10 @@ public class RadarLinkBlockEntity extends BlockEntity {
             RadarLinkReconcileResult result = manager.attachControllerFromLink(this.networkId, linkGlobalPos, newEndpointPos);
             this.endpointRole = RadarLinkEndpointRole.RADAR_CONTROLLER;
             this.endpointPos = newEndpointPos;
-            syncChanged();
+            pulseAndSync(result == RadarLinkReconcileResult.OUT_OF_RANGE
+                    || result == RadarLinkReconcileResult.AMBIGUOUS
+                    ? LampPulse.RED
+                    : LampPulse.GREEN);
             return result;
         }
 
@@ -136,20 +147,21 @@ public class RadarLinkBlockEntity extends BlockEntity {
             manager.attachMonitorFromLink(this.networkId, linkGlobalPos, newEndpointPos);
             this.endpointRole = RadarLinkEndpointRole.RADAR_MONITOR;
             this.endpointPos = newEndpointPos;
-            syncChanged();
             if (manager.resolveControllersForConsumer(this.networkId, linkGlobalPos).status()
                     == RadarNetworkConnectionStatus.OUT_OF_RANGE) {
+                pulseAndSync(LampPulse.RED);
                 return RadarLinkReconcileResult.OUT_OF_RANGE;
             }
+            pulseAndSync(LampPulse.GREEN);
             return RadarLinkReconcileResult.MONITOR_ATTACHED;
         }
 
-        if (frontState.is(ModBlocks.COMPUTING_BLOCK.get())
-                && serverLevel.getBlockEntity(frontPos) instanceof ComputingBlockEntity) {
+        if (frontState.is(ModBlocks.LOGIC_DOCK.get())
+                && serverLevel.getBlockEntity(frontPos) instanceof LogicDockBlockEntity) {
             detachCurrentEndpoint(manager, linkGlobalPos);
-            this.endpointRole = RadarLinkEndpointRole.COMPUTING_BLOCK;
+            this.endpointRole = RadarLinkEndpointRole.LOGIC_DOCK;
             this.endpointPos = newEndpointPos;
-            syncChanged();
+            pulseAndSync(LampPulse.GREEN);
             return RadarLinkReconcileResult.NONE;
         }
 
@@ -157,7 +169,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             detachCurrentEndpoint(manager, linkGlobalPos);
             this.endpointRole = RadarLinkEndpointRole.FUTURE_CONSUMER;
             this.endpointPos = newEndpointPos;
-            syncChanged();
+            pulseAndSync(LampPulse.GREEN);
             return RadarLinkReconcileResult.NONE;
         }
 
@@ -165,10 +177,21 @@ public class RadarLinkBlockEntity extends BlockEntity {
             detachCurrentEndpoint(manager, linkGlobalPos);
             this.endpointRole = RadarLinkEndpointRole.NONE;
             this.endpointPos = null;
-            syncChanged();
+            pulseAndSync(LampPulse.RED);
             return RadarLinkReconcileResult.MONITOR_DETACHED;
         }
+        pulseClientOnly(LampPulse.RED);
         return RadarLinkReconcileResult.NONE;
+    }
+
+    // Сервер передаёт только начало импульса; клиент самостоятельно рассчитывает
+    // плавное затухание и не получает сетевой пакет на каждый кадр анимации.
+    public float greenLampGlow(float partialTick) {
+        return clientPulseGlow(this.clientGreenPulseStart, partialTick);
+    }
+
+    public float redLampGlow(float partialTick) {
+        return clientPulseGlow(this.clientRedPulseStart, partialTick);
     }
 
     public void destroyNetworkMembership() {
@@ -257,6 +280,13 @@ public class RadarLinkBlockEntity extends BlockEntity {
         this.endpointPos = null;
         if (this.level != null && this.level.isClientSide()) {
             RadarNetworkNodeClientCacheBridge.onNetworkChanged(this.level, this.worldPosition, oldNetworkId, this.networkId);
+            long gameTime = this.level.getGameTime();
+            if (tag.getBoolean(GREEN_PULSE_TAG)) {
+                this.clientGreenPulseStart = gameTime;
+            }
+            if (tag.getBoolean(RED_PULSE_TAG)) {
+                this.clientRedPulseStart = gameTime;
+            }
         }
     }
 
@@ -267,7 +297,16 @@ public class RadarLinkBlockEntity extends BlockEntity {
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-        return this.saveCustomOnly(registries);
+        CompoundTag tag = this.saveCustomOnly(registries);
+        if (this.sendGreenPulse) {
+            tag.putBoolean(GREEN_PULSE_TAG, true);
+            this.sendGreenPulse = false;
+        }
+        if (this.sendRedPulse) {
+            tag.putBoolean(RED_PULSE_TAG, true);
+            this.sendRedPulse = false;
+        }
+        return tag;
     }
 
     private void registerLoaded(ServerLevel level) {
@@ -296,9 +335,48 @@ public class RadarLinkBlockEntity extends BlockEntity {
         setChanged();
         if (this.level instanceof ServerLevel serverLevel) {
             if (this.networkId != null) {
-                RadarNetworkManager.get(serverLevel.getServer()).invalidateComputingCache(this.networkId);
+                RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(this.networkId);
             }
             serverLevel.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(), 2);
         }
+    }
+
+    private void pulseAndSync(LampPulse pulse) {
+        queuePulse(pulse);
+        syncChanged();
+    }
+
+    // Неизменившееся ошибочное состояние требует только визуального импульса:
+    // оно не помечает сохранение грязным и не сбрасывает вычислительный кэш сети.
+    private void pulseClientOnly(LampPulse pulse) {
+        queuePulse(pulse);
+        if (this.level instanceof ServerLevel serverLevel) {
+            serverLevel.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(), 2);
+        }
+    }
+
+    private void queuePulse(LampPulse pulse) {
+        if (pulse == LampPulse.GREEN) {
+            this.sendGreenPulse = true;
+        } else {
+            this.sendRedPulse = true;
+        }
+    }
+
+    private float clientPulseGlow(long startTime, float partialTick) {
+        if (this.level == null || !this.level.isClientSide() || startTime == Long.MIN_VALUE) {
+            return 0.0F;
+        }
+        float elapsed = this.level.getGameTime() + partialTick - startTime;
+        if (elapsed < 0.0F || elapsed >= LAMP_PULSE_DURATION_TICKS) {
+            return 0.0F;
+        }
+        float normalized = 1.0F - elapsed / LAMP_PULSE_DURATION_TICKS;
+        return normalized * normalized;
+    }
+
+    private enum LampPulse {
+        GREEN,
+        RED
     }
 }

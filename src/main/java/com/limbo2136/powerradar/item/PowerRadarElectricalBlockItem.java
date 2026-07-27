@@ -90,7 +90,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case OVERVIEW_MODULE -> PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
             case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts();
             case RADAR_DISPLAY -> PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts();
-            case COMPUTING_BLOCK -> PowerRadarElectricalParameters.Ratings.computingBlockPowerWatts();
+            case LOGIC_DOCK -> PowerRadarElectricalParameters.Ratings.logicDockPowerWatts();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
             case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER -> 0.0D;

@@ -13,7 +13,7 @@ import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.block.InterceptionControllerBlock;
 import com.limbo2136.powerradar.block.AirRadarControllerBlock;
 import com.limbo2136.powerradar.block.SurfaceRadarControllerBlock;
-import com.limbo2136.powerradar.block.ComputingBlock;
+import com.limbo2136.powerradar.block.LogicDockBlock;
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.neoforged.bus.api.IEventBus;
@@ -41,9 +41,9 @@ public final class ModBlocks {
             BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
     );
 
-    public static final DeferredBlock<ComputingBlock> COMPUTING_BLOCK = BLOCKS.registerBlock(
-            "computing_block",
-            ComputingBlock::new,
+    public static final DeferredBlock<LogicDockBlock> LOGIC_DOCK = BLOCKS.registerBlock(
+            "logic_dock",
+            LogicDockBlock::new,
             BlockBehaviour.Properties.of().strength(3.0F, 6.0F)
     );
 

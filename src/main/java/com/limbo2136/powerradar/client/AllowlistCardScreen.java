@@ -12,6 +12,7 @@ import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem.AllowlistData;
 import com.limbo2136.powerradar.network.AllowlistCardOpenPayload;
 import com.limbo2136.powerradar.network.AllowlistCardSavePayload;
+import com.limbo2136.powerradar.radar.SableStructureName;
 import com.limbo2136.powerradar.registry.ModItems;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -395,7 +396,8 @@ public class AllowlistCardScreen extends Screen {
         if (sanitized.isEmpty()) {
             return null;
         }
-        return sanitized.length() <= 64 ? sanitized : sanitized.substring(0, 64).trim();
+        String limited = sanitized.length() <= 64 ? sanitized : sanitized.substring(0, 64).trim();
+        return SableStructureName.normalize(limited);
     }
 
     private enum ButtonType {

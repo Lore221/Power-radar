@@ -10,9 +10,12 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
+import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarDisplayPanelAttachment;
+import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarPanelMonitorRuntime;
 import com.limbo2136.powerradar.network.RadarMonitorBlockStaticPayload;
 import com.limbo2136.powerradar.network.RadarMonitorBlockTargetsPayload;
 import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
+import com.limbo2136.powerradar.network.RadarMonitorPosePayloadFactory;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
@@ -184,39 +187,18 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     private void sendMovingPoses(ServerLevel serverLevel, BlockPos monitorPos) {
         refreshCachedSnapshotResolutionIfNeeded(serverLevel, monitorPos);
-        List<RadarMonitorBlockPosePayload.RadarPose> poses = new ArrayList<>();
-        long gameTime = serverLevel.getGameTime();
-        RadarWorldPose monitorWorldPose = RadarWorldPoseResolver.resolve(
+        RadarMonitorBlockPosePayload payload = RadarMonitorPosePayloadFactory.create(
                 serverLevel,
                 monitorPos,
-                net.minecraft.world.phys.Vec3.atCenterOf(monitorPos),
-                RadarGeometry.yawDegrees(facingFromState(getBlockState()).getOpposite()));
-        RadarMonitorBlockPosePayload.MonitorPose monitorPose = monitorWorldPose.onSableStructure()
-                ? new RadarMonitorBlockPosePayload.MonitorPose(
-                        monitorWorldPose.origin().x, monitorWorldPose.origin().y, monitorWorldPose.origin().z,
-                        monitorWorldPose.yawDegrees())
-                : null;
-        for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
-            RadarWorldPose pose = controller.worldPoseAt(gameTime);
-            if (!pose.onSableStructure()) {
-                continue;
-            }
-            poses.add(new RadarMonitorBlockPosePayload.RadarPose(
-                    controller.radarId(),
-                    pose.origin().x, pose.origin().y, pose.origin().z,
-                    controller.orientationState().structureType() == RadarStructureType.OVERVIEW
-                            ? 0.0F
-                            : pose.yawDegrees()));
-        }
-        if (monitorPose == null && poses.isEmpty()) {
+                facingFromState(getBlockState()),
+                this.cachedSnapshotControllers);
+        if (payload == null) {
             return;
         }
         List<ServerPlayer> players = nearbyPlayers(serverLevel);
         if (players.isEmpty()) {
             return;
         }
-        RadarMonitorBlockPosePayload payload = new RadarMonitorBlockPosePayload(
-                monitorPos, gameTime, monitorPose, List.copyOf(poses));
         for (ServerPlayer player : players) {
             PacketDistributor.sendToPlayer(player, payload);
         }
@@ -326,6 +308,10 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             monitorController.cachedSnapshot = snapshot;
             monitorController.cachedSnapshotKey = key;
             return snapshot;
+        }
+        RadarDisplayPanelAttachment panelDisplay = RadarPanelMonitorRuntime.findDisplay(level, controllerPos);
+        if (panelDisplay != null) {
+            return RadarPanelMonitorRuntime.createSnapshot(level, controllerPos, panelDisplay);
         }
         return buildSnapshotPayload(level, controllerPos, null, level.getGameTime());
     }

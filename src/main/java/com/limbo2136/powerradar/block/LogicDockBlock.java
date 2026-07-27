@@ -1,11 +1,11 @@
 package com.limbo2136.powerradar.block;
 
-import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
-import com.limbo2136.powerradar.compat.electroenergetics.ComputingBlockCeeDevice;
+import com.limbo2136.powerradar.compat.electroenergetics.LogicDockCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
@@ -36,11 +36,11 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.RandomSource;
 
-public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceBlock<ComputingBlockCeeDevice> {
-    public static final MapCodec<ComputingBlock> CODEC = simpleCodec(ComputingBlock::new);
+public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceBlock<LogicDockCeeDevice> {
+    public static final MapCodec<LogicDockBlock> CODEC = simpleCodec(LogicDockBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
-    public ComputingBlock(Properties properties) {
+    public LogicDockBlock(Properties properties) {
         super(properties);
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
@@ -86,10 +86,10 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
             BlockHitResult hitResult
     ) {
         if (!(stack.getItem() instanceof RadarFilterCardItem card)
-                || !(level.getBlockEntity(pos) instanceof ComputingBlockEntity computer)) {
+                || !(level.getBlockEntity(pos) instanceof LogicDockBlockEntity dock)) {
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
-        if (!level.isClientSide() && computer.insertCard(card.kind(), stack, player)) {
+        if (!level.isClientSide() && dock.insertCard(card.kind(), stack, player)) {
             return ItemInteractionResult.SUCCESS;
         }
         return level.isClientSide() ? ItemInteractionResult.SUCCESS : ItemInteractionResult.CONSUME;
@@ -106,9 +106,9 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
         if (!player.getMainHandItem().isEmpty()) {
             return InteractionResult.PASS;
         }
-        if (level.getBlockEntity(pos) instanceof ComputingBlockEntity computer) {
+        if (level.getBlockEntity(pos) instanceof LogicDockBlockEntity dock) {
             if (!level.isClientSide()) {
-                computer.extractCard(player, slotFromHit(state, hitResult));
+                dock.extractCard(player, slotFromHit(state, hitResult));
             }
             return InteractionResult.sidedSuccess(level.isClientSide());
         }
@@ -119,15 +119,18 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
         if (hit.getDirection() != state.getValue(FACING)) {
             return -1;
         }
-        // Три визуальные секции соответствуют ordinal Kind и устойчивым NBT-ключам Card0..Card2.
-        double localY = hit.getLocation().y - hit.getBlockPos().getY();
-        return localY >= 2.0D / 3.0D ? 0 : localY >= 1.0D / 3.0D ? 1 : 2;
+        // Модельные позиции справа налево соответствуют ordinal Kind и NBT-ключам Card0..Card2.
+        Direction right = state.getValue(FACING).getClockWise();
+        double offsetX = hit.getLocation().x - (hit.getBlockPos().getX() + 0.5D);
+        double offsetZ = hit.getLocation().z - (hit.getBlockPos().getZ() + 0.5D);
+        double localX = 0.5D + offsetX * right.getStepX() + offsetZ * right.getStepZ();
+        return localX >= 2.0D / 3.0D ? 0 : localX >= 1.0D / 3.0D ? 1 : 2;
     }
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof ComputingBlockEntity computer) {
-            computer.dropCards();
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof LogicDockBlockEntity dock) {
+            dock.dropCards();
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -145,7 +148,7 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new ComputingBlockEntity(pos, state);
+        return new LogicDockBlockEntity(pos, state);
     }
 
     @Nullable
@@ -159,13 +162,13 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
                 ? null
                 : createTickerHelper(
                         type,
-                        ModBlockEntities.COMPUTING_BLOCK.get(),
-                        ComputingBlockEntity::serverTick);
+                        ModBlockEntities.LOGIC_DOCK.get(),
+                        LogicDockBlockEntity::serverTick);
     }
 
     @Override
-    public SimulatedDeviceType<ComputingBlockCeeDevice> getDevice() {
-        return PowerRadarCeeDeviceTypes.COMPUTING_BLOCK.get();
+    public SimulatedDeviceType<LogicDockCeeDevice> getDevice() {
+        return PowerRadarCeeDeviceTypes.LOGIC_DOCK.get();
     }
 
     @Override
@@ -187,10 +190,12 @@ public class ComputingBlock extends BaseEntityBlock implements ElectricalDeviceB
         Direction facing = state.getValue(FACING);
         Direction rear = facing.getOpposite();
         Direction right = facing.getClockWise();
-        Vec3 center = new Vec3(0.5, 5.0 / 16.0, 0.5)
-                .add(rear.getStepX() * 9.0 / 16.0, 0, rear.getStepZ() * 9.0 / 16.0);
+        // Координаты взяты из models/block/logic_dock.json: (+) -1 3 11, (-) 17 3 11.
+        // При изменении геометрии контактов модели нужно синхронно обновить эти смещения.
+        Vec3 center = new Vec3(0.5, 3.0 / 16.0, 0.5)
+                .add(rear.getStepX() * 3.0 / 16.0, 0, rear.getStepZ() * 3.0 / 16.0);
         return new PowerRadarCeeTerminalPair(
-                center.add(right.getStepX() * -2.0 / 16.0, 0, right.getStepZ() * -2.0 / 16.0),
-                center.add(right.getStepX() * 4.0 / 16.0, 0, right.getStepZ() * 4.0 / 16.0));
+                center.add(right.getStepX() * -9.0 / 16.0, 0, right.getStepZ() * -9.0 / 16.0),
+                center.add(right.getStepX() * 9.0 / 16.0, 0, right.getStepZ() * 9.0 / 16.0));
     }
 }

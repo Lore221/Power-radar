@@ -23,7 +23,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.RADAR_CONTROLLER.get());
                         output.accept(ModItems.AIR_RADAR_CONTROLLER.get());
                         output.accept(ModItems.SURFACE_RADAR_CONTROLLER.get());
-                        output.accept(ModItems.COMPUTING_BLOCK.get());
+                        output.accept(ModItems.LOGIC_DOCK.get());
                         if (SableRadarIntegration.isAeronauticsLoaded()) {
                             output.accept(ModItems.ONBOARD_COMPUTER.get());
                         }

@@ -5,6 +5,6 @@ public enum RadarLinkEndpointRole {
     NONE,
     RADAR_CONTROLLER,
     RADAR_MONITOR,
-    COMPUTING_BLOCK,
+    LOGIC_DOCK,
     FUTURE_CONSUMER
 }

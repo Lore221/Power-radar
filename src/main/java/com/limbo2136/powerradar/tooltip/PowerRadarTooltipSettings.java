@@ -16,7 +16,7 @@ public final class PowerRadarTooltipSettings {
         OVERVIEW_MODULE,
         MONITOR_CONTROLLER,
         RADAR_DISPLAY,
-        COMPUTING_BLOCK,
+        LOGIC_DOCK,
         ONBOARD_COMPUTER,
         TARGET_CONTROLLER,
         INTERCEPTION_CONTROLLER,
@@ -75,7 +75,7 @@ public final class PowerRadarTooltipSettings {
                     field(InventoryField.RANGE_BONUS))),
             Map.entry(Target.MONITOR_CONTROLLER, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.RADAR_DISPLAY, List.of(field(InventoryField.NOMINAL_POWER))),
-            Map.entry(Target.COMPUTING_BLOCK, List.of(field(InventoryField.NOMINAL_POWER))),
+            Map.entry(Target.LOGIC_DOCK, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.ONBOARD_COMPUTER, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.TARGET_CONTROLLER, List.of(
                     field(InventoryField.INTERNAL_RESISTANCE),
@@ -102,7 +102,7 @@ public final class PowerRadarTooltipSettings {
                     field(InventoryField.RANGE_BONUS))),
             Map.entry(Target.MONITOR_CONTROLLER, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.RADAR_DISPLAY, List.of(field(InventoryField.NOMINAL_POWER))),
-            Map.entry(Target.COMPUTING_BLOCK, List.of(field(InventoryField.NOMINAL_POWER))),
+            Map.entry(Target.LOGIC_DOCK, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.ONBOARD_COMPUTER, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.TARGET_CONTROLLER, List.of(
                     field(InventoryField.INTERNAL_RESISTANCE),
@@ -137,7 +137,7 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.DISPLAY_COUNT))),
-            Map.entry(Target.COMPUTING_BLOCK, List.of(
+            Map.entry(Target.LOGIC_DOCK, List.of(
                     field(GoggleField.TITLE),
                     field(GoggleField.CARD_SLOTS),
                     field(GoggleField.NETWORK_STATUS))),

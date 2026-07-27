@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.item;
 import com.limbo2136.powerradar.network.AllowlistCardOpenPayload;
 import com.limbo2136.powerradar.network.TargetingCardOpenPayload;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
+import com.limbo2136.powerradar.radar.SableStructureName;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,7 +92,7 @@ public class RadarFilterCardItem extends Item {
                 continue;
             }
             if (rawLine.startsWith(SABLE_QUERY_PREFIX)) {
-                putName(sables, rawLine.substring(SABLE_QUERY_PREFIX.length()));
+                putSableName(sables, rawLine.substring(SABLE_QUERY_PREFIX.length()));
                 continue;
             }
             if (rawLine.startsWith(SABLE_PREFIX)) {
@@ -101,11 +102,11 @@ public class RadarFilterCardItem extends Item {
                 if (parts.length != 3) {
                     continue;
                 }
-                putName(sables, parts[2]);
+                putSableName(sables, parts[2]);
                 continue;
             }
             if (legacySableMode) {
-                putName(sables, rawLine);
+                putSableName(sables, rawLine);
             } else {
                 putName(players, rawLine);
             }
@@ -116,6 +117,13 @@ public class RadarFilterCardItem extends Item {
     private static void putName(LinkedHashMap<String, String> target, String rawName) {
         String name = sanitizeName(rawName);
         if (!name.isEmpty() && target.size() < MAX_ALLOWLIST_NAMES) {
+            target.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
+        }
+    }
+
+    private static void putSableName(LinkedHashMap<String, String> target, String rawName) {
+        String name = SableStructureName.normalize(sanitizeName(rawName));
+        if (name != null && target.size() < MAX_ALLOWLIST_NAMES) {
             target.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
         }
     }

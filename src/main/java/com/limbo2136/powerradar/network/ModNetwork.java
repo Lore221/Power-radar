@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
+import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarPanelMonitorRuntime;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
@@ -230,23 +231,42 @@ public final class ModNetwork {
         context.enqueueWork(() -> {
             RadarLinkConnectionResolver.Resolution linkResolution =
                     RadarLinkConnectionResolver.findSingleLinkFacingEndpoint(player.serverLevel(), payload.monitorPos());
-            if (linkResolution.status() != RadarLinkConnectionResolver.Status.SINGLE
-                    || linkResolution.link().networkId() == null) {
-                return;
-            }
             RadarNetworkManager manager = RadarNetworkManager.get(player.server);
-            if (!manager.controlConsumersAllowed(linkResolution.link().networkId())) {
+            java.util.UUID networkId;
+            GlobalPos consumerLinkPos;
+            RadarNetworkManager.ControllersResolution controllerResolution;
+            if (linkResolution.status() == RadarLinkConnectionResolver.Status.SINGLE
+                    && linkResolution.link().networkId() != null) {
+                networkId = linkResolution.link().networkId();
+                consumerLinkPos = GlobalPos.of(
+                        player.serverLevel().dimension(), linkResolution.link().getBlockPos());
+                controllerResolution = manager.resolveControllersForConsumer(networkId, consumerLinkPos);
+            } else {
+                var panelDisplay = RadarPanelMonitorRuntime.findDisplay(
+                        player.serverLevel(), payload.monitorPos());
+                if (panelDisplay == null || !panelDisplay.isElectricallyOperational()) {
+                    return;
+                }
+                RadarPanelMonitorRuntime.PanelNetworkResolution panelResolution =
+                        panelDisplay.currentNetworkResolution(player.serverLevel());
+                if (panelResolution.networkId() == null || panelResolution.linkPos() == null) {
+                    return;
+                }
+                networkId = panelResolution.networkId();
+                consumerLinkPos = GlobalPos.of(
+                        player.serverLevel().dimension(), panelResolution.linkPos());
+                controllerResolution = new RadarNetworkManager.ControllersResolution(
+                        panelResolution.status(), panelResolution.controllers());
+            }
+            if (!manager.controlConsumersAllowed(networkId)) {
                 return;
             }
-            RadarNetworkManager.ControllersResolution controllerResolution = manager.resolveControllersForConsumer(
-                    linkResolution.link().networkId(),
-                    GlobalPos.of(player.serverLevel().dimension(), linkResolution.link().getBlockPos()));
             if (payload.targetUuid() != null
                     && controllerResolution.controllers().stream()
                     .noneMatch(controller -> controller.findTargetTrack(payload.targetUuid()) != null)) {
                 return;
             }
-            manager.setSelectedTargetUuid(linkResolution.link().networkId(), payload.targetUuid());
+            manager.setSelectedTargetUuid(networkId, payload.targetUuid());
         });
     }
 

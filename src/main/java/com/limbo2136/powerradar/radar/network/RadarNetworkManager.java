@@ -3,7 +3,7 @@ package com.limbo2136.powerradar.radar.network;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
-import com.limbo2136.powerradar.block.entity.ComputingBlockEntity;
+import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
@@ -13,6 +13,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.SableStructureName;
 import com.limbo2136.powerradar.radar.ShellAlarmDisplayZone;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -46,8 +47,8 @@ public class RadarNetworkManager {
     private final MinecraftServer server;
     private final RadarNetworkSavedData savedData;
     private final Map<UUID, RadarNetworkRuntime> runtimeNetworks = new HashMap<>();
-    private final Map<UUID, ComputingResolution> computingResolutionCache = new HashMap<>();
-    private final Map<UUID, ComputingPolicy> computingPolicyCache = new HashMap<>();
+    private final Map<UUID, LogicDockResolution> logicDockResolutionCache = new HashMap<>();
+    private final Map<UUID, LogicDockPolicy> logicDockPolicyCache = new HashMap<>();
 
     private RadarNetworkManager(MinecraftServer server) {
         this.server = server;
@@ -81,6 +82,10 @@ public class RadarNetworkManager {
         return this.savedData.get(id).isPresent();
     }
 
+    /**
+     * Возвращает устойчивый порядок создания сети в SavedData.
+     * LinkedHashMap сохраняет этот порядок между сохранением и загрузкой мира.
+     */
     public RadarNetworkRecord ensureNetwork(UUID id) {
         RadarNetworkRecord record = this.savedData.ensure(id);
         this.runtimeNetworks.computeIfAbsent(id, ignored -> new RadarNetworkRuntime());
@@ -103,7 +108,7 @@ public class RadarNetworkManager {
             record.setSelectedTargetUuid(null);
             runtime(id).setSelectedTargetUuid(null);
         }
-        invalidateComputingCache(id);
+        invalidateLogicDockCache(id);
         this.savedData.setDirty();
     }
 
@@ -129,14 +134,14 @@ public class RadarNetworkManager {
     public void loadLink(UUID id, GlobalPos linkPos) {
         this.addPersistentLink(id, linkPos);
         this.runtime(id).loadedLinks().add(linkPos);
-        invalidateComputingCache(id);
+        invalidateLogicDockCache(id);
         this.reconcileConsumerLeases(id);
     }
 
     public void unloadLink(UUID id, GlobalPos linkPos) {
         RadarNetworkRuntime runtime = this.runtime(id);
         runtime.loadedLinks().remove(linkPos);
-        invalidateComputingCache(id);
+        invalidateLogicDockCache(id);
         this.detachMonitorFromLink(id, linkPos);
         this.reconcileConsumerLeases(id);
     }
@@ -278,11 +283,11 @@ public class RadarNetworkManager {
     }
 
     public int autotargetFilterMask(UUID id) {
-        return cachedComputingPolicy(id).targetingMask();
+        return cachedLogicDockPolicy(id).targetingMask();
     }
 
     public int displayFilterMask(UUID id) {
-        return cachedComputingPolicy(id).displayMask();
+        return cachedLogicDockPolicy(id).displayMask();
     }
 
     public int displayFilterMaskForController(GlobalPos controllerPos) {
@@ -323,7 +328,7 @@ public class RadarNetworkManager {
             List<String> onlinePlayerNames
     ) {
         RadarNetworkRuntime runtime = this.runtime(id);
-        ComputingPolicy policy = cachedComputingPolicy(id);
+        LogicDockPolicy policy = cachedLogicDockPolicy(id);
         int displayMask = policy.displayMask();
         int targetingMask = policy.targetingMask();
         List<String> allowlistedPlayers = policy.allowlistedPlayers();
@@ -375,12 +380,14 @@ public class RadarNetworkManager {
             ServerLevel level = this.server.getLevel(linkPos.dimension());
             if (level == null
                     || !(level.getBlockEntity(linkPos.pos()) instanceof ShellAlarmBlockEntity alarm)
-                    || alarm.sableProtectionMode()) {
+                    || alarm.electricalState() != PowerRadarCeeState.POWERED) {
                 continue;
             }
-            // На монитор выводятся только настраиваемые наземные зоны.
-            // Защита Sable и встроенная защита Onboard Computer остаются локальными для корабля.
-            AABB bounds = alarm.displayProtectionBounds();
+            // Наземный и Sable-режимы публикуют прямоугольный X/Z-след фактической защищаемой зоны.
+            AABB bounds = alarm.displayProtectionBounds(level);
+            if (bounds == null) {
+                continue;
+            }
             Vec3 center = bounds.getCenter();
             zones.add(new ShellAlarmDisplayZone(
                     linkPos.dimension().location(), center.x, center.y, center.z,
@@ -412,11 +419,11 @@ public class RadarNetworkManager {
     }
 
     public List<String> whitelistedPlayerNames(UUID id) {
-        return cachedComputingPolicy(id).allowlistedPlayers();
+        return cachedLogicDockPolicy(id).allowlistedPlayers();
     }
 
     public boolean hasForcedAutotargetEntries(UUID id) {
-        ComputingPolicy policy = cachedComputingPolicy(id);
+        LogicDockPolicy policy = cachedLogicDockPolicy(id);
         return policy.powered() && !policy.allowlistIsWhitelist()
                 && (!policy.playerNames().isEmpty() || !policy.sableNames().isEmpty());
     }
@@ -424,58 +431,60 @@ public class RadarNetworkManager {
     // targetUuid сохранён в публичном контракте для вызывающего кода; текущие карточки доступа
     // сопоставляют игроков и Sable только по регистронезависимому отображаемому имени.
     public boolean isAutotargetExcluded(UUID id, UUID targetUuid, String name, boolean sable) {
-        ComputingPolicy policy = cachedComputingPolicy(id);
+        LogicDockPolicy policy = cachedLogicDockPolicy(id);
         return policy.powered() && policy.allowlistIsWhitelist()
                 && matchesAllowlist(policy, name, sable);
     }
 
     public boolean isAutotargetForced(UUID id, UUID targetUuid, String name, boolean sable) {
-        ComputingPolicy policy = cachedComputingPolicy(id);
+        LogicDockPolicy policy = cachedLogicDockPolicy(id);
         return policy.powered() && !policy.allowlistIsWhitelist()
                 && matchesAllowlist(policy, name, sable);
     }
 
-    private static boolean matchesAllowlist(ComputingPolicy policy, String name, boolean sable) {
+    private static boolean matchesAllowlist(LogicDockPolicy policy, String name, boolean sable) {
         if (!sable) {
             return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
         }
-        return policy.sableNames().stream().anyMatch(name::equalsIgnoreCase);
+        String structureName = SableStructureName.normalize(name);
+        return structureName != null
+                && policy.sableNames().stream().anyMatch(structureName::equalsIgnoreCase);
     }
 
-    private ComputingResolution cachedComputingResolution(UUID id) {
-        return this.computingResolutionCache.computeIfAbsent(id, this::resolveComputingBlock);
+    private LogicDockResolution cachedLogicDockResolution(UUID id) {
+        return this.logicDockResolutionCache.computeIfAbsent(id, this::resolveLogicDock);
     }
 
-    private ComputingPolicy cachedComputingPolicy(UUID id) {
-        return this.computingPolicyCache.computeIfAbsent(id, ignored -> {
-            ComputingResolution resolution = cachedComputingResolution(id);
-            ComputingBlockEntity computer = resolution.active();
-            if (computer == null || !computer.isElectricallyOperational()) {
-                return ComputingPolicy.EMPTY;
+    private LogicDockPolicy cachedLogicDockPolicy(UUID id) {
+        return this.logicDockPolicyCache.computeIfAbsent(id, ignored -> {
+            LogicDockResolution resolution = cachedLogicDockResolution(id);
+            LogicDockBlockEntity dock = resolution.active();
+            if (dock == null || !dock.isElectricallyOperational()) {
+                return LogicDockPolicy.EMPTY;
             }
-            return new ComputingPolicy(true, true, computer.targetingMask(), computer.displayMask(),
-                    computer.allowlistIsWhitelist(), computer.allowlistPlayerNames(),
-                    computer.allowlistSableNames(),
-                    computer.allowlistedPlayers(), computer.allowlistedSableNames());
+            return new LogicDockPolicy(true, true, dock.targetingMask(), dock.displayMask(),
+                    dock.allowlistIsWhitelist(), dock.allowlistPlayerNames(),
+                    dock.allowlistSableNames(),
+                    dock.allowlistedPlayers(), dock.allowlistedSableNames());
         });
     }
 
-    public void invalidateComputingCache(UUID id) {
+    public void invalidateLogicDockCache(UUID id) {
         if (id == null) {
             return;
         }
-        this.computingResolutionCache.remove(id);
-        this.computingPolicyCache.remove(id);
+        this.logicDockResolutionCache.remove(id);
+        this.logicDockPolicyCache.remove(id);
         this.runtime(id).markSettingsChanged();
     }
 
     // Ровно один загруженный и корректно подключённый блок становится авторитетным;
     // сортировка делает результат независимым от порядка загрузки чанков.
-    public ComputingResolution resolveComputingBlock(UUID id) {
+    public LogicDockResolution resolveLogicDock(UUID id) {
         if (!controlConsumersAllowed(id)) {
-            return new ComputingResolution(null, false);
+            return new LogicDockResolution(null, false);
         }
-        List<ComputingBlockEntity> computers = new ArrayList<>();
+        List<LogicDockBlockEntity> docks = new ArrayList<>();
         this.runtime(id).loadedLinks().stream()
                 .sorted(Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
                         .thenComparingLong(pos -> pos.pos().asLong()))
@@ -483,31 +492,31 @@ public class RadarNetworkManager {
                     ServerLevel level = this.server.getLevel(linkPos.dimension());
                     if (level == null || !level.isLoaded(linkPos.pos())
                             || !(level.getBlockEntity(linkPos.pos()) instanceof RadarLinkBlockEntity link)
-                            || link.endpointRole() != RadarLinkEndpointRole.COMPUTING_BLOCK
+                            || link.endpointRole() != RadarLinkEndpointRole.LOGIC_DOCK
                             || link.endpointPos() == null
                             || !link.endpointPos().dimension().equals(linkPos.dimension())
                             || !level.isLoaded(link.endpointPos().pos())
-                            || !(level.getBlockEntity(link.endpointPos().pos()) instanceof ComputingBlockEntity computer)) {
+                            || !(level.getBlockEntity(link.endpointPos().pos()) instanceof LogicDockBlockEntity dock)) {
                         return;
                     }
-                    if (!computers.contains(computer)) {
-                        computers.add(computer);
+                    if (!docks.contains(dock)) {
+                        docks.add(dock);
                     }
                 });
-        return new ComputingResolution(computers.size() == 1 ? computers.get(0) : null, computers.size() > 1);
+        return new LogicDockResolution(docks.size() == 1 ? docks.get(0) : null, docks.size() > 1);
     }
 
-    public record ComputingResolution(ComputingBlockEntity active, boolean conflict) {
+    public record LogicDockResolution(LogicDockBlockEntity active, boolean conflict) {
     }
 
-    private record ComputingPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
+    private record LogicDockPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
                                    boolean allowlistIsWhitelist, List<String> playerNames,
                                    List<String> sableNames,
                                    List<String> allowlistedPlayers, List<String> allowlistedSables) {
-        private static final ComputingPolicy EMPTY = new ComputingPolicy(false, false, 0,
+        private static final LogicDockPolicy EMPTY = new LogicDockPolicy(false, false, 0,
                 RadarDetectionFilters.DEFAULT_MASK, true, List.of(), List.of(), List.of(), List.of());
 
-        private ComputingPolicy {
+        private LogicDockPolicy {
             playerNames = List.copyOf(playerNames);
             sableNames = List.copyOf(sableNames);
             allowlistedPlayers = List.copyOf(allowlistedPlayers);
@@ -524,8 +533,8 @@ public class RadarNetworkManager {
             return;
         }
         this.runtimeNetworks.remove(id);
-        this.computingResolutionCache.remove(id);
-        this.computingPolicyCache.remove(id);
+        this.logicDockResolutionCache.remove(id);
+        this.logicDockPolicyCache.remove(id);
     }
 
     // Контроллер принадлежит максимум одной сети: новая привязка удаляет устаревшие записи остальных.
@@ -533,7 +542,7 @@ public class RadarNetworkManager {
         RadarNetworkRecord record = this.ensureNetwork(id);
         for (RadarNetworkRecord other : this.savedData.records()) {
             if (!other.id().equals(id) && other.controllerBindings().removeIf(binding -> binding.controllerPos().equals(controllerPos))) {
-                invalidateComputingCache(other.id());
+                invalidateLogicDockCache(other.id());
                 this.savedData.setDirty();
             }
         }

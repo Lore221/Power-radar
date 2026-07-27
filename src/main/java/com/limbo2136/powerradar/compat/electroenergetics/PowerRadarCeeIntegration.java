@@ -31,10 +31,10 @@ public final class PowerRadarCeeIntegration {
         }
     }
 
-    public static void configureComputingLoad(ServerLevel level, BlockPos pos) {
+    public static void configureLogicDockLoad(ServerLevel level, BlockPos pos) {
         SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
-        if (device instanceof ComputingBlockCeeDevice computingDevice) {
-            computingDevice.configureLoad();
+        if (device instanceof LogicDockCeeDevice logicDockDevice) {
+            logicDockDevice.configureLoad();
         }
     }
 

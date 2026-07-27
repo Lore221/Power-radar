@@ -1,0 +1,22 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Made with Blockbench",
+	"textures": {
+		"0": "power_radar:item/dispaly_card",
+		"particle": "power_radar:item/dispaly_card"
+	},
+	"elements": [
+		{
+			"from": [7.5, 4, 3],
+			"to": [8.5, 13, 10],
+			"rotation": {"angle": 0, "axis": "y", "origin": [6, 4, 4]},
+			"faces": {
+				"north": {"uv": [2, 4, 3, 16], "texture": "#0"},
+				"east": {"uv": [2, 14, 13, 2], "texture": "#0"},
+				"south": {"uv": [2, 4, 3, 16], "texture": "#0"},
+				"west": {"uv": [2, 14, 13, 2], "texture": "#0"},
+				"up": {"uv": [2, 4, 3, 11], "texture": "#0"}
+			}
+		}
+	]
+}

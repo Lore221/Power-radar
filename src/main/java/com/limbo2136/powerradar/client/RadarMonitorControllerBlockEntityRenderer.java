@@ -54,6 +54,8 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final float BASE_FACE_OFFSET = 0.006F;
     private static final float VERTICAL_GRID_FACE_OFFSET = 0.007F;
     private static final float HORIZONTAL_GRID_FACE_OFFSET = 0.0072F;
+    private static final float SHELL_ALARM_ZONE_FILL_FACE_OFFSET = 0.0075F;
+    private static final float SHELL_ALARM_ZONE_OUTLINE_FACE_OFFSET = 0.0077F;
     private static final float COVERAGE_FACE_OFFSET = BASE_FACE_OFFSET + 0.002F;
     private static final float COVERAGE_FACE_OFFSET_STEP = 0.00005F;
     private static final float SILHOUETTE_FILL_FACE_OFFSET = 0.010F;
@@ -72,6 +74,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final int GRID_ALPHA = 48;
     private static final int COVERAGE_ALPHA = 255;
     private static final int SHELL_ALARM_ZONE_ALPHA = 32;
+    private static final int SHELL_ALARM_ZONE_OUTLINE_ALPHA = 192;
     private static final int SABLE_SILHOUETTE_FILL_ALPHA = 144;
     // Ключи BlockPos действительны только внутри cachedLevel; смена объекта уровня очищает кэш.
     private final Map<BlockPos, InWorldBlipCache> blipCaches = new HashMap<>();
@@ -129,22 +132,64 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             int fixedMapSizeBlocks,
             boolean withoutFrameInset
     ) {
-        this.renderWithoutFrameInset = withoutFrameInset;
-        if (controller.getLevel() != this.cachedLevel) {
-            // Сравнение по ссылке покрывает переподключение в то же измерение и координаты.
-            this.blipCaches.clear();
-            this.cachedLevel = controller.getLevel();
-        }
+        synchronizeLevelCache(controller.getLevel());
         if (controller.activeOrigin() == null
                 || controller.activeSize() <= 0
                 || controller.structureStatus() != com.limbo2136.powerradar.block.RadarDisplayStructureResolver.StructureStatus.ACTIVE) {
             return;
         }
+        renderSurface(
+                controller.getBlockPos(),
+                controller.activeFacing(),
+                controller.activeOrigin().subtract(controller.getBlockPos()),
+                controller.activeSize(),
+                partialTick,
+                poseStack,
+                bufferSource,
+                packedLight,
+                fixedMapSizeBlocks,
+                withoutFrameInset);
+    }
 
-        Direction facing = controller.activeFacing();
-        int size = controller.activeSize();
-        BlockPos relativeOrigin = controller.activeOrigin().subtract(controller.getBlockPos());
-        RadarMonitorClientState.Entry clientState = RadarMonitorClientState.get(controller.getBlockPos());
+    /**
+     * Рисует карту в каноническом квадрате 1x1, уже преобразованном вызывающим рендерером.
+     * Панель CEE масштабирует этот квадрат до физического окна своей модели.
+     */
+    public void renderPanelSurface(
+            BlockPos monitorPos,
+            float partialTick,
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            int packedLight
+    ) {
+        synchronizeLevelCache(Minecraft.getInstance().level);
+        renderSurface(
+                monitorPos,
+                Direction.NORTH,
+                BlockPos.ZERO,
+                1,
+                partialTick,
+                poseStack,
+                bufferSource,
+                packedLight,
+                0,
+                true);
+    }
+
+    private void renderSurface(
+            BlockPos monitorPos,
+            Direction facing,
+            BlockPos relativeOrigin,
+            int size,
+            float partialTick,
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            int packedLight,
+            int fixedMapSizeBlocks,
+            boolean withoutFrameInset
+    ) {
+        this.renderWithoutFrameInset = withoutFrameInset;
+        RadarMonitorClientState.Entry clientState = RadarMonitorClientState.get(monitorPos);
         RadarMonitorDisplayData displayData = clientState == null ? null : clientState.displayData();
         if (displayData == null || !displayData.monitorRendererEnabled()) {
             return;
@@ -200,19 +245,36 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                     halfWidth, halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
             SableSilhouetteProjection.Point fourth = SableSilhouetteProjection.projectOffset(
                     -halfWidth, halfDepth, 0.0F, viewYawDegrees, unitsPerBlock);
+            ScreenPoint firstPoint = new ScreenPoint(center.u() + first.x(), center.v() + first.y());
+            ScreenPoint secondPoint = new ScreenPoint(center.u() + second.x(), center.v() + second.y());
+            ScreenPoint thirdPoint = new ScreenPoint(center.u() + third.x(), center.v() + third.y());
+            ScreenPoint fourthPoint = new ScreenPoint(center.u() + fourth.x(), center.v() + fourth.y());
             drawClippedSilhouetteQuad(
                     poseStack,
                     bufferSource,
                     facing,
                     relativeOrigin,
                     size,
-                    new ScreenPoint(center.u() + first.x(), center.v() + first.y()),
-                    new ScreenPoint(center.u() + second.x(), center.v() + second.y()),
-                    new ScreenPoint(center.u() + third.x(), center.v() + third.y()),
-                    new ScreenPoint(center.u() + fourth.x(), center.v() + fourth.y()),
+                    firstPoint,
+                    secondPoint,
+                    thirdPoint,
+                    fourthPoint,
                     palette.red(palette.shellAlarmZone()), palette.green(palette.shellAlarmZone()),
                     palette.blue(palette.shellAlarmZone()), SHELL_ALARM_ZONE_ALPHA, screenLight,
-                    COVERAGE_FACE_OFFSET);
+                    SHELL_ALARM_ZONE_FILL_FACE_OFFSET, true);
+            List<ScreenPoint> corners = List.of(firstPoint, secondPoint, thirdPoint, fourthPoint);
+            for (int corner = 0; corner < corners.size(); corner++) {
+                ScreenPoint[] edge = silhouetteLineQuad(
+                        corners.get(corner), corners.get((corner + 1) % corners.size()));
+                if (edge != null) {
+                    drawClippedSilhouetteQuad(
+                            poseStack, bufferSource, facing, relativeOrigin, size,
+                            edge[0], edge[1], edge[2], edge[3],
+                            palette.red(palette.shellAlarmZone()), palette.green(palette.shellAlarmZone()),
+                            palette.blue(palette.shellAlarmZone()), SHELL_ALARM_ZONE_OUTLINE_ALPHA,
+                            screenLight, SHELL_ALARM_ZONE_OUTLINE_FACE_OFFSET, true);
+                }
+            }
         }
         for (int coverageIndex = 0; coverageIndex < coverages.size(); coverageIndex++) {
             RadarDisplayCoverage coverageData = clientState.interpolatedCoverage(
@@ -259,6 +321,14 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         drawBlips(poseStack, bufferSource, facing, relativeOrigin, size, screenLight, displayData,
                 ticksSinceSnapshot, viewYawDegrees, mapRadiusBlocks, clientState.updateVersion(),
                 monitorOffsetX, monitorOffsetZ, palette);
+    }
+
+    private void synchronizeLevelCache(Level level) {
+        if (level != this.cachedLevel) {
+            // Сравнение объекта покрывает переподключение в то же измерение и координаты.
+            this.blipCaches.clear();
+            this.cachedLevel = level;
+        }
     }
 
     private void drawSableSilhouettes(
@@ -311,7 +381,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                         silhouettePoint(center, fill.maxX(), fill.minZ(), target, viewYawDegrees, unitsPerBlock),
                         silhouettePoint(center, fill.maxX(), fill.maxZ(), target, viewYawDegrees, unitsPerBlock),
                         silhouettePoint(center, fill.minX(), fill.maxZ(), target, viewYawDegrees, unitsPerBlock),
-                        red, green, blue, fillAlpha, packedLight, SILHOUETTE_FILL_FACE_OFFSET);
+                        red, green, blue, fillAlpha, packedLight, SILHOUETTE_FILL_FACE_OFFSET, false);
             }
             for (RadarMonitorSilhouettePayload.Line line : silhouette.lines()) {
                 ScreenPoint start = silhouettePoint(
@@ -323,7 +393,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                     drawClippedSilhouetteQuad(
                             poseStack, bufferSource, facing, relativeOrigin, size,
                             quad[0], quad[1], quad[2], quad[3],
-                            red, green, blue, fadeAlpha, packedLight, SILHOUETTE_LINE_FACE_OFFSET);
+                            red, green, blue, fadeAlpha, packedLight, SILHOUETTE_LINE_FACE_OFFSET, false);
                 }
             }
             if (target.targetUuid() != null && target.targetUuid().equals(displayData.manualTargetUuid())) {
@@ -399,7 +469,8 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             int blue,
             int alpha,
             int packedLight,
-            float faceOffset
+            float faceOffset,
+            boolean colorOnly
     ) {
         ArrayList<TexturedScreenVertex> polygon = new ArrayList<>(List.of(
                 new TexturedScreenVertex(first.u(), first.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
@@ -416,7 +487,7 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         }
         drawTexturedMatrixPolygon(
                 poseStack, bufferSource, RadarBlipSprite.ATLAS, facing, relativeOrigin, size, polygon,
-                red, green, blue, alpha, packedLight, faceOffset, false);
+                red, green, blue, alpha, packedLight, faceOffset, colorOnly);
     }
 
     @Override
