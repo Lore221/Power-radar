@@ -37,6 +37,12 @@ public final class PowerRadarPanelAttachmentTypes {
                     registryItem(AERONAUTICS_GIMBAL_SENSOR),
                     PanelAttachmentMode.FULL_NONE));
 
+    public static final DeferredHolder<PanelAttachmentType, PanelAttachmentType> LOGIC_DOCK =
+            ATTACHMENT_TYPES.register("panel_logic_dock", () -> new PanelAttachmentType(
+                    LogicDockPanelAttachment::new,
+                    ModItems.LOGIC_DOCK.get(),
+                    PanelAttachmentMode.HALF_VERTICAL));
+
     private PowerRadarPanelAttachmentTypes() {
     }
 

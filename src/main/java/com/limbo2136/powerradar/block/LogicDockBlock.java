@@ -7,6 +7,7 @@ import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.LogicDockCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.mojang.serialization.MapCodec;
@@ -187,15 +188,6 @@ public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceB
     }
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        Direction facing = state.getValue(FACING);
-        Direction rear = facing.getOpposite();
-        Direction right = facing.getClockWise();
-        // Координаты взяты из models/block/logic_dock.json: (+) -1 3 11, (-) 17 3 11.
-        // При изменении геометрии контактов модели нужно синхронно обновить эти смещения.
-        Vec3 center = new Vec3(0.5, 3.0 / 16.0, 0.5)
-                .add(rear.getStepX() * 3.0 / 16.0, 0, rear.getStepZ() * 3.0 / 16.0);
-        return new PowerRadarCeeTerminalPair(
-                center.add(right.getStepX() * -9.0 / 16.0, 0, right.getStepZ() * -9.0 / 16.0),
-                center.add(right.getStepX() * 9.0 / 16.0, 0, right.getStepZ() * 9.0 / 16.0));
+        return PowerRadarCeeContactGeometry.logicDock(state.getValue(FACING));
     }
 }

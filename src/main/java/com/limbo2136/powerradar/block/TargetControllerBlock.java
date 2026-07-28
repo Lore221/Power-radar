@@ -4,6 +4,7 @@ import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeDevice;
@@ -121,13 +122,7 @@ public class TargetControllerBlock extends BaseEntityBlock implements Electrical
     }
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        Direction facing = state.getValue(FACING);
-        Direction rear = facing.getOpposite();
-        Direction right = rightOf(facing);
-        Direction up = upOf(facing);
-        return new PowerRadarCeeTerminalPair(
-                facePoint(rear, right, up, -0.24, -0.22),
-                facePoint(rear, right, up, 0.24, -0.22));
+        return PowerRadarCeeContactGeometry.targetController(state.getValue(FACING));
     }
 
     @Nullable
@@ -142,28 +137,6 @@ public class TargetControllerBlock extends BaseEntityBlock implements Electrical
         return level.isClientSide()
                 ? null
                 : createTickerHelper(type, ModBlockEntities.TARGET_CONTROLLER.get(), TargetControllerBlockEntity::serverTick);
-    }
-
-    private static Vec3 facePoint(Direction face, Direction horizontal, Direction vertical, double horizontalOffset, double verticalOffset) {
-        return new Vec3(0.5, 0.5, 0.5)
-                .add(face.getStepX() * 0.56, face.getStepY() * 0.56, face.getStepZ() * 0.56)
-                .add(horizontal.getStepX() * horizontalOffset, horizontal.getStepY() * horizontalOffset, horizontal.getStepZ() * horizontalOffset)
-                .add(vertical.getStepX() * verticalOffset, vertical.getStepY() * verticalOffset, vertical.getStepZ() * verticalOffset);
-    }
-
-    private static Direction rightOf(Direction facing) {
-        if (facing.getAxis() == Direction.Axis.Y) {
-            return Direction.EAST;
-        }
-        return facing.getClockWise();
-    }
-
-    private static Direction upOf(Direction facing) {
-        return switch (facing) {
-            case UP -> Direction.SOUTH;
-            case DOWN -> Direction.NORTH;
-            default -> Direction.UP;
-        };
     }
 
     private void scheduleNodeRefresh(Level level, BlockPos pos) {

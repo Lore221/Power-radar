@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
+import com.limbo2136.powerradar.logic.LogicDockPolicySource;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
@@ -43,12 +44,15 @@ public class RadarNetworkManager {
     private static final TicketType<UUID> RADAR_LINK_TICKET =
             TicketType.create("power_radar:radar_link", UUID::compareTo);
     private static final int RADAR_LINK_TICKET_DISTANCE = 2;
+    private static final long PANEL_LOGIC_DOCK_LEASE_TIMEOUT_TICKS = 40L;
 
     private final MinecraftServer server;
     private final RadarNetworkSavedData savedData;
     private final Map<UUID, RadarNetworkRuntime> runtimeNetworks = new HashMap<>();
     private final Map<UUID, LogicDockResolution> logicDockResolutionCache = new HashMap<>();
     private final Map<UUID, LogicDockPolicy> logicDockPolicyCache = new HashMap<>();
+    private final Map<UUID, Map<PanelLogicDockKey, PanelLogicDockRegistration>> panelLogicDocks =
+            new HashMap<>();
 
     private RadarNetworkManager(MinecraftServer server) {
         this.server = server;
@@ -64,6 +68,17 @@ public class RadarNetworkManager {
 
     public static RadarNetworkManager get(MinecraftServer server) {
         return MANAGERS.computeIfAbsent(server, RadarNetworkManager::new);
+    }
+
+    public static void tickServer(MinecraftServer server) {
+        RadarNetworkManager manager = MANAGERS.get(server);
+        if (manager != null) {
+            manager.prunePanelLogicDocks(server.overworld().getGameTime());
+        }
+    }
+
+    public static void stopServer(MinecraftServer server) {
+        MANAGERS.remove(server);
     }
 
     public UUID createNetwork() {
@@ -458,7 +473,7 @@ public class RadarNetworkManager {
     private LogicDockPolicy cachedLogicDockPolicy(UUID id) {
         return this.logicDockPolicyCache.computeIfAbsent(id, ignored -> {
             LogicDockResolution resolution = cachedLogicDockResolution(id);
-            LogicDockBlockEntity dock = resolution.active();
+            LogicDockPolicySource dock = resolution.active();
             if (dock == null || !dock.isElectricallyOperational()) {
                 return LogicDockPolicy.EMPTY;
             }
@@ -478,13 +493,58 @@ public class RadarNetworkManager {
         this.runtime(id).markSettingsChanged();
     }
 
-    // Ровно один загруженный и корректно подключённый блок становится авторитетным;
-    // сортировка делает результат независимым от порядка загрузки чанков.
+    /** Панельный Logic Dock обновляет короткую runtime-lease каждый электрический тик. */
+    public void touchPanelLogicDock(
+            UUID id,
+            GlobalPos panelPos,
+            int slotIndex,
+            LogicDockPolicySource source,
+            long gameTime
+    ) {
+        if (!networkExists(id)) {
+            return;
+        }
+        PanelLogicDockKey key = new PanelLogicDockKey(panelPos, slotIndex);
+        Map<PanelLogicDockKey, PanelLogicDockRegistration> registrations =
+                this.panelLogicDocks.computeIfAbsent(id, ignored -> new HashMap<>());
+        PanelLogicDockRegistration previous = registrations.get(key);
+        if (previous != null && previous.source == source) {
+            previous.lastSeenGameTime = gameTime;
+            return;
+        }
+        registrations.put(key, new PanelLogicDockRegistration(source, gameTime));
+        invalidateLogicDockCache(id);
+    }
+
+    public void releasePanelLogicDock(
+            UUID id,
+            GlobalPos panelPos,
+            int slotIndex,
+            LogicDockPolicySource source
+    ) {
+        Map<PanelLogicDockKey, PanelLogicDockRegistration> registrations = this.panelLogicDocks.get(id);
+        if (registrations == null) {
+            return;
+        }
+        PanelLogicDockKey key = new PanelLogicDockKey(panelPos, slotIndex);
+        PanelLogicDockRegistration registration = registrations.get(key);
+        if (registration == null || registration.source != source) {
+            return;
+        }
+        registrations.remove(key);
+        if (registrations.isEmpty()) {
+            this.panelLogicDocks.remove(id);
+        }
+        invalidateLogicDockCache(id);
+    }
+
+    // Ровно один загруженный и корректно подключённый источник становится авторитетным.
+    // Обычные блоки обнаруживаются через Link, панельные — через короткие runtime-leases.
     public LogicDockResolution resolveLogicDock(UUID id) {
         if (!controlConsumersAllowed(id)) {
             return new LogicDockResolution(null, false);
         }
-        List<LogicDockBlockEntity> docks = new ArrayList<>();
+        List<LogicDockPolicySource> docks = new ArrayList<>();
         this.runtime(id).loadedLinks().stream()
                 .sorted(Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
                         .thenComparingLong(pos -> pos.pos().asLong()))
@@ -503,10 +563,19 @@ public class RadarNetworkManager {
                         docks.add(dock);
                     }
                 });
+        Map<PanelLogicDockKey, PanelLogicDockRegistration> panelRegistrations =
+                this.panelLogicDocks.get(id);
+        if (panelRegistrations != null) {
+            panelRegistrations.values().stream()
+                    .map(registration -> registration.source)
+                    .filter(source -> source.isAvailableForNetwork(id))
+                    .filter(source -> !docks.contains(source))
+                    .forEach(docks::add);
+        }
         return new LogicDockResolution(docks.size() == 1 ? docks.get(0) : null, docks.size() > 1);
     }
 
-    public record LogicDockResolution(LogicDockBlockEntity active, boolean conflict) {
+    public record LogicDockResolution(LogicDockPolicySource active, boolean conflict) {
     }
 
     private record LogicDockPolicy(boolean present, boolean powered, int targetingMask, int displayMask,
@@ -535,6 +604,7 @@ public class RadarNetworkManager {
         this.runtimeNetworks.remove(id);
         this.logicDockResolutionCache.remove(id);
         this.logicDockPolicyCache.remove(id);
+        this.panelLogicDocks.remove(id);
     }
 
     // Контроллер принадлежит максимум одной сети: новая привязка удаляет устаревшие записи остальных.
@@ -755,12 +825,47 @@ public class RadarNetworkManager {
         return consumerWorldPos.distanceToSqr(radarWorldPos) <= (double) max * max;
     }
 
+    // Выгруженный щиток перестаёт подтверждать lease и удаляется без ссылки на события выгрузки CEE.
+    private void prunePanelLogicDocks(long gameTime) {
+        ArrayList<UUID> changedNetworks = new ArrayList<>();
+        var networkIterator = this.panelLogicDocks.entrySet().iterator();
+        while (networkIterator.hasNext()) {
+            Map.Entry<UUID, Map<PanelLogicDockKey, PanelLogicDockRegistration>> network =
+                    networkIterator.next();
+            boolean removed = network.getValue().entrySet().removeIf(entry -> {
+                PanelLogicDockRegistration registration = entry.getValue();
+                return gameTime - registration.lastSeenGameTime > PANEL_LOGIC_DOCK_LEASE_TIMEOUT_TICKS
+                        || !registration.source.isAvailableForNetwork(network.getKey());
+            });
+            if (removed) {
+                changedNetworks.add(network.getKey());
+            }
+            if (network.getValue().isEmpty()) {
+                networkIterator.remove();
+            }
+        }
+        changedNetworks.forEach(this::invalidateLogicDockCache);
+    }
+
     private RadarNetworkRuntime runtime(UUID id) {
         return this.runtimeNetworks.computeIfAbsent(id, ignored -> {
             RadarNetworkRuntime runtime = new RadarNetworkRuntime();
             this.savedData.get(id).ifPresent(record -> runtime.loadPersistentSettings(record.selectedTargetUuid()));
             return runtime;
         });
+    }
+
+    private record PanelLogicDockKey(GlobalPos panelPos, int slotIndex) {
+    }
+
+    private static final class PanelLogicDockRegistration {
+        private final LogicDockPolicySource source;
+        private long lastSeenGameTime;
+
+        private PanelLogicDockRegistration(LogicDockPolicySource source, long lastSeenGameTime) {
+            this.source = source;
+            this.lastSeenGameTime = lastSeenGameTime;
+        }
     }
 
     public record ControllerResolution(

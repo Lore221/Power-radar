@@ -5,6 +5,7 @@ import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
@@ -120,20 +121,7 @@ public class InterceptionControllerBlock extends BaseEntityBlock
     }
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        Direction facing = state.getValue(FACING);
-        Direction rear = facing.getOpposite();
-        Direction right = facing.getAxis() == Direction.Axis.Y ? Direction.EAST : facing.getClockWise();
-        Direction up = switch (facing) {
-            case UP -> Direction.SOUTH;
-            case DOWN -> Direction.NORTH;
-            default -> Direction.UP;
-        };
-        Vec3 center = new Vec3(0.5, 0.5, 0.5)
-                .add(rear.getStepX() * 0.56, rear.getStepY() * 0.56, rear.getStepZ() * 0.56)
-                .add(up.getStepX() * 0.22, up.getStepY() * 0.22, up.getStepZ() * 0.22);
-        return new PowerRadarCeeTerminalPair(
-                center.add(right.getStepX() * -0.24, right.getStepY() * -0.24, right.getStepZ() * -0.24),
-                center.add(right.getStepX() * 0.24, right.getStepY() * 0.24, right.getStepZ() * 0.24));
+        return PowerRadarCeeContactGeometry.interceptionController(state.getValue(FACING));
     }
 
     @Override

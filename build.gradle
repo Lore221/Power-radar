@@ -50,6 +50,23 @@ repositories {
             includeGroup "maven.modrinth"
         }
     }
+    exclusiveContent {
+        forRepository {
+            ivy {
+                name = "CeeAutobuilds"
+                url = uri("https://github.com/george8188625/Create-Electro-Energetics/releases/download")
+                patternLayout {
+                    artifact("[revision]/[artifact].[ext]")
+                }
+                metadataSources {
+                    artifact()
+                }
+            }
+        }
+        filter {
+            includeGroup "github.release.cee"
+        }
+    }
 }
 
 base {
@@ -106,7 +123,7 @@ dependencies {
     implementation("dev.architectury:architectury-neoforge:${architectury_version}") {
         transitive = false
     }
-    implementation("maven.modrinth:qYJdIoAx:${electroenergetics_modrinth_version}") {
+    implementation("github.release.cee:${electroenergetics_github_artifact}:${electroenergetics_github_tag}@jar") {
         transitive = false
     }
     implementation("maven.modrinth:GWp4jCJj:${create_big_cannons_modrinth_version}") {

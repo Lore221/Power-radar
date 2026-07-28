@@ -8,6 +8,7 @@ import com.limbo2136.powerradar.compat.create.PowerRadarStressValues;
 import com.limbo2136.powerradar.compat.create.display.PowerRadarDisplaySources;
 import com.limbo2136.powerradar.network.ModNetwork;
 import com.limbo2136.powerradar.radar.RadarScanCoordinator;
+import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import com.limbo2136.powerradar.registry.ModCreativeTabs;
@@ -58,9 +59,11 @@ public final class PowerRadar {
 
     private static void onServerTick(ServerTickEvent.Post event) {
         RadarScanCoordinator.tickServer(event.getServer());
+        RadarNetworkManager.tickServer(event.getServer());
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
         RadarScanCoordinator.stopServer(event.getServer());
+        RadarNetworkManager.stopServer(event.getServer());
     }
 }

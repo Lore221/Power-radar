@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.client;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.bridge.AttitudeIndicatorPanelRenderBridge;
+import com.limbo2136.powerradar.bridge.LogicDockPanelRenderBridge;
 import com.limbo2136.powerradar.client.onboard.OnboardComputerRenderer;
 import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
 import com.limbo2136.powerradar.client.radarlink.RadarLinkClientRuntime;
@@ -26,6 +27,15 @@ public final class PowerRadarClient {
                                 attachment,
                                 panel,
                                 partialTicks,
+                                (com.mojang.blaze3d.vertex.PoseStack) poseStack,
+                                (net.minecraft.client.renderer.MultiBufferSource) buffers,
+                                packedLight,
+                                packedOverlay));
+        LogicDockPanelRenderBridge.setHandler(
+                (attachment, panel, poseStack, buffers, packedLight, packedOverlay) ->
+                        PowerRadarPanelAttachmentRenderer.renderLogicDock(
+                                attachment,
+                                panel,
                                 (com.mojang.blaze3d.vertex.PoseStack) poseStack,
                                 (net.minecraft.client.renderer.MultiBufferSource) buffers,
                                 packedLight,

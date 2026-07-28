@@ -1,7 +1,8 @@
 package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
-import com.limbo2136.powerradar.radar.RadarDetectionFilters;
+import com.limbo2136.powerradar.logic.LogicDockCardInventory;
+import com.limbo2136.powerradar.logic.LogicDockPolicySource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
@@ -25,13 +26,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInformation {
-    private static final String CARD_PRESENCE_MASK_TAG = "CardPresenceMask";
-    private static final int TARGETING_CARD_SLOT = 0;
-    private static final int DISPLAY_CARD_SLOT = 1;
-    private static final int ALLOWLIST_CARD_SLOT = 2;
-
-    private final ItemStack[] cards = {ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY};
+public class LogicDockBlockEntity extends BlockEntity
+        implements IHaveGoggleInformation, LogicDockPolicySource {
+    private final LogicDockCardInventory cards = new LogicDockCardInventory();
     private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
 
     public LogicDockBlockEntity(BlockPos pos, BlockState state) {
@@ -69,33 +66,22 @@ public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInfo
     }
 
     public boolean insertCard(RadarFilterCardItem.Kind kind, ItemStack held, Player player) {
-        // Порядок Kind является частью раскладки слотов и сохранённых NBT-ключей Card0..Card2.
-        int slot = kind.ordinal();
-        if (!this.cards[slot].isEmpty()) {
+        if (!this.cards.insert(kind, held, player)) {
             return false;
-        }
-        this.cards[slot] = held.copyWithCount(1);
-        if (!player.getAbilities().instabuild) {
-            held.shrink(1);
         }
         cardsChanged();
         return true;
     }
 
     public boolean hasCard(int slot) {
-        return slot >= 0 && slot < this.cards.length && !this.cards[slot].isEmpty();
+        return this.cards.hasCard(slot);
     }
 
     public void extractCard(Player player, int requestedSlot) {
-        int slot = requestedSlot;
-        if (slot < 0 || slot >= this.cards.length || this.cards[slot].isEmpty()) {
-            slot = firstOccupiedSlot();
-        }
-        if (slot < 0) {
+        ItemStack extracted = this.cards.extract(requestedSlot);
+        if (extracted.isEmpty()) {
             return;
         }
-        ItemStack extracted = this.cards[slot];
-        this.cards[slot] = ItemStack.EMPTY;
         if (!player.addItem(extracted)) {
             player.drop(extracted, false);
         }
@@ -103,65 +89,42 @@ public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInfo
     }
 
     public int targetingMask() {
-        if (this.cards[TARGETING_CARD_SLOT].isEmpty()) {
-            return 0;
-        }
-        int selected = RadarFilterCardItem.filterMask(this.cards[TARGETING_CARD_SLOT], 0);
-        return RadarFilterCardItem.cardOption(this.cards[TARGETING_CARD_SLOT], 1) == 0
-                ? RadarDetectionFilters.DEFAULT_MASK & ~selected
-                : selected;
+        return this.cards.targetingMask();
     }
 
     public int displayMask() {
-        if (this.cards[DISPLAY_CARD_SLOT].isEmpty()) {
-            return RadarDetectionFilters.DEFAULT_MASK;
-        }
-        int selected = RadarFilterCardItem.filterMask(this.cards[DISPLAY_CARD_SLOT], 0);
-        return RadarFilterCardItem.cardOption(this.cards[DISPLAY_CARD_SLOT], 0) == 0
-                ? RadarDetectionFilters.DEFAULT_MASK & ~selected
-                : selected;
+        return this.cards.displayMask();
     }
 
     public List<String> allowlistedPlayers() {
-        if (this.cards[ALLOWLIST_CARD_SLOT].isEmpty() || !allowlistIsWhitelist()) {
-            return List.of();
-        }
-        return allowlistData().playerNames();
+        return this.cards.allowlistedPlayers();
     }
 
     public boolean allowlistIsWhitelist() {
-        return this.cards[ALLOWLIST_CARD_SLOT].isEmpty()
-                || RadarFilterCardItem.cardOption(this.cards[ALLOWLIST_CARD_SLOT], 1) == 1;
+        return this.cards.allowlistIsWhitelist();
     }
 
     public List<String> allowlistPlayerNames() {
-        return allowlistData().playerNames();
+        return this.cards.allowlistPlayerNames();
     }
 
     public List<String> allowlistSableNames() {
-        return allowlistData().sableNames();
-    }
-    public List<String> allowlistedSableNames() {
-        return this.cards[ALLOWLIST_CARD_SLOT].isEmpty() || !allowlistIsWhitelist()
-                ? List.of()
-                : allowlistSableNames();
+        return this.cards.allowlistSableNames();
     }
 
-    private RadarFilterCardItem.AllowlistData allowlistData() {
-        return this.cards[ALLOWLIST_CARD_SLOT].isEmpty()
-                ? new RadarFilterCardItem.AllowlistData(List.of(), List.of())
-                : RadarFilterCardItem.allowlistData(this.cards[ALLOWLIST_CARD_SLOT]);
+    public List<String> allowlistedSableNames() {
+        return this.cards.allowlistedSableNames();
     }
 
     public void dropCards() {
         if (level == null || level.isClientSide()) {
             return;
         }
-        for (int i = 0; i < this.cards.length; i++) {
-            if (!this.cards[i].isEmpty()) {
+        for (int i = 0; i < LogicDockCardInventory.SLOT_COUNT; i++) {
+            ItemStack card = this.cards.removeExact(i);
+            if (!card.isEmpty()) {
                 Containers.dropItemStack(level, worldPosition.getX() + 0.5D, worldPosition.getY() + 0.5D,
-                        worldPosition.getZ() + 0.5D, this.cards[i]);
-                this.cards[i] = ItemStack.EMPTY;
+                        worldPosition.getZ() + 0.5D, card);
             }
         }
     }
@@ -177,11 +140,12 @@ public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInfo
                 case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.logic_dock")
                         .withStyle(ChatFormatting.GOLD));
                 case CARD_SLOTS -> {
-                    for (int i = 0; i < this.cards.length; i++) {
+                    for (int i = 0; i < LogicDockCardInventory.SLOT_COUNT; i++) {
+                        ItemStack card = this.cards.card(i);
                         tooltip.add(Component.translatable("goggles.power_radar.logic_dock.slot." + i,
-                                this.cards[i].isEmpty()
+                                card.isEmpty()
                                         ? Component.translatable("goggles.power_radar.logic_dock.empty")
-                                        : this.cards[i].getHoverName()));
+                                        : card.getHoverName()));
                     }
                 }
                 case NETWORK_STATUS -> {
@@ -218,25 +182,13 @@ public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInfo
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
-        int presenceMask = 0;
-        for (int i = 0; i < this.cards.length; i++) {
-            if (!this.cards[i].isEmpty()) {
-                presenceMask |= 1 << i;
-                tag.put("Card" + i, this.cards[i].save(registries));
-            }
-        }
-        // Нулевая маска делает пакет непустым и явно сообщает клиенту об удалении последней карты.
-        tag.putByte(CARD_PRESENCE_MASK_TAG, (byte) presenceMask);
+        this.cards.write(tag, registries);
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
-        for (int i = 0; i < this.cards.length; i++) {
-            this.cards[i] = tag.contains("Card" + i)
-                    ? ItemStack.parseOptional(registries, tag.getCompound("Card" + i))
-                    : ItemStack.EMPTY;
-        }
+        this.cards.read(tag, registries);
     }
 
     @Override
@@ -247,15 +199,6 @@ public class LogicDockBlockEntity extends BlockEntity implements IHaveGoggleInfo
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         return saveWithoutMetadata(registries);
-    }
-
-    private int firstOccupiedSlot() {
-        for (int i = 0; i < this.cards.length; i++) {
-            if (!this.cards[i].isEmpty()) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private void cardsChanged() {

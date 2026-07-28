@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "power_radar:item/dispaly_card"
+    "layer0": "power_radar:item/display_card"
   }
 }

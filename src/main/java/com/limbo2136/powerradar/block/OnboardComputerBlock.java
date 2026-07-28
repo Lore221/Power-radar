@@ -5,6 +5,7 @@ import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.MonitorControllerCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
@@ -271,16 +272,8 @@ public final class OnboardComputerBlock extends BaseEntityBlock
         return terminals(state).position(index);
     }
 
-    // Относительно игрока у лицевой стороны node 0 находится справа, а node 1 — слева.
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        Direction facing = state.getValue(FACING);
-        Direction right = RadarDisplayStructureResolver.right(facing);
-        Direction rear = facing.getOpposite();
-        Vec3 center = new Vec3(0.5, 0.5, 0.5)
-                .add(rear.getStepX() * 0.25, 0, rear.getStepZ() * 0.25);
-        return new PowerRadarCeeTerminalPair(
-                center.add(right.getStepX() * 0.56, 0, right.getStepZ() * 0.56),
-                center.add(right.getStepX() * -0.56, 0, right.getStepZ() * -0.56));
+        return PowerRadarCeeContactGeometry.onboardComputer(state.getValue(FACING));
     }
 
     @Override

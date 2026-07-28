@@ -1,0 +1,22 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Made with Blockbench",
+	"textures": {
+		"0": "power_radar:item/display_card",
+		"particle": "power_radar:item/display_card"
+	},
+	"elements": [
+		{
+			"from": [3, 7.5, 7],
+			"to": [7, 8.5, 11],
+			"rotation": {"angle": 0, "axis": "y", "origin": [4, 7, 9]},
+			"faces": {
+				"north": {"uv": [4, 13, 7.99999, 13.99999], "texture": "#0"},
+				"east": {"uv": [4, 13, 7.99999, 13.99999], "texture": "#0"},
+				"west": {"uv": [6.00001, 13, 10, 13.99999], "texture": "#0"},
+				"up": {"uv": [2, 14, 12.99999, 2.00001], "texture": "#0"},
+				"down": {"uv": [2, 2, 12.99999, 13.99999], "texture": "#0"}
+			}
+		}
+	]
+}

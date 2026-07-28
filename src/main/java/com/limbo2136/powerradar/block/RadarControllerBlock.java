@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.compat.electroenergetics.RadarControllerCeeDevice;
@@ -36,11 +37,6 @@ import net.minecraft.world.phys.Vec3;
 public class RadarControllerBlock extends BaseEntityBlock implements ElectricalDeviceBlock<RadarControllerCeeDevice> {
     public static final MapCodec<RadarControllerBlock> CODEC = simpleCodec(RadarControllerBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
-    private static final double NODE_Y = 5.0 / 16.0;
-    private static final double NODE_REAR_OFFSET = 9.0 / 16.0;
-    private static final double NODE_A_SIDE_OFFSET = -2.0 / 16.0;
-    private static final double NODE_B_SIDE_OFFSET = 4.0 / 16.0;
-
     public RadarControllerBlock(Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
@@ -117,17 +113,7 @@ public class RadarControllerBlock extends BaseEntityBlock implements ElectricalD
     }
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        Direction facing = state.getValue(FACING);
-        Direction rear = facing.getOpposite();
-        Direction right = facing.getClockWise();
-        Vec3 center = new Vec3(0.5, NODE_Y, 0.5)
-                .add(rear.getStepX() * NODE_REAR_OFFSET, 0.0, rear.getStepZ() * NODE_REAR_OFFSET)
-                .add(right.getStepX() * NODE_A_SIDE_OFFSET, 0.0, right.getStepZ() * NODE_A_SIDE_OFFSET);
-        Vec3 negative = center.add(
-                right.getStepX() * (NODE_B_SIDE_OFFSET - NODE_A_SIDE_OFFSET),
-                0.0,
-                right.getStepZ() * (NODE_B_SIDE_OFFSET - NODE_A_SIDE_OFFSET));
-        return new PowerRadarCeeTerminalPair(center, negative);
+        return PowerRadarCeeContactGeometry.radarController(state.getValue(FACING));
     }
 
     @Override
