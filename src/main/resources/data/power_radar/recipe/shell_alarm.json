@@ -1,23 +1,27 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "BCB",
-    "RLR",
-    "BCB"
+    "ACA",
+    "AEA",
+    "BDB"
   ],
   "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
     "B": {
-      "item": "create:brass_ingot"
+      "item": "electroenergetics:connector"
     },
-    "C": {
-      "item": "create:electron_tube"
+    "c": {
+      "item": "power_radar:radar_display"
     },
-    "R": {
-      "item": "minecraft:redstone"
-    },
-    "L": {
+    "D": {
       "item": "power_radar:radar_link"
+    },
+    "E": {
+      "item": "create:electron_tube"
     }
+    
   },
   "result": {
     "id": "power_radar:shell_alarm",

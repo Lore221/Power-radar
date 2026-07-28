@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "AAA",
+    "CBC",
+    "AAA"
+  ],
+  "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
+    "B": {
+      "item": "minecraft:cooper_grate"
+    },
+    "C": {
+      "item": "electroenergetics:inductor"
+    }
+  },
+  "result": {
+    "id": "power_radar:phased_array_panel",
+    "count": 1
+  }
+}

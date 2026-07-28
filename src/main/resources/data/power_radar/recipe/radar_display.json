@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CCC",
+    "ABA",
+    "ADA"
+  ],
+  "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
+    "B": {
+      "item": "electroenergetics:indictator_blub"
+    },
+     "C": {
+      "tag": "minecraft:tinted_glass"
+    },
+     "D": {
+      "tag": "create:copper_sheet"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_display",
+    "count": 1
+  }
+}

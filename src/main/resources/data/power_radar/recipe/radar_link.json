@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " C ",
+    "BAB",
+    "   "
+  ],
+  "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
+    "B": {
+      "item": "electroenergetics:indicator_blub"
+    },
+     "C": {
+      "tag": "craetes:transmitter"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_link",
+    "count": 1
+  }
+}

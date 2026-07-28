@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "   ",
+    "A A",
+    "BAB"
+  ],
+  "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
+    "B": {
+      "item": "electroenergetics:connector"
+    }
+    
+  },
+  "result": {
+    "id": "power_radar:logic_dock",
+    "count": 1
+  }
+}

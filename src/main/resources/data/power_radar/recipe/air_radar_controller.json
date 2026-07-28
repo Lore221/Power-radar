@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "   ",
+    "ABA",
+    "CDC"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:wind_charge"
+    },
+    "B": {
+      "item": "create:electron_tube"
+    },
+    "C": {
+      "item": "minecraft:breeze_rod"
+    },
+    "D": {
+      "item": "power_radar:radar_controller"
+    }
+  },
+  "result": {
+    "id": "power_radar:air_radar_controller",
+    "count": 1
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " D ",
+    "ABA",
+    "CAC"
+  ],
+  "key": {
+    "A": {
+      "tag": "c:ingots/steel"
+    },
+    "B": {
+      "item": "create:electron_tube"
+    },
+     "C": {
+      "tag": "electroenergetics:connector"
+    },
+     "D": {
+      "tag": "create:copper_sheet"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_monitor_controller",
+    "count": 1
+  }
+}
