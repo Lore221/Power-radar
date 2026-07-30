@@ -304,5 +304,8 @@
   "power_radar.ponder.tag.targeting": "Система наведения",
   "power_radar.ponder.tag.targeting.description": "Компоненты, участвующие в уничтожении целей.",
   "power_radar.ponder.tag.interception": "Система защиты",
-  "power_radar.ponder.tag.interception.description": "Компоненты, участвующие в защите"
+  "power_radar.ponder.tag.interception.description": "Компоненты, участвующие в защите",
+  "targeting_card_text":"Позволяет выбирать категории целей для наведения пушек при помощи док-станции",
+  "allowlist_card_text":"Позволяет состовлять белый и черный списки для игроков и sable структур при помощи док-станции",
+  "display_card_text":"Позволяет выбирать категории отображаемые на мониторе при помощи док- станции"
 }

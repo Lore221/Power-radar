@@ -17,31 +17,31 @@ public final class PowerRadarElectricalParameters {
 
     // Базовые значения напряжения. Порядок: номинал, минимум, перезапуск, максимум, сброс перенапряжения.
     private static final LoadVoltageRange DEFAULT_RADAR_VOLTAGE =
-            new LoadVoltageRange(600.0D, 400.0D, 430.0D, 700.0D, 650.0D);
-    private static final double DEFAULT_RADAR_FULL_RANGE_VOLTAGE = 600.0D;
+            new LoadVoltageRange(380.0D, 220.0D, 220.0D, 500.0D, 400.0D);
+    private static final double DEFAULT_RADAR_FULL_RANGE_VOLTAGE = 380.0D;
     private static final LoadVoltageRange DEFAULT_MONITOR_VOLTAGE =
             new LoadVoltageRange(24.0D, 18.0D, 20.0D, 30.0D, 28.0D);
     private static final LoadVoltageRange DEFAULT_SHELL_ALARM_VOLTAGE =
-            new LoadVoltageRange(400.0D, 300.0D, 320.0D, 400.0D, 380.0D);
+            new LoadVoltageRange(220.0D, 170.0D, 170.0D, 380.0D, 340.0D);
 
     // Контроллеры наведения являются резистивной нагрузкой; скорость растёт до fullSpeed.
     private static final DriveVoltageRange DEFAULT_TARGET_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(200.0D, 300.0D, 360.0D);
+            new DriveVoltageRange(170.0D, 220.0D, 380.0D);
     private static final DriveVoltageRange DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(200.0D, 300.0D, 360.0D);
-    private static final double DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS = 30.0D;
-    private static final double DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = 30.0D;
+            new DriveVoltageRange(170.0D, 220.0D, 380.0D);
+    private static final double DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS = 20.0D;
+    private static final double DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = 20.0D;
 
     // Постоянная потребляемая мощность отдельных блоков и модулей в ваттах.
     private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
-    private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 700.0D;
-    private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 700.0D;
-    private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 45.0D;
-    private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 5.0D;
+    private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
+    private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
+    private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 500.0D;
+    private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 50.0D;
     private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
-    private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 45.0D;
-    private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 50.0D;
-    private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 45.0D;
+    private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
+    private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
+    private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 750.0D;
 
     private static ModConfigSpec.DoubleValue radarNominalVoltage;
     private static ModConfigSpec.DoubleValue radarMinimumVoltage;

@@ -304,5 +304,8 @@
   "power_radar.ponder.tag.targeting": "Target system",
   "power_radar.ponder.tag.targeting.description": "Components involved in the destruction of targets",
   "power_radar.ponder.tag.interception": "Defense system",
-  "power_radar.ponder.tag.interception.description": "Components involved in defense"
+  "power_radar.ponder.tag.interception.description": "Components involved in defense",
+  "targeting_card_text":"Allows you to select target categories for gun aiming using logic dock",
+  "allowlist_card_text":"Allows you to create white and black lists for players and sable structures using logic dock",
+  "display_card_text":"Allows you to select the categories displayed on the monitor using logic dock"
 }

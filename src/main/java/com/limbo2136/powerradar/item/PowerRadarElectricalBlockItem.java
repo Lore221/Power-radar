@@ -93,7 +93,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case LOGIC_DOCK -> PowerRadarElectricalParameters.Ratings.logicDockPowerWatts();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
-            case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER -> 0.0D;
+            case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD -> 0.0D;
         };
     }
 
