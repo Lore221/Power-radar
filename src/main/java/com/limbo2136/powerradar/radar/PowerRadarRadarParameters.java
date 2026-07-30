@@ -13,7 +13,7 @@ public final class PowerRadarRadarParameters {
     private static final int DEFAULT_MAX_OVERVIEW_MODULES = 5;
     private static final int DEFAULT_BASE_RANGE_BLOCKS = 80;
     private static final int DEFAULT_PHASED_ARRAY_PANEL_RANGE_BLOCKS = 20;
-    private static final int DEFAULT_OVERVIEW_MODULE_RANGE_BLOCKS = 60;
+    private static final int DEFAULT_OVERVIEW_MODULE_RANGE_BLOCKS = 50;
 
     // Горизонтальная геометрия направленного радара.
     private static final double DEFAULT_AIR_RANGE_MULTIPLIER = 1.5D;

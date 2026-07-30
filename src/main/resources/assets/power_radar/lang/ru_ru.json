@@ -270,5 +270,8 @@
   "power_radar.unit.percent": "%s%%",
   "block.power_radar.onboard_computer": "Бортовой компьютер",
   "goggles.power_radar.onboard_computer": "Бортовой компьютер",
-  "message.power_radar.onboard_computer.sable_only": "можно размещать только на sable структуре"
+  "message.power_radar.onboard_computer.sable_only": "можно размещать только на sable структуре",
+  "targeting_card_text":"позволяет выбирать категории целей для наведения пушек при помощи док-станции",
+  "allowlist_card_text":"позволяет состовлять белый и черный списки для игроков и sable структур при помощи док-станции",
+  "display_card_text":"позволяет выбирать категории отображаемые на мониторе при помощи док- станции"
 }

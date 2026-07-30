@@ -20,7 +20,10 @@ public final class PowerRadarTooltipSettings {
         ONBOARD_COMPUTER,
         TARGET_CONTROLLER,
         INTERCEPTION_CONTROLLER,
-        SHELL_ALARM
+        SHELL_ALARM,
+        TARGETING_CARD,
+        ALLOWLIST_CARD,
+        DISPLAY_CARD
     }
 
     public sealed interface Field permits InventoryField, GoggleField {
@@ -88,7 +91,10 @@ public final class PowerRadarTooltipSettings {
             Map.entry(Target.SHELL_ALARM, List.of(
                     field(InventoryField.NOMINAL_POWER),
                     field(InventoryField.WORKING_VOLTAGE),
-                    field(InventoryField.PROTECTION_ZONE)))
+                    field(InventoryField.PROTECTION_ZONE))),
+            Map.entry(Target.TARGETING_CARD, List.of(text("targeting_card_text"))),
+            Map.entry(Target.ALLOWLIST_CARD, List.of(text("allowlist_card_text"))),
+            Map.entry(Target.DISPLAY_CARD, List.of(text("display_card_text")))
     );
 
     // Shift в инвентаре с надетыми инженерными очками Create. Список настраивается независимо.
@@ -106,9 +112,7 @@ public final class PowerRadarTooltipSettings {
             Map.entry(Target.ONBOARD_COMPUTER, List.of(field(InventoryField.NOMINAL_POWER))),
             Map.entry(Target.TARGET_CONTROLLER, List.of(
                     field(InventoryField.INTERNAL_RESISTANCE),
-                    field(InventoryField.WORKING_VOLTAGE),
-                    field(InventoryField.AUTOCANNON_MIN_DISTANCE),
-                    field(InventoryField.BIG_CANNON_MIN_DISTANCE))),
+                    field(InventoryField.WORKING_VOLTAGE))),
             Map.entry(Target.INTERCEPTION_CONTROLLER, List.of(
                     field(InventoryField.INTERNAL_RESISTANCE),
                     field(InventoryField.WORKING_VOLTAGE))),
@@ -125,7 +129,7 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.STATUS),
                     field(GoggleField.SCAN_MODE),
                     field(GoggleField.CURRENT_RANGE),
-                    field(GoggleField.ELECTRICAL_STATE),
+                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.PANEL_COUNT),
@@ -133,39 +137,40 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.EFFECTIVE_RANGE))),
             Map.entry(Target.MONITOR_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
-                    field(GoggleField.ELECTRICAL_STATE),
+                   
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.DISPLAY_COUNT))),
             Map.entry(Target.LOGIC_DOCK, List.of(
                     field(GoggleField.TITLE),
+                    field(GoggleField.VOLTAGE),
+                    field(GoggleField.POWER),
                     field(GoggleField.CARD_SLOTS),
                     field(GoggleField.NETWORK_STATUS))),
             Map.entry(Target.ONBOARD_COMPUTER, List.of(
                     field(GoggleField.TITLE),
-                    field(GoggleField.ELECTRICAL_STATE),
+                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER))),
             Map.entry(Target.TARGET_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
                     field(GoggleField.VOLTAGE),
-                    field(GoggleField.CURRENT),
+                    
                     field(GoggleField.POWER),
                     field(GoggleField.STATUS))),
             Map.entry(Target.INTERCEPTION_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
                     field(GoggleField.VOLTAGE),
-                    field(GoggleField.CURRENT),
+                    
                     field(GoggleField.POWER),
-                    field(GoggleField.STATUS),
-                    field(GoggleField.INTERCEPT_TIME))),
+                    field(GoggleField.STATUS))),
             Map.entry(Target.SHELL_ALARM, List.of(
                     field(GoggleField.TITLE),
-                    field(GoggleField.ELECTRICAL_STATE),
+                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.PROTECTION_ZONE),
-                    field(GoggleField.SHELL_COUNT),
+                    
                     field(GoggleField.ALARM_STATE)))
     );
 
@@ -174,7 +179,7 @@ public final class PowerRadarTooltipSettings {
 
     // В списках выше используй text("ключ.из.lang") или text("ключ.из.lang", ChatFormatting.COLOR).
     private static Line text(String translationKey) {
-        return text(translationKey, ChatFormatting.GRAY);
+        return text(translationKey, ChatFormatting.blue);
     }
 
     private static Line text(String translationKey, ChatFormatting style) {

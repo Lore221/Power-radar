@@ -270,5 +270,8 @@
   "power_radar.unit.percent": "%s%%",
   "block.power_radar.onboard_computer": "Onboard Computer",
   "goggles.power_radar.onboard_computer": "Onboard Computer",
-  "message.power_radar.onboard_computer.sable_only": "Can only be placed on a Sable structure"
+  "message.power_radar.onboard_computer.sable_only": "Can only be placed on a Sable structure",
+  "targeting_card_text":"allows you to select target categories for gun aiming using logic dock",
+  "allowlist_card_text":"allows you to create white and black lists for players and sable structures using logic dock",
+  "display_card_text":"allows you to select the categories displayed on the monitor using logic dock"
 }
