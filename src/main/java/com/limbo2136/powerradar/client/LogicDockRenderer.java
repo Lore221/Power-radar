@@ -8,7 +8,7 @@ import com.mojang.math.Axis;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.createmod.catnip.render.CachedBuffers;
 import net.createmod.catnip.render.SuperByteBuffer;
-import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -21,11 +21,11 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 /** Рисует карты, физически вставленные в фиксированные слоты док-станции. */
 public final class LogicDockRenderer implements BlockEntityRenderer<LogicDockBlockEntity> {
     private static final ResourceLocation TARGETING_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/targeting_card");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/targeting_card");
     private static final ResourceLocation DISPLAY_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/display_card");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/display_card");
     private static final ResourceLocation ALLOWLIST_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/allowlist_card");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/allowlist_card");
 
     private static final PartialModel TARGETING = PartialModel.of(TARGETING_LOCATION);
     private static final PartialModel DISPLAY = PartialModel.of(DISPLAY_LOCATION);
@@ -53,16 +53,27 @@ public final class LogicDockRenderer implements BlockEntityRenderer<LogicDockBlo
             return;
         }
 
+        Direction facing = dock.getBlockState().getValue(LogicDockBlock.FACING);
+        int cardLight = packedLight;
+        if (dock.getLevel() != null) {
+            // Ячейка док-станции затемнена ее корпусом, поэтому карты берут свет
+            // из свободного блока непосредственно перед лицевой стороной.
+            cardLight = LevelRenderer.getLightColor(
+                    dock.getLevel(),
+                    dock.getBlockPos().relative(facing)
+            );
+        }
+
         poseStack.pushPose();
-        applyBlockstateRotation(poseStack, dock.getBlockState().getValue(LogicDockBlock.FACING));
+        applyBlockstateRotation(poseStack, facing);
         if (dock.hasCard(0)) {
-            renderCard(TARGETING, dock, poseStack, buffers, packedLight, packedOverlay);
+            renderCard(TARGETING, dock, poseStack, buffers, cardLight, packedOverlay);
         }
         if (dock.hasCard(1)) {
-            renderCard(DISPLAY, dock, poseStack, buffers, packedLight, packedOverlay);
+            renderCard(DISPLAY, dock, poseStack, buffers, cardLight, packedOverlay);
         }
         if (dock.hasCard(2)) {
-            renderCard(ALLOWLIST, dock, poseStack, buffers, packedLight, packedOverlay);
+            renderCard(ALLOWLIST, dock, poseStack, buffers, cardLight, packedOverlay);
         }
         poseStack.popPose();
     }
@@ -92,10 +103,9 @@ public final class LogicDockRenderer implements BlockEntityRenderer<LogicDockBlo
             int packedOverlay
     ) {
         SuperByteBuffer geometry = CachedBuffers.partial(model, dock.getBlockState());
-        // Карты лежат внутри корпуса, поэтому свет блока ошибочно затемняет их модельные текстуры.
-        geometry.light(LightTexture.FULL_BRIGHT)
+        // Обычное затенение граней сохраняет объем модели при любом внешнем освещении.
+        geometry.light(packedLight)
                 .overlay(packedOverlay)
-                .disableDiffuse()
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutoutMipped()));
     }
 }

@@ -10,14 +10,14 @@
       "tag": "c:ingots/steel"
     },
     "B": {
-      "item": "minecraft:cooper_grate"
+      "item": "minecraft:copper_grate"
     },
     "C": {
       "item": "electroenergetics:inductor"
     }
   },
   "result": {
-    "id": "power_radar:phased_array_panel",
+    "id": "power_radar:radar_panel",
     "count": 1
   }
 }

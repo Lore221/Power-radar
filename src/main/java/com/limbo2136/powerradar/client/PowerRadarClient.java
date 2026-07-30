@@ -13,6 +13,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.createmod.ponder.foundation.PonderIndex;
+import com.limbo2136.powerradar.client.ponder.PowerRadarPonderPlugin;
 
 @EventBusSubscriber(modid = PowerRadar.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class PowerRadarClient {
@@ -57,5 +60,10 @@ public final class PowerRadarClient {
         RadarLinkRenderer.registerAdditionalModels(event);
         LogicDockRenderer.registerAdditionalModels(event);
         PowerRadarPanelAttachmentRenderer.registerAdditionalModels(event);
+    }
+
+    @SubscribeEvent
+    public static void registerPonder(FMLClientSetupEvent event) {
+        PonderIndex.addPlugin(new PowerRadarPonderPlugin());
     }
 }

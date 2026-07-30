@@ -2,12 +2,12 @@
   "loader": "neoforge:separate_transforms",
 
   "base": {
-    "parent": "power_radar:block/target_controller"
+    "parent": "power_radar:block/target_controller/model"
   },
 
   "perspectives": {
     "gui": {
-      "parent": "power_radar:block/target_controller_hud"
+      "parent": "power_radar:block/target_controller/hud"
     }
   }
 }

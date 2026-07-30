@@ -1,8 +1,8 @@
 {
   "variants": {
-    "facing=north": { "model": "power_radar:block/logic_dock" },
-    "facing=east": { "model": "power_radar:block/logic_dock", "y": 90 },
-    "facing=south": { "model": "power_radar:block/logic_dock", "y": 180 },
-    "facing=west": { "model": "power_radar:block/logic_dock", "y": 270 }
+    "facing=north": { "model": "power_radar:block/logic_dock/model" },
+    "facing=east": { "model": "power_radar:block/logic_dock/model", "y": 90 },
+    "facing=south": { "model": "power_radar:block/logic_dock/model", "y": 180 },
+    "facing=west": { "model": "power_radar:block/logic_dock/model", "y": 270 }
   }
 }

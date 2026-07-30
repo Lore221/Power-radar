@@ -13,10 +13,10 @@
       "item": "create:electron_tube"
     },
      "C": {
-      "tag": "electroenergetics:connector"
+      "item": "electroenergetics:connector"
     },
      "D": {
-      "tag": "create:copper_sheet"
+      "tag": "c:plates/copper"
     }
   },
   "result": {

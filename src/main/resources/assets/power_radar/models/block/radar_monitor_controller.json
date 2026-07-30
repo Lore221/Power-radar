@@ -43,5 +43,13 @@
 				"down": {"uv": [10.66667, 0, 12, 0.66667], "texture": "#0"}
 			}
 		}
-	]
+	],
+
+	"display": {
+		"thirdperson_righthand": {
+			"rotation": [75, 45, 0],
+			"translation": [0, 2.5, 0],
+			"scale": [0.375, 0.375, 0.375]
+		}
+	}
 }

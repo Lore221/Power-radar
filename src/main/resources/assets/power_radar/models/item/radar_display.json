@@ -1,5 +1,5 @@
 {
-  "parent": "power_radar:block/radar_display_single",
+  "parent": "power_radar:block/radar_display/single",
   "display": {
     "thirdperson_righthand": {
       "rotation": [75, 45, 0],

@@ -1,16 +1,16 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "A",
-    "B",
-    "C"
+    " A ",
+    " B ",
+    " C "
   ],
   "key": {
     "A": {
       "item": "minecraft:green_dye"
     },
     "B": {
-      "item": "create:list_filter"
+      "item": "create:filter"
     },
     "C": {
       "item": "create:golden_sheet"

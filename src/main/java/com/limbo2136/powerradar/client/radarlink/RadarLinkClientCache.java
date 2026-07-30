@@ -76,6 +76,15 @@ public final class RadarLinkClientCache {
         return links == null ? 0 : links.size();
     }
 
+    /** Возвращает снимок всех известных позиций без обхода загруженных чанков мира. */
+    public static Set<BlockPos> getKnownNodePositions(ClientLevel level) {
+        Map<BlockPos, UUID> positions = NETWORK_BY_POS.get(level.dimension());
+        if (positions == null || positions.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return Set.copyOf(positions.keySet());
+    }
+
     public static void clear() {
         LINKS_BY_LEVEL.clear();
         NETWORK_BY_POS.clear();

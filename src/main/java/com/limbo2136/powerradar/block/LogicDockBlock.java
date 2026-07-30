@@ -22,6 +22,7 @@ import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
@@ -35,11 +36,30 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.util.RandomSource;
 
 public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceBlock<LogicDockCeeDevice> {
     public static final MapCodec<LogicDockBlock> CODEC = simpleCodec(LogicDockBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
+    // Кубы повторяют корпус из models/block/logic_dock/model.json.
+    // Боковые электрические контакты остаются визуальными и в физическую форму не входят.
+    private static final ModelBox[] MODEL_BOXES = {
+            new ModelBox(0.0, 0.0, 0.0, 16.0, 4.0, 16.0),
+            new ModelBox(0.0, 4.0, 13.0, 16.0, 16.0, 16.0),
+            new ModelBox(0.0, 4.0, 3.0, 3.0, 6.0, 10.0),
+            new ModelBox(13.0, 4.0, 3.0, 16.0, 6.0, 10.0),
+            new ModelBox(8.67, 4.0, 3.0, 11.67, 6.0, 10.0),
+            new ModelBox(4.34, 4.0, 3.0, 7.34, 6.0, 10.0),
+            new ModelBox(0.0, 4.0, 10.0, 16.0, 6.0, 13.0),
+            new ModelBox(0.0, 4.0, 0.0, 16.0, 6.0, 3.0)
+    };
+    private static final VoxelShape NORTH_SHAPE = buildShape(Direction.NORTH);
+    private static final VoxelShape EAST_SHAPE = buildShape(Direction.EAST);
+    private static final VoxelShape SOUTH_SHAPE = buildShape(Direction.SOUTH);
+    private static final VoxelShape WEST_SHAPE = buildShape(Direction.WEST);
 
     public LogicDockBlock(Properties properties) {
         super(properties);
@@ -142,6 +162,26 @@ public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceB
     }
 
     @Override
+    protected VoxelShape getShape(
+            BlockState state,
+            BlockGetter level,
+            BlockPos pos,
+            CollisionContext context
+    ) {
+        return shapeFor(state.getValue(FACING));
+    }
+
+    @Override
+    protected VoxelShape getCollisionShape(
+            BlockState state,
+            BlockGetter level,
+            BlockPos pos,
+            CollisionContext context
+    ) {
+        return shapeFor(state.getValue(FACING));
+    }
+
+    @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
     }
@@ -189,5 +229,54 @@ public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceB
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         return PowerRadarCeeContactGeometry.logicDock(state.getValue(FACING));
+    }
+
+    private static VoxelShape shapeFor(Direction facing) {
+        return switch (facing) {
+            case EAST -> EAST_SHAPE;
+            case SOUTH -> SOUTH_SHAPE;
+            case WEST -> WEST_SHAPE;
+            default -> NORTH_SHAPE;
+        };
+    }
+
+    // Поворачивает модельные координаты вокруг центра блока так же, как blockstate.
+    private static VoxelShape buildShape(Direction facing) {
+        VoxelShape shape = Shapes.empty();
+        for (ModelBox box : MODEL_BOXES) {
+            ModelBox rotated = box.rotateTo(facing);
+            shape = Shapes.or(shape, Block.box(
+                    rotated.minX,
+                    rotated.minY,
+                    rotated.minZ,
+                    rotated.maxX,
+                    rotated.maxY,
+                    rotated.maxZ));
+        }
+        return shape.optimize();
+    }
+
+    private record ModelBox(
+            double minX,
+            double minY,
+            double minZ,
+            double maxX,
+            double maxY,
+            double maxZ
+    ) {
+        private ModelBox rotateTo(Direction facing) {
+            return switch (facing) {
+                case EAST -> new ModelBox(
+                        16.0 - this.maxZ, this.minY, this.minX,
+                        16.0 - this.minZ, this.maxY, this.maxX);
+                case SOUTH -> new ModelBox(
+                        16.0 - this.maxX, this.minY, 16.0 - this.maxZ,
+                        16.0 - this.minX, this.maxY, 16.0 - this.minZ);
+                case WEST -> new ModelBox(
+                        this.minZ, this.minY, 16.0 - this.maxX,
+                        this.maxZ, this.maxY, 16.0 - this.minX);
+                default -> this;
+            };
+        }
     }
 }

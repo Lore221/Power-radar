@@ -21,13 +21,13 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 /** Рисует только динамическое внутреннее свечение ламп Radar Link. */
 public final class RadarLinkRenderer implements BlockEntityRenderer<RadarLinkBlockEntity> {
     private static final ResourceLocation HORIZONTAL_RED_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link_glow_horizontal_red");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_horizontal_red");
     private static final ResourceLocation HORIZONTAL_GREEN_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link_glow_horizontal_green");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_horizontal_green");
     private static final ResourceLocation VERTICAL_RED_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link_glow_vertical_red");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_vertical_red");
     private static final ResourceLocation VERTICAL_GREEN_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link_glow_vertical_green");
+            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_vertical_green");
 
     private static final PartialModel HORIZONTAL_RED = PartialModel.of(HORIZONTAL_RED_LOCATION);
     private static final PartialModel HORIZONTAL_GREEN = PartialModel.of(HORIZONTAL_GREEN_LOCATION);

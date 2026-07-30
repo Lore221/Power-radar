@@ -16,6 +16,7 @@ import com.mojang.math.Axis;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.createmod.catnip.render.CachedBuffers;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.ModelResourceLocation;
@@ -135,6 +136,17 @@ public final class PowerRadarPanelAttachmentRenderer {
             int packedLight,
             int packedOverlay
     ) {
+        Direction facing = panel.getBlockState().getValue(ElectricalPanelBlock.FACING);
+        int cardLight = packedLight;
+        if (panel.getLevel() != null) {
+            // Ячейка щитка затемнена его корпусом, поэтому карты берут внешний свет
+            // из блока непосредственно перед лицевой стороной панели.
+            cardLight = LevelRenderer.getLightColor(
+                    panel.getLevel(),
+                    panel.getBlockPos().relative(facing)
+            );
+        }
+
         attachment.transformPose(poseStack, panel);
         CachedBuffers.partial(LOGIC_DOCK, panel.getBlockState())
                 .light(packedLight)
@@ -143,15 +155,15 @@ public final class PowerRadarPanelAttachmentRenderer {
 
         if (attachment.hasCard(0)) {
             renderLogicDockCard(
-                    LOGIC_DOCK_TARGETING_CARD, panel, poseStack, buffers, packedOverlay);
+                    LOGIC_DOCK_TARGETING_CARD, panel, poseStack, buffers, cardLight, packedOverlay);
         }
         if (attachment.hasCard(1)) {
             renderLogicDockCard(
-                    LOGIC_DOCK_DISPLAY_CARD, panel, poseStack, buffers, packedOverlay);
+                    LOGIC_DOCK_DISPLAY_CARD, panel, poseStack, buffers, cardLight, packedOverlay);
         }
         if (attachment.hasCard(2)) {
             renderLogicDockCard(
-                    LOGIC_DOCK_ALLOWLIST_CARD, panel, poseStack, buffers, packedOverlay);
+                    LOGIC_DOCK_ALLOWLIST_CARD, panel, poseStack, buffers, cardLight, packedOverlay);
         }
     }
 
@@ -160,12 +172,12 @@ public final class PowerRadarPanelAttachmentRenderer {
             ElectricalPanelBlockEntity panel,
             PoseStack poseStack,
             MultiBufferSource buffers,
+            int packedLight,
             int packedOverlay
     ) {
         CachedBuffers.partial(card, panel.getBlockState())
-                .light(net.minecraft.client.renderer.LightTexture.FULL_BRIGHT)
+                .light(packedLight)
                 .overlay(packedOverlay)
-                .disableDiffuse()
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutoutMipped()));
     }
 

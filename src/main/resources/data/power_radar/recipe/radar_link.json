@@ -10,10 +10,10 @@
       "tag": "c:ingots/steel"
     },
     "B": {
-      "item": "electroenergetics:indicator_blub"
+      "item": "electroenergetics:indicator_bulb"
     },
      "C": {
-      "tag": "craetes:transmitter"
+      "item": "create:transmitter"
     }
   },
   "result": {

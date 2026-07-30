@@ -161,6 +161,7 @@ public final class RadarLinkClientOutlineHandler {
         if (networkId == null) {
             return;
         }
+        reconcileInterceptionRoots(level);
         int color = interceptionPulseColor();
         for (BlockPos pos : InterceptionNetworkClientCache.getNodes(level, networkId)) {
             if (!level.isLoaded(pos)) {
@@ -188,6 +189,25 @@ public final class RadarLinkClientOutlineHandler {
                             pos.immutable()),
                     outline,
                     color);
+        }
+    }
+
+    // Shell Alarm и Onboard уже известны синему кэшу как радарные узлы.
+    // Это восстанавливает их жёлтую регистрацию без поиска block entity по чанкам.
+    private static void reconcileInterceptionRoots(ClientLevel level) {
+        for (BlockPos pos : RadarLinkClientCache.getKnownNodePositions(level)) {
+            if (!level.isLoaded(pos)) {
+                continue;
+            }
+            UUID rootNetworkId;
+            if (level.getBlockEntity(pos) instanceof ShellAlarmBlockEntity alarm) {
+                rootNetworkId = alarm.interceptionNetworkId();
+            } else if (level.getBlockEntity(pos) instanceof OnboardComputerBlockEntity computer) {
+                rootNetworkId = computer.interceptionNetworkId();
+            } else {
+                continue;
+            }
+            InterceptionNetworkClientCache.registerOrUpdate(level, pos, rootNetworkId);
         }
     }
 

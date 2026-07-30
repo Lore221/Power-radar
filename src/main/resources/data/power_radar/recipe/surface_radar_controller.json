@@ -7,10 +7,10 @@
   ],
   "key": {
     "A": {
-      "item": "minecraft:end_stone_powder"
+      "item": "aeronautics:end_stone_powder"
     },
     "B": {
-      "item": "simulated:gyroscopic_mechanism:electron_tube"
+      "item": "simulated:gyroscopic_mechanism"
     },
     "C": {
       "item": "minecraft:end_stone"

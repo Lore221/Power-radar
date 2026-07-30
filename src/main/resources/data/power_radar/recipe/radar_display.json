@@ -10,13 +10,13 @@
       "tag": "c:ingots/steel"
     },
     "B": {
-      "item": "electroenergetics:indictator_blub"
+      "item": "electroenergetics:indicator_bulb"
     },
      "C": {
-      "tag": "minecraft:tinted_glass"
+      "item": "minecraft:tinted_glass"
     },
      "D": {
-      "tag": "create:copper_sheet"
+      "tag": "c:plates/copper"
     }
   },
   "result": {

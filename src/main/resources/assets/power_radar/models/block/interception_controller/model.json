@@ -2,8 +2,11 @@
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
 	"ambientocclusion": false,
+	"render_type": "minecraft:cutout",
+	"texture_size": [48, 48],
 	"textures": {
 		"0": "power_radar:block/radar_controller",
+		"1": "power_radar:block/radar_link",
 		"particle": "power_radar:block/radar_controller"
 	},
 	"elements": [
@@ -265,29 +268,49 @@
 				"up": {"uv": [0, 15.33333, 0.66667, 16], "rotation": 180, "texture": "#0"},
 				"down": {"uv": [0, 11, 0.66667, 11.66667], "rotation": 180, "texture": "#0"}
 			}
+		},
+		{
+			"from": [3, 12, 17],
+			"to": [13, 22, 17],
+			"rotation": {"angle": 0, "axis": "y", "origin": [8, 14, 15]},
+			"faces": {
+				"north": {"uv": [14.66667, 2, 11.33333, 5.33333], "texture": "#1"},
+				"south": {"uv": [14.66667, 2, 11.33333, 5.33333], "texture": "#1"}
+			}
+		},
+		{
+			"from": [5, 8, 16],
+			"to": [11, 12, 18],
+			"rotation": {"angle": 0, "axis": "y", "origin": [7, 10, 16]},
+			"faces": {
+				"east": {"uv": [11.33333, 0, 12, 1.33333], "rotation": 180, "texture": "#1"},
+				"south": {"uv": [12, 0, 14, 1.33333], "texture": "#1"},
+				"west": {"uv": [11.33333, 0, 12, 1.33333], "texture": "#1"},
+				"up": {"uv": [12, 1.33332, 14, 1.99999], "texture": "#1"},
+				"down": {"uv": [12, 1.33333, 14, 2], "texture": "#1"}
+			}
 		}
 	],
 	"display": {
-      "thirdperson_righthand": {
-        "rotation": [75, 45, 0],
-        "translation": [0, 2.5, 0],
-        "scale": [0.375, 0.375, 0.375]
-      },
-      "firstperson_righthand": {
-        "rotation": [0, 45, 0],
-        "scale": [0.4, 0.4, 0.4]
-      },
-      "firstperson_lefthand": {
-        "rotation": [0, -135, 0],
-        "scale": [0.4, 0.4, 0.4]
-      },
-
-      "ground": {
-        "scale": [0.25, 0.25, 0.25]
-      },
-      "fixed": {
-        "scale": [0.5, 0.5, 0.5]
-      }
+		"thirdperson_righthand": {
+			"rotation": [75, 45, 0],
+			"translation": [0, 2.5, 0],
+			"scale": [0.375, 0.375, 0.375]
+		},
+		"firstperson_righthand": {
+			"rotation": [0, 45, 0],
+			"scale": [0.4, 0.4, 0.4]
+		},
+		"firstperson_lefthand": {
+			"rotation": [0, -135, 0],
+			"scale": [0.4, 0.4, 0.4]
+		},
+		"ground": {
+			"scale": [0.25, 0.25, 0.25]
+		},
+		"fixed": {
+			"scale": [0.5, 0.5, 0.5]
+		}
 	},
 	"groups": [
 		0,
@@ -324,6 +347,13 @@
 					"children": [17, 18, 19]
 				}
 			]
+		},
+		{
+			"name": "antenna",
+			"origin": [8, 8, 8],
+			"scope": 0,
+			"color": 0,
+			"children": [20, 21]
 		}
 	]
 }
