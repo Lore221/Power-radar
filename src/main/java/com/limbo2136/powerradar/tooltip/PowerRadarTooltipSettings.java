@@ -179,7 +179,7 @@ public final class PowerRadarTooltipSettings {
 
     // В списках выше используй text("ключ.из.lang") или text("ключ.из.lang", ChatFormatting.COLOR).
     private static Line text(String translationKey) {
-        return text(translationKey, ChatFormatting.blue);
+        return text(translationKey, ChatFormatting.BLUE);
     }
 
     private static Line text(String translationKey, ChatFormatting style) {
