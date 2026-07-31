@@ -95,6 +95,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
         this.networkId = id;
         if (this.level instanceof ServerLevel serverLevel) {
             RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            if (oldNetworkId != null && !oldNetworkId.equals(id)) {
+                manager.removePersistentLink(oldNetworkId, this.globalPos());
+            }
             manager.ensureNetwork(id);
             manager.addPersistentLink(id, this.globalPos());
             this.registerLoaded(serverLevel);
@@ -135,6 +138,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             this.endpointRole = RadarLinkEndpointRole.RADAR_CONTROLLER;
             this.endpointPos = newEndpointPos;
             pulseAndSync(result == RadarLinkReconcileResult.OUT_OF_RANGE
+                    || result == RadarLinkReconcileResult.CONTROLLER_ALREADY_BOUND
                     || result == RadarLinkReconcileResult.AMBIGUOUS
                     ? LampPulse.RED
                     : LampPulse.GREEN);

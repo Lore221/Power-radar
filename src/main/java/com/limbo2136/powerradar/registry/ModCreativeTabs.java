@@ -40,6 +40,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.SHELL_ALARM.get());
                         output.accept(ModItems.INTERCEPTION_CONTROLLER.get());
                         output.accept(ModItems.INTERCEPTION_FUZE.get());
+                        output.accept(ModItems.LINKER.get());
                     })
                     .build()
     );

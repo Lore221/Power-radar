@@ -4,7 +4,7 @@
 	"render_type": "minecraft:cutout",
 	"texture_size": [48, 48],
 	"textures": {
-		"1": "power_radar:block/surface_radar_controller" ,
+		"1": "power_radar:block/surface_radar_controller",
 		"particle": "power_radar:block/surface_radar_controller"
 	},
 	"elements": [
@@ -37,7 +37,7 @@
 		{
 			"from": [3, 2, 16],
 			"to": [7, 6, 18],
-			"rotation": {"angle": 0, "axis": "y", "origin": [8, 8, 8]},
+			"rotation": {"angle": 0, "axis": "y", "origin": [5, 4, 17]},
 			"faces": {
 				"north": {"uv": [6.33333, 12.33333, 7.66667, 13.66667], "texture": "#1"},
 				"east": {"uv": [7.66667, 15, 6.33333, 14.33333], "rotation": 90, "texture": "#1"},

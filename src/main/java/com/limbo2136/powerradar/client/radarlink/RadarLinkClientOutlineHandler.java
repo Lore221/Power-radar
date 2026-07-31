@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarLinkPanelAttachment;
 import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
+import com.limbo2136.powerradar.item.LinkerItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
@@ -58,6 +59,14 @@ public final class RadarLinkClientOutlineHandler {
         }
 
         ItemStack stack = player.getMainHandItem();
+        ItemStack linkerStack = stack.getItem() instanceof LinkerItem
+                ? stack
+                : player.getOffhandItem();
+        if (linkerStack.getItem() instanceof LinkerItem) {
+            outlineRadarNetwork(player, level, linkerStack);
+            outlineInterceptionNetwork(player, level, linkerStack);
+            return;
+        }
         if (stack.getItem() instanceof InterceptionControllerBlockItem) {
             outlineInterceptionNetwork(player, level, stack);
             return;
@@ -67,6 +76,10 @@ public final class RadarLinkClientOutlineHandler {
                 && !(stack.getItem() instanceof OnboardComputerBlockItem)) {
             return;
         }
+        outlineRadarNetwork(player, level, stack);
+    }
+
+    private static void outlineRadarNetwork(LocalPlayer player, ClientLevel level, ItemStack stack) {
         UUID networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
         if (networkId == null) {
             return;
@@ -193,7 +206,7 @@ public final class RadarLinkClientOutlineHandler {
     }
 
     // Shell Alarm и Onboard уже известны синему кэшу как радарные узлы.
-    // Это восстанавливает их жёлтую регистрацию без поиска block entity по чанкам.
+    // Это восстанавливает их оранжевую регистрацию без поиска block entity по чанкам.
     private static void reconcileInterceptionRoots(ClientLevel level) {
         for (BlockPos pos : RadarLinkClientCache.getKnownNodePositions(level)) {
             if (!level.isLoaded(pos)) {

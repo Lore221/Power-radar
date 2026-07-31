@@ -7,6 +7,7 @@ import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
 import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
+import com.limbo2136.powerradar.item.LinkerItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
@@ -87,6 +88,9 @@ public final class ModItems {
     public static final DeferredItem<InterceptionFuzeItem> INTERCEPTION_FUZE = ITEMS.register(
             "interception_fuze",
             () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(64)));
+    public static final DeferredItem<LinkerItem> LINKER = ITEMS.register(
+            "linker",
+            () -> new LinkerItem(new Item.Properties().stacksTo(1)));
 
     private ModItems() {
     }

@@ -103,6 +103,7 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             .add(ModBlocks.RADAR_MONITOR_CONTROLLER.getId())
             .add(ModBlocks.RADAR_DISPLAY.getId())
             .add(ModBlocks.RADAR_LINK.getId())
+            .add(ModItems.LINKER.getId())
             .add(ModItems.DISPLAY_CARD.getId())
             .add(ModItems.ALLOWLIST_CARD.getId())
             .add(ResourceLocation.fromNamespaceAndPath("minecraft", "compass"))
@@ -121,6 +122,7 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
         helper.addToTag(targeting)
             .add(ModBlocks.TARGET_CONTROLLER.getId())
             .add(ModBlocks.RADAR_LINK.getId())
+            .add(ModItems.LINKER.getId())
             .add(ModItems.TARGETING_CARD.getId());
 
         ResourceLocation interception = ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "interception");
@@ -136,6 +138,7 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             .add(ModBlocks.MECHANICAL_SIREN.getId())
             .add(ModBlocks.SHELL_ALARM.getId())
             .add(ModBlocks.INTERCEPTION_CONTROLLER.getId())
-            .add(ModItems.INTERCEPTION_FUZE.getId());
+            .add(ModItems.INTERCEPTION_FUZE.getId())
+            .add(ModItems.LINKER.getId());
     }
 }

@@ -16,6 +16,7 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.event.ModelEvent;
 
 /** Рисует только динамическое внутреннее свечение ламп Radar Link. */
@@ -63,7 +64,7 @@ public final class RadarLinkRenderer implements BlockEntityRenderer<RadarLinkBlo
         boolean vertical = facing.getAxis() == Direction.Axis.Y;
 
         poseStack.pushPose();
-        applyBlockstateRotation(poseStack, facing);
+        applyBlockstateRotation(poseStack, link.getBlockState());
         if (redGlow > 0.0F) {
             renderGlow(vertical ? VERTICAL_RED : HORIZONTAL_RED, link, poseStack, buffers, redGlow);
         }
@@ -75,14 +76,20 @@ public final class RadarLinkRenderer implements BlockEntityRenderer<RadarLinkBlo
 
     // Повторяет x/y-повороты из blockstates/radar_link.json вокруг центра блока.
     // При изменении ориентации основной модели нужно синхронно обновить эту таблицу.
-    private static void applyBlockstateRotation(PoseStack poseStack, Direction facing) {
+    private static void applyBlockstateRotation(PoseStack poseStack, BlockState state) {
+        Direction facing = state.getValue(RadarLinkBlock.FACING);
         float xRotation = facing == Direction.UP ? 180.0F : 0.0F;
-        float yRotation = switch (facing) {
-            case NORTH -> 180.0F;
-            case EAST -> 270.0F;
-            case WEST -> 90.0F;
-            default -> 0.0F;
-        };
+        float yRotation;
+        if (facing.getAxis() == Direction.Axis.Y) {
+            yRotation = horizontalModelRotation(state.getValue(RadarLinkBlock.MODEL_FACING));
+        } else {
+            yRotation = switch (facing) {
+                case NORTH -> 180.0F;
+                case EAST -> 270.0F;
+                case WEST -> 90.0F;
+                default -> 0.0F;
+            };
+        }
 
         poseStack.translate(0.5D, 0.5D, 0.5D);
         if (xRotation != 0.0F) {
@@ -92,6 +99,15 @@ public final class RadarLinkRenderer implements BlockEntityRenderer<RadarLinkBlo
             poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));
         }
         poseStack.translate(-0.5D, -0.5D, -0.5D);
+    }
+
+    private static float horizontalModelRotation(Direction facing) {
+        return switch (facing) {
+            case EAST -> 90.0F;
+            case SOUTH -> 180.0F;
+            case WEST -> 270.0F;
+            default -> 0.0F;
+        };
     }
 
     private static void renderGlow(

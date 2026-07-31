@@ -6,5 +6,6 @@ public enum RadarLinkReconcileResult {
     MONITOR_ATTACHED,
     MONITOR_DETACHED,
     OUT_OF_RANGE,
+    CONTROLLER_ALREADY_BOUND,
     AMBIGUOUS
 }

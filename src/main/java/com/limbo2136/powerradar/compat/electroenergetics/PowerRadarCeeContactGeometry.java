@@ -11,11 +11,11 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class PowerRadarCeeContactGeometry {
     // Горизонтальные блоки: Y, смещение к задней стороне, смещения плюса и минуса вправо.
-    private static final HorizontalPair RADAR_CONTROLLER = new HorizontalPair(5.0, 9.0, 2.0, -4.0);
-    private static final HorizontalPair RADAR_MONITOR = new HorizontalPair(11.52, 8.96, 4.0, -4.0);
+    private static final HorizontalPair RADAR_CONTROLLER = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
+    private static final HorizontalPair RADAR_MONITOR = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
     private static final HorizontalPair LOGIC_DOCK = new HorizontalPair(3.0, 3.0, 9.0, -9.0);
-    private static final HorizontalPair SHELL_ALARM = new HorizontalPair(10.88, 8.96, 3.84, -3.84);
-    private static final HorizontalPair ONBOARD_COMPUTER = new HorizontalPair(8.0, 4.0, 8.96, -8.96);
+    private static final HorizontalPair SHELL_ALARM = new HorizontalPair(4.0, 7.0, 4.0, -4.0);
+    private static final HorizontalPair ONBOARD_COMPUTER = new HorizontalPair(9.0, 4.0, 9.0, -9.0);
 
     // Блоки, устанавливаемые на любую грань: наружу, плюс вправо, минус вправо, вверх.
     private static final FacePair TARGET_CONTROLLER = new FacePair(8.96, 3.84, -3.84, -3.52);

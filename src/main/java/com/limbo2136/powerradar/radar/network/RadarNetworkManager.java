@@ -177,6 +177,9 @@ public class RadarNetworkManager {
 
     public RadarLinkReconcileResult attachControllerFromLink(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         this.addPersistentLink(id, linkPos);
+        if (controllerOwnedByAnotherLink(id, linkPos, controllerPos)) {
+            return RadarLinkReconcileResult.CONTROLLER_ALREADY_BOUND;
+        }
         this.upsertControllerBinding(id, linkPos, controllerPos);
         this.reconcileConsumerLeases(id);
         return RadarLinkReconcileResult.CONTROLLER_ATTACHED;
@@ -780,15 +783,23 @@ public class RadarNetworkManager {
         this.panelLogicDocks.remove(id);
     }
 
-    // Контроллер принадлежит максимум одной сети: новая привязка удаляет устаревшие записи остальных.
-    private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
-        RadarNetworkRecord record = this.ensureNetwork(id);
-        for (RadarNetworkRecord other : this.savedData.records()) {
-            if (!other.id().equals(id) && other.controllerBindings().removeIf(binding -> binding.controllerPos().equals(controllerPos))) {
-                invalidateLogicDockCache(other.id());
-                this.savedData.setDirty();
+    // Первый сохранённый Link остаётся владельцем радара, пока не будет разрушен или отвёрнут.
+    // Это не позволяет нескольким периодическим reconcile перетягивать контроллер между сетями.
+    private boolean controllerOwnedByAnotherLink(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
+        for (RadarNetworkRecord network : this.savedData.records()) {
+            for (RadarControllerEndpointBinding binding : network.controllerBindings()) {
+                if (!binding.controllerPos().equals(controllerPos)) {
+                    continue;
+                }
+                return !network.id().equals(id) || !binding.radarLinkPos().equals(linkPos);
             }
         }
+        return false;
+    }
+
+    // Обновляет только привязку текущего Link; чужое владение проверено до вызова.
+    private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
+        RadarNetworkRecord record = this.ensureNetwork(id);
         RadarControllerEndpointBinding newBinding = new RadarControllerEndpointBinding(linkPos, controllerPos);
         Optional<RadarControllerEndpointBinding> previous = record.controllerBindings().stream()
                 .filter(binding -> binding.radarLinkPos().equals(linkPos))

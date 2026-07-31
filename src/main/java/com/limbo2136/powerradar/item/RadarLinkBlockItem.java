@@ -107,6 +107,10 @@ public class RadarLinkBlockItem extends BlockItem {
             return Component.translatable("message.power_radar.network.link_out_of_range")
                     .withStyle(ChatFormatting.RED);
         }
+        if (result == RadarLinkReconcileResult.CONTROLLER_ALREADY_BOUND) {
+            return Component.translatable("message.power_radar.network.controller_already_bound")
+                    .withStyle(ChatFormatting.RED);
+        }
         return Component.translatable(newNetwork
                 ? "message.power_radar.network.created"
                 : "message.power_radar.network.item_tuned");

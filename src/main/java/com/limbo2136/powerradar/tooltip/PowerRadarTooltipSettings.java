@@ -28,7 +28,8 @@ public final class PowerRadarTooltipSettings {
         TARGETING_CARD,
         ALLOWLIST_CARD,
         DISPLAY_CARD,
-        INTERCEPTION_FUZE
+        INTERCEPTION_FUZE,
+        LINKER
     }
 
     public sealed interface Field permits InventoryField, GoggleField {
@@ -116,7 +117,8 @@ public final class PowerRadarTooltipSettings {
             Map.entry(Target.TARGETING_CARD, List.of(text("targeting_card_text"))),
             Map.entry(Target.ALLOWLIST_CARD, List.of(text("allowlist_card_text"))),
             Map.entry(Target.DISPLAY_CARD, List.of(text("display_card_text"))),
-            Map.entry(Target.INTERCEPTION_FUZE, List.of(text("intercept_fuze_text")))
+            Map.entry(Target.INTERCEPTION_FUZE, List.of(text("intercept_fuze_text"))),
+            Map.entry(Target.LINKER, List.of(text("linker_text")))
     );
 
     // Подсказка в мире при взгляде на установленный блок через инженерные очки Create.

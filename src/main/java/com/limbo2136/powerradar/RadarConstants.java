@@ -35,7 +35,7 @@ public final class RadarConstants {
 
     // Общий масштаб атласа контактов для GUI и дисплея в мире.
     public static final float RADAR_DISPLAY_CONTENT_SCALE = 0.88F;
-    public static final float RADAR_BLIP_RENDER_SCALE = 0.75F;
+    public static final float RADAR_BLIP_RENDER_SCALE = 0.8F;
     public static final float RADAR_BLIP_CELL_TEXTURE_RATIO = 11.0F / 128.0F * RADAR_BLIP_RENDER_SCALE;
 
     private RadarConstants() {

@@ -4,7 +4,13 @@
     "facing=east": {"model": "power_radar:block/radar_link/horizontal", "y": 270},
     "facing=south": {"model": "power_radar:block/radar_link/horizontal"},
     "facing=west": {"model": "power_radar:block/radar_link/horizontal", "y": 90},
-    "facing=up": {"model": "power_radar:block/radar_link/vertical", "x": 180},
-    "facing=down": {"model": "power_radar:block/radar_link/vertical"}
+    "facing=up,model_facing=north": {"model": "power_radar:block/radar_link/vertical", "x": 180},
+    "facing=up,model_facing=east": {"model": "power_radar:block/radar_link/vertical", "x": 180, "y": 90},
+    "facing=up,model_facing=south": {"model": "power_radar:block/radar_link/vertical", "x": 180, "y": 180},
+    "facing=up,model_facing=west": {"model": "power_radar:block/radar_link/vertical", "x": 180, "y": 270},
+    "facing=down,model_facing=north": {"model": "power_radar:block/radar_link/vertical"},
+    "facing=down,model_facing=east": {"model": "power_radar:block/radar_link/vertical", "y": 90},
+    "facing=down,model_facing=south": {"model": "power_radar:block/radar_link/vertical", "y": 180},
+    "facing=down,model_facing=west": {"model": "power_radar:block/radar_link/vertical", "y": 270}
   }
 }

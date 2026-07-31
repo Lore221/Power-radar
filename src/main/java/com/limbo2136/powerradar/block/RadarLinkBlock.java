@@ -24,6 +24,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public class RadarLinkBlock extends BaseEntityBlock {
     public static final MapCodec<RadarLinkBlock> CODEC = simpleCodec(RadarLinkBlock::new);
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
+    public static final DirectionProperty MODEL_FACING =
+            DirectionProperty.create("model_facing", Direction.Plane.HORIZONTAL);
     private static final VoxelShape NORTH_SHAPE = Block.box(1.0, 1.0, 0.0, 15.0, 16.0, 5.0);
     private static final VoxelShape SOUTH_SHAPE = Block.box(1.0, 1.0, 11.0, 15.0, 16.0, 16.0);
     private static final VoxelShape WEST_SHAPE = Block.box(0.0, 1.0, 1.0, 5.0, 16.0, 15.0);
@@ -33,7 +35,9 @@ public class RadarLinkBlock extends BaseEntityBlock {
 
     public RadarLinkBlock(Properties properties) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(FACING, Direction.NORTH)
+                .setValue(MODEL_FACING, Direction.NORTH));
     }
 
     @Override
@@ -43,7 +47,10 @@ public class RadarLinkBlock extends BaseEntityBlock {
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return this.defaultBlockState().setValue(FACING, context.getClickedFace().getOpposite());
+        // FACING указывает на блок подключения, а отдельное направление разворачивает модель на полу/потолке.
+        return this.defaultBlockState()
+                .setValue(FACING, context.getClickedFace().getOpposite())
+                .setValue(MODEL_FACING, context.getHorizontalDirection().getOpposite());
     }
 
     @Override
@@ -105,7 +112,7 @@ public class RadarLinkBlock extends BaseEntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING);
+        builder.add(FACING, MODEL_FACING);
     }
 
     private static VoxelShape shapeFor(Direction facing) {

@@ -163,7 +163,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
             case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, RADAR_LINK, MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE -> 0.0D;
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
         };
     }
 
@@ -192,7 +192,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case MONITOR_CONTROLLER, RADAR_DISPLAY, LOGIC_DOCK, ONBOARD_COMPUTER ->
                     PowerRadarElectricalParameters.Voltages.monitor().nominal();
             case RADAR_LINK, MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE -> 0.0D;
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
         };
     }
 
