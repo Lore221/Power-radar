@@ -2,16 +2,22 @@ package com.limbo2136.powerradar.radar.network;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
+import com.limbo2136.powerradar.PowerRadarServerConfig;
 import com.limbo2136.powerradar.RadarConstants;
+import com.limbo2136.powerradar.api.target.TargetSourceType;
+import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
+import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.logic.LogicDockPolicySource;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
+import com.limbo2136.powerradar.radar.RadarId;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.SableStructureName;
@@ -30,9 +36,12 @@ import java.util.WeakHashMap;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
@@ -73,7 +82,12 @@ public class RadarNetworkManager {
     public static void tickServer(MinecraftServer server) {
         RadarNetworkManager manager = MANAGERS.get(server);
         if (manager != null) {
-            manager.prunePanelLogicDocks(server.overworld().getGameTime());
+            long gameTime = server.overworld().getGameTime();
+            manager.prunePanelLogicDocks(gameTime);
+            int trackInterval = Math.max(1, PowerRadarServerConfig.radarScanUpdateIntervalTicks());
+            if (Math.floorMod(gameTime, trackInterval) == trackInterval - 1) {
+                manager.refreshSelectedTargetTracks(gameTime);
+            }
         }
     }
 
@@ -295,6 +309,165 @@ public class RadarNetworkManager {
             this.savedData.setDirty();
         }
         this.runtime(id).setSelectedTargetUuid(targetUuid);
+    }
+
+    public SelectedTargetRuntimeSnapshot selectedTargetSnapshot(UUID id) {
+        if (!networkExists(id)) {
+            return SelectedTargetRuntimeSnapshot.EMPTY;
+        }
+        RadarNetworkRuntime runtime = this.runtime(id);
+        long gameTime = this.server.overworld().getGameTime();
+        if (!runtime.selectedTargetUpdatedAt(gameTime)) {
+            refreshSelectedTargetLiveState(runtime, gameTime);
+        }
+        return runtime.selectedTargetSnapshot();
+    }
+
+    /**
+     * На новом общем снимке определяет, какие радары действительно подтвердили выбранный UUID.
+     * Метод читает только готовые tracks загруженных контроллеров и не создаёт chunk tickets.
+     */
+    private void refreshSelectedTargetTracks(long gameTime) {
+        for (RadarNetworkRecord record : this.savedData.records()) {
+            RadarNetworkRuntime runtime = this.runtime(record.id());
+            UUID selectedTarget = runtime.selectedTargetUuid().orElse(null);
+            if (selectedTarget == null) {
+                continue;
+            }
+
+            ArrayList<RadarControllerBlockEntity> controllers = loadedControllers(record);
+            long scanFingerprint = selectedTargetScanFingerprint(controllers);
+            if (scanFingerprint == runtime.selectedTargetScanFingerprint()) {
+                continue;
+            }
+
+            SelectedTargetRuntimeSnapshot.TargetView measuredTarget = null;
+            Set<RadarId> confirmingRadars = new HashSet<>();
+            for (RadarControllerBlockEntity controller : controllers) {
+                TrackedTargetView track = controller.findTrackedTarget(selectedTarget);
+                if (track == null
+                        || controller.lastScanGameTime() <= 0L
+                        || track.lastSeenGameTime() < controller.lastScanGameTime()) {
+                    continue;
+                }
+                confirmingRadars.add(controller.radarId());
+                if (measuredTarget == null) {
+                    measuredTarget = SelectedTargetRuntimeSnapshot.TargetView.measured(track);
+                }
+            }
+            runtime.putSelectedTargetTrack(
+                    scanFingerprint,
+                    selectedTarget,
+                    measuredTarget,
+                    confirmingRadars,
+                    gameTime);
+        }
+    }
+
+    // Живые координаты и проверка isAlive вычисляются максимум один раз за тик на сеть.
+    private void refreshSelectedTargetLiveState(RadarNetworkRuntime runtime, long gameTime) {
+        RadarNetworkRuntime.SelectedTargetTrackSelection selection = runtime.selectedTargetTrack();
+        if (!selection.confirmed()
+                || selection.targetUuid() == null
+                || selection.measuredTarget() == null) {
+            return;
+        }
+
+        SelectedTargetRuntimeSnapshot.TargetView measured = selection.measuredTarget();
+        ServerLevel targetLevel = this.server.getLevel(
+                ResourceKey.create(Registries.DIMENSION, measured.dimensionId()));
+        if (targetLevel == null) {
+            runtime.putLiveSelectedTarget(
+                    SelectedTargetRuntimeSnapshot.Status.ENTITY_UNAVAILABLE,
+                    selection.targetUuid(),
+                    selection.confirmingRadars(),
+                    gameTime,
+                    null);
+            return;
+        }
+
+        if (measured.sourceType() == TargetSourceType.STRUCTURE) {
+            SableStructureObservation observation = SableRadarIntegration
+                    .loadedStructure(targetLevel, selection.targetUuid())
+                    .orElse(null);
+            if (observation == null) {
+                runtime.putLiveSelectedTarget(
+                        SelectedTargetRuntimeSnapshot.Status.ENTITY_UNAVAILABLE,
+                        selection.targetUuid(),
+                        selection.confirmingRadars(),
+                        gameTime,
+                        null);
+                return;
+            }
+            double height = Math.max(0.1D, observation.worldBounds().getYsize());
+            Vec3 targetingBase = observation.worldOrigin().subtract(0.0D, height * 0.5D, 0.0D);
+            runtime.putLiveSelectedTarget(
+                    SelectedTargetRuntimeSnapshot.Status.LIVE,
+                    selection.targetUuid(),
+                    selection.confirmingRadars(),
+                    gameTime,
+                    SelectedTargetRuntimeSnapshot.TargetView.liveStructure(
+                            measured,
+                            targetingBase,
+                            observation.velocity(),
+                            gameTime,
+                            height));
+            return;
+        }
+
+        Entity entity = targetLevel.getEntity(selection.targetUuid());
+        if (entity == null || !entity.isAlive()) {
+            runtime.putLiveSelectedTarget(
+                    SelectedTargetRuntimeSnapshot.Status.ENTITY_UNAVAILABLE,
+                    selection.targetUuid(),
+                    selection.confirmingRadars(),
+                    gameTime,
+                    null);
+            return;
+        }
+        runtime.putLiveSelectedTarget(
+                SelectedTargetRuntimeSnapshot.Status.LIVE,
+                selection.targetUuid(),
+                selection.confirmingRadars(),
+                gameTime,
+                SelectedTargetRuntimeSnapshot.TargetView.liveEntity(
+                        measured,
+                        entity.getId(),
+                        entity.level().dimension().location(),
+                        entity.position(),
+                        entity.getDeltaMovement(),
+                        gameTime,
+                        entity.getBbHeight(),
+                        Math.max(measured.approximateSize(),
+                                Math.max(entity.getBbWidth(), entity.getBbHeight()))));
+    }
+
+    // Порядок bindings сохраняется, чтобы несколько радаров выбирали одинаковый первый track.
+    private ArrayList<RadarControllerBlockEntity> loadedControllers(RadarNetworkRecord record) {
+        ArrayList<RadarControllerBlockEntity> controllers = new ArrayList<>();
+        for (RadarControllerEndpointBinding binding : record.controllerBindings()) {
+            ServerLevel level = this.server.getLevel(binding.controllerPos().dimension());
+            if (level == null || !level.isLoaded(binding.controllerPos().pos())) {
+                continue;
+            }
+            if (level.getBlockEntity(binding.controllerPos().pos()) instanceof RadarControllerBlockEntity controller) {
+                controllers.add(controller);
+            }
+        }
+        return controllers;
+    }
+
+    private static long selectedTargetScanFingerprint(List<RadarControllerBlockEntity> controllers) {
+        long fingerprint = 17L;
+        for (RadarControllerBlockEntity controller : controllers) {
+            if (controller.getLevel() != null) {
+                fingerprint = 31L * fingerprint
+                        + controller.getLevel().dimension().location().hashCode();
+            }
+            fingerprint = 31L * fingerprint + controller.getBlockPos().asLong();
+            fingerprint = 31L * fingerprint + controller.lastScanGameTime();
+        }
+        return fingerprint;
     }
 
     public int autotargetFilterMask(UUID id) {

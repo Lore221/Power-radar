@@ -173,6 +173,39 @@ class RadarMonitorPayloadCodecTest {
     }
 
     @Test
+    void radarCompassPayloadsRoundTrip() {
+        UUID networkId = UUID.fromString("ed871101-85a0-418e-b828-4083022d81e7");
+        UUID targetUuid = UUID.fromString("3a43ca1f-d86e-46b5-b1b6-b9c44470074e");
+        RadarCompassSubscriptionPayload subscription =
+                new RadarCompassSubscriptionPayload(networkId);
+        assertEquals(subscription, roundTrip(RadarCompassSubscriptionPayload.STREAM_CODEC, subscription));
+
+        RadarCompassTargetPayload live = new RadarCompassTargetPayload(
+                networkId,
+                45L,
+                targetUuid,
+                true,
+                true,
+                ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"),
+                new net.minecraft.world.phys.Vec3(12.25D, 80.5D, -31.75D),
+                new net.minecraft.world.phys.Vec3(0.5D, -0.125D, 1.0D),
+                9_001L);
+        assertEquals(live, roundTrip(RadarCompassTargetPayload.STREAM_CODEC, live));
+
+        RadarCompassTargetPayload waiting = new RadarCompassTargetPayload(
+                networkId,
+                46L,
+                targetUuid,
+                false,
+                false,
+                null,
+                null,
+                net.minecraft.world.phys.Vec3.ZERO,
+                9_005L);
+        assertEquals(waiting, roundTrip(RadarCompassTargetPayload.STREAM_CODEC, waiting));
+    }
+
+    @Test
     void v5WireBytesRemainStable() throws NoSuchAlgorithmException {
         assertEquals("5", ModNetwork.PROTOCOL_VERSION);
         assertEquals(5, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);

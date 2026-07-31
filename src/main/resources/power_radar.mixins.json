@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.limbo2136.powerradar.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CompassNavigationTargetMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

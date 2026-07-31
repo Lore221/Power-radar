@@ -761,24 +761,48 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             int packedLight,
             int mapSizeBlocks
     ) {
-        int cells = Math.max(1, mapSizeBlocks / RadarDisplayProjector.MONITOR_GRID_CELL_BLOCKS);
         float contentMin = screenContentMin(size);
         float contentMax = screenContentMax(size);
         float contentSize = contentMax - contentMin;
+        float center = (contentMin + contentMax) * 0.5F;
+        int halfLineCount = mapSizeBlocks
+                / (RadarDisplayProjector.MONITOR_GRID_CELL_BLOCKS * 2);
         float lineHalfWidth = Math.max(0.0008F, SCREEN_SIZE / 256.0F);
-        for (int i = 0; i <= cells; i++) {
-            float coordinate = contentMin + contentSize * i / cells;
-            drawSolidGridQuad(
+
+        // Как и GUI, начинаем с мировой нулевой линии в центре и продолжаем
+        // одинаковым шагом наружу. Нечётное число клеток больше не сдвигает центр в квадрат.
+        for (int line = -halfLineCount; line <= halfLineCount; line++) {
+            float coordinate = center + contentSize * line
+                    * RadarDisplayProjector.MONITOR_GRID_CELL_BLOCKS
+                    / Math.max(1, mapSizeBlocks);
+            drawGridCrossLine(
                     poseStack, bufferSource, facing, relativeOrigin, size,
-                    coordinate - lineHalfWidth, contentMin,
-                    coordinate + lineHalfWidth, contentMax,
-                    packedLight, VERTICAL_GRID_FACE_OFFSET);
-            drawSolidGridQuad(
-                    poseStack, bufferSource, facing, relativeOrigin, size,
-                    contentMin, coordinate - lineHalfWidth,
-                    contentMax, coordinate + lineHalfWidth,
-                    packedLight, HORIZONTAL_GRID_FACE_OFFSET);
+                    contentMin, contentMax, coordinate, lineHalfWidth, packedLight);
         }
+    }
+
+    private static void drawGridCrossLine(
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            Direction facing,
+            BlockPos relativeOrigin,
+            int size,
+            float contentMin,
+            float contentMax,
+            float coordinate,
+            float lineHalfWidth,
+            int packedLight
+    ) {
+        drawSolidGridQuad(
+                poseStack, bufferSource, facing, relativeOrigin, size,
+                coordinate - lineHalfWidth, contentMin,
+                coordinate + lineHalfWidth, contentMax,
+                packedLight, VERTICAL_GRID_FACE_OFFSET);
+        drawSolidGridQuad(
+                poseStack, bufferSource, facing, relativeOrigin, size,
+                contentMin, coordinate - lineHalfWidth,
+                contentMax, coordinate + lineHalfWidth,
+                packedLight, HORIZONTAL_GRID_FACE_OFFSET);
     }
 
     private static void drawSolidGridQuad(

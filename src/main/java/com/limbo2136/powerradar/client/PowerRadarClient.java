@@ -6,6 +6,7 @@ import com.limbo2136.powerradar.bridge.LogicDockPanelRenderBridge;
 import com.limbo2136.powerradar.client.onboard.OnboardComputerRenderer;
 import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
 import com.limbo2136.powerradar.client.radarlink.RadarLinkClientRuntime;
+import com.limbo2136.powerradar.client.compass.RadarCompassItemProperties;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
 import net.neoforged.api.distmarker.Dist;
@@ -65,5 +66,6 @@ public final class PowerRadarClient {
     @SubscribeEvent
     public static void registerPonder(FMLClientSetupEvent event) {
         PonderIndex.addPlugin(new PowerRadarPonderPlugin());
+        event.enqueueWork(RadarCompassItemProperties::register);
     }
 }

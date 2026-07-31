@@ -28,6 +28,7 @@ import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.SelectedTargetRuntimeSnapshot;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
@@ -359,16 +360,26 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 || controllerResolution.controllers().isEmpty()) {
             return TargetSolution.invalid("radar-offline");
         }
-        TrackedTargetView track = selectedTarget == null ? null : radarController.findTrackedTarget(selectedTarget);
+        TrackedTargetView track = null;
         if (manualTarget) {
-            if (track == null) {
+            SelectedTargetRuntimeSnapshot manualSnapshot =
+                    networkManager.selectedTargetSnapshot(networkId);
+            boolean confirmedByAccessibleRadar = controllerResolution.controllers().stream()
+                    .map(RadarControllerBlockEntity::radarId)
+                    .anyMatch(manualSnapshot.confirmingRadars()::contains);
+            if (!selectedTarget.equals(manualSnapshot.selectedTargetUuid())
+                    || !manualSnapshot.confirmedByLatestScan()
+                    || !confirmedByAccessibleRadar) {
                 invalidateTargetLeadCache();
                 return TargetSolution.invalid("manual-target-unreachable");
-            } else if (!isSelectedTargetAlive(worldLevel, track)) {
+            } else if (!manualSnapshot.alive() || manualSnapshot.target() == null) {
                 networkManager.setSelectedTargetUuid(networkId, null);
                 manualTarget = false;
                 selectedTarget = null;
-            } else if (track.classification() == TargetClassification.PROJECTILE) {
+            } else {
+                track = manualSnapshot.target();
+            }
+            if (track != null && track.classification() == TargetClassification.PROJECTILE) {
                 networkManager.setSelectedTargetUuid(networkId, null);
                 manualTarget = false;
                 selectedTarget = null;
@@ -437,7 +448,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         int lockTicks = updateTargetLock(selectedTarget);
         long gameTime = level.getGameTime();
-        TrackedTargetView aimTrack = liveTargetView(worldLevel, track, gameTime);
+        TrackedTargetView aimTrack = manualTarget ? track : liveTargetView(worldLevel, track, gameTime);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
                 cannonState.kind(),
                 preferHighArc,

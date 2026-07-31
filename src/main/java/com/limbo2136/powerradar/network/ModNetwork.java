@@ -15,6 +15,7 @@ import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.lang.reflect.InvocationTargetException;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -32,6 +33,14 @@ public final class ModNetwork {
         modEventBus.addListener(ModNetwork::registerPayloads);
     }
 
+    public static void tickServer(MinecraftServer server) {
+        RadarCompassSubscriptionManager.tickServer(server);
+    }
+
+    public static void stopServer(MinecraftServer server) {
+        RadarCompassSubscriptionManager.stopServer(server);
+    }
+
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(PROTOCOL_VERSION);
         registrar.playToClient(RadarMonitorSnapshotPayload.TYPE, RadarMonitorSnapshotPayload.STREAM_CODEC, ModNetwork::handleSnapshot);
@@ -47,6 +56,8 @@ public final class ModNetwork {
         registrar.playToServer(TargetingCardSavePayload.TYPE, TargetingCardSavePayload.STREAM_CODEC, ModNetwork::handleTargetingCardSave);
         registrar.playToClient(AllowlistCardOpenPayload.TYPE, AllowlistCardOpenPayload.STREAM_CODEC, ModNetwork::handleAllowlistCardOpen);
         registrar.playToServer(AllowlistCardSavePayload.TYPE, AllowlistCardSavePayload.STREAM_CODEC, ModNetwork::handleAllowlistCardSave);
+        registrar.playToClient(RadarCompassTargetPayload.TYPE, RadarCompassTargetPayload.STREAM_CODEC, ModNetwork::handleRadarCompassTarget);
+        registrar.playToServer(RadarCompassSubscriptionPayload.TYPE, RadarCompassSubscriptionPayload.STREAM_CODEC, ModNetwork::handleRadarCompassSubscription);
     }
 
     private static void handleSnapshot(RadarMonitorSnapshotPayload payload, IPayloadContext context) {
@@ -96,6 +107,23 @@ public final class ModNetwork {
                 payload, context, TargetingCardOpenPayload.class,
                 "com.limbo2136.powerradar.client.TargetingCardClientHooks", "open",
                 "[PowerRadar] Failed to open targeting card screen");
+    }
+
+    private static void handleRadarCompassTarget(RadarCompassTargetPayload payload, IPayloadContext context) {
+        enqueueClientHandler(
+                payload, context, RadarCompassTargetPayload.class,
+                "com.limbo2136.powerradar.client.compass.RadarCompassClientHooks", "handleTarget",
+                "[PowerRadar] Failed to update radar compass target");
+    }
+
+    private static void handleRadarCompassSubscription(
+            RadarCompassSubscriptionPayload payload,
+            IPayloadContext context
+    ) {
+        if (!(context.player() instanceof ServerPlayer player)) {
+            return;
+        }
+        context.enqueueWork(() -> RadarCompassSubscriptionManager.subscribe(player, payload.networkId()));
     }
 
     private static void handleTargetingCardSave(TargetingCardSavePayload payload, IPayloadContext context) {

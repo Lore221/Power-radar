@@ -5,10 +5,7 @@ package com.limbo2136.powerradar.radar;
  * Высота цели не влияет на положение метки, а центр карты всегда совпадает с блоком монитора.
  */
 public final class RadarDisplayProjector {
-    public static final int MONITOR_MAP_SIZE_BLOCKS = 300;
-    public static final int MONITOR_MAP_RADIUS_BLOCKS = MONITOR_MAP_SIZE_BLOCKS / 2;
     public static final int MONITOR_GRID_CELL_BLOCKS = 100;
-    public static final int MONITOR_GRID_CELLS = MONITOR_MAP_SIZE_BLOCKS / MONITOR_GRID_CELL_BLOCKS;
     public static final int MIN_MONITOR_MAP_SIZE_BLOCKS = 100;
     public static final int MAX_MONITOR_MAP_SIZE_BLOCKS = 10_000;
     public static final int MINIMUM_RADAR_REFERENCE_MAP_SIZE_BLOCKS =
@@ -35,23 +32,6 @@ public final class RadarDisplayProjector {
         return Math.max(MIN_MONITOR_MAP_SIZE_BLOCKS, Math.min(MAX_MONITOR_MAP_SIZE_BLOCKS, roundedToGrid));
     }
 
-    public static RadarDisplayProjection project(RadarMonitorDisplayData displayData, RadarDisplayTarget target) {
-        return project(displayData, target, displayData.monitorViewYawDegrees());
-    }
-
-    public static RadarDisplayProjection project(RadarMonitorDisplayData displayData, RadarDisplayTarget target, float viewYawDegrees) {
-        return project(displayData, target, viewYawDegrees, MONITOR_MAP_RADIUS_BLOCKS);
-    }
-
-    public static RadarDisplayProjection project(
-            RadarMonitorDisplayData displayData,
-            RadarDisplayTarget target,
-            float viewYawDegrees,
-            int mapRadiusBlocks
-    ) {
-        return project(displayData, target, viewYawDegrees, mapRadiusBlocks, 0.0D, 0.0D);
-    }
-
     public static RadarDisplayProjection project(
             RadarMonitorDisplayData displayData,
             RadarDisplayTarget target,
@@ -67,42 +47,6 @@ public final class RadarDisplayProjector {
                 target.y(),
                 target.z(),
                 target.displayAgeTicks() > 0,
-                viewYawDegrees,
-                mapRadiusBlocks,
-                centerOffsetX,
-                centerOffsetZ);
-    }
-
-    public static RadarDisplayProjection projectRadarOrigin(RadarMonitorDisplayData displayData) {
-        return projectRadarOrigin(displayData, displayData.monitorViewYawDegrees());
-    }
-
-    public static RadarDisplayProjection projectRadarOrigin(RadarMonitorDisplayData displayData, float viewYawDegrees) {
-        return projectRadarOrigin(displayData, viewYawDegrees, MONITOR_MAP_RADIUS_BLOCKS);
-    }
-
-    public static RadarDisplayProjection projectRadarOrigin(
-            RadarMonitorDisplayData displayData,
-            float viewYawDegrees,
-            int mapRadiusBlocks
-    ) {
-        return projectRadarOrigin(displayData, viewYawDegrees, mapRadiusBlocks, 0.0D, 0.0D);
-    }
-
-    public static RadarDisplayProjection projectRadarOrigin(
-            RadarMonitorDisplayData displayData,
-            float viewYawDegrees,
-            int mapRadiusBlocks,
-            double centerOffsetX,
-            double centerOffsetZ
-    ) {
-        return projectWorldPoint(
-                displayData,
-                displayData.radarDimensionId(),
-                displayData.radarOriginX(),
-                displayData.radarOriginY(),
-                displayData.radarOriginZ(),
-                false,
                 viewYawDegrees,
                 mapRadiusBlocks,
                 centerOffsetX,

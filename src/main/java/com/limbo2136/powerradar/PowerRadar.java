@@ -60,10 +60,12 @@ public final class PowerRadar {
     private static void onServerTick(ServerTickEvent.Post event) {
         RadarScanCoordinator.tickServer(event.getServer());
         RadarNetworkManager.tickServer(event.getServer());
+        ModNetwork.tickServer(event.getServer());
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
         RadarScanCoordinator.stopServer(event.getServer());
+        ModNetwork.stopServer(event.getServer());
         RadarNetworkManager.stopServer(event.getServer());
     }
 }

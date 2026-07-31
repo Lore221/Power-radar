@@ -1,7 +1,10 @@
 package com.limbo2136.powerradar.client.onboard;
 
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
+import com.limbo2136.powerradar.client.compass.RadarCompassClientCache;
 import com.limbo2136.powerradar.radar.RadarGeometry;
+import com.limbo2136.powerradar.registry.ModDataComponents;
+import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -21,7 +24,8 @@ record OnboardCompassRenderContext(
         float worldYawAtZeroNeedleRotation,
         float spawnRotation,
         float recoveryRotation,
-        float invalidRotation
+        float invalidRotation,
+        float partialTick
 ) {
     static OnboardCompassRenderContext create(
             OnboardComputerBlockEntity computer,
@@ -50,17 +54,31 @@ record OnboardCompassRenderContext(
                 worldYawAtZeroNeedleRotation,
                 spawnRotation,
                 recoveryRotation,
-                invalidRotation);
+                invalidRotation,
+                partialTick);
     }
 
     static OnboardCompassRenderContext unavailable() {
-        return new OnboardCompassRenderContext(null, Vec3.ZERO, 0.0F, 0.0F, 0.0F, 0.0F);
+        return new OnboardCompassRenderContext(null, Vec3.ZERO, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
     }
 
     // Выбирает цель по сохранённым компонентам установленного предмета.
     float needleRotation(ItemStack compass) {
         if (this.level == null) {
             return 0.0F;
+        }
+        UUID radarNetworkId = compass.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+        if (radarNetworkId != null) {
+            RadarCompassClientCache.Target target = RadarCompassClientCache.target(
+                    radarNetworkId, this.level, this.partialTick);
+            if (target == null || !target.dimensionId().equals(this.level.dimension().location())) {
+                return this.invalidRotation;
+            }
+            return targetRotation(
+                    this.compassPosition,
+                    this.worldYawAtZeroNeedleRotation,
+                    target.position(),
+                    this.invalidRotation);
         }
         if (compass.is(Items.RECOVERY_COMPASS)) {
             return this.recoveryRotation;
@@ -91,6 +109,15 @@ record OnboardCompassRenderContext(
         }
 
         Vec3 target = Vec3.atCenterOf(targetPosition.pos());
+        return targetRotation(compassPosition, worldYawAtZeroNeedleRotation, target, invalidRotation);
+    }
+
+    private static float targetRotation(
+            Vec3 compassPosition,
+            float worldYawAtZeroNeedleRotation,
+            Vec3 target,
+            float invalidRotation
+    ) {
         double deltaX = target.x - compassPosition.x;
         double deltaZ = target.z - compassPosition.z;
         if (deltaX * deltaX + deltaZ * deltaZ < 1.0E-5D) {

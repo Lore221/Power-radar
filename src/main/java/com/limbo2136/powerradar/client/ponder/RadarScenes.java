@@ -17,6 +17,8 @@ import net.createmod.ponder.api.scene.SceneBuilder;
 import net.createmod.ponder.api.scene.SceneBuildingUtil;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Items;
 
 public class RadarScenes {
 
@@ -197,7 +199,26 @@ public class RadarScenes {
             RadarStructureType.OVERVIEW,
             0.8f,
             0.0f);
-        scene.idle(60);
+        scene.idle(80);
+
+        scene.addKeyframe();
+        scene.idle(10);
+        scene.rotateCameraY(-90);
+        scene.idle(20);
+        scene.overlay()
+            .showControls(
+                util.vector().topOf(1, 2, 1),
+                Pointing.DOWN,
+                80
+            )
+            .rightClick()
+            .withItem(Items.COMPASS.getDefaultInstance());
+        scene.overlay()
+            .showText(80)
+            .pointAt(util.vector().topOf(1, 1, 1))
+            .placeNearTarget()
+            .text("The compass can be linked to the network and will point to the selected target.");
+        scene.idle(100);
     }
 
     public static void logicDockBasic(SceneBuilder builder, SceneBuildingUtil util) {
