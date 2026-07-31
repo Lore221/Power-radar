@@ -33,7 +33,7 @@ public final class RadarLinkPanelAttachment extends AbstractPoweredPanelAttachme
     }
 
     @Override
-    protected double powerDrawWatts() {
+    protected double nominalPowerWatts() {
         return PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts();
     }
 

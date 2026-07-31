@@ -48,7 +48,7 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
     }
 
     @Override
-    protected double powerDrawWatts() {
+    protected double nominalPowerWatts() {
         return PowerRadarElectricalParameters.Ratings.logicDockPowerWatts();
     }
 

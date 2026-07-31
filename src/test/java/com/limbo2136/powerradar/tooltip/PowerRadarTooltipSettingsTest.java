@@ -13,9 +13,15 @@ class PowerRadarTooltipSettingsTest {
     @Test
     void editableLayoutsContainOnlyWellFormedLines() {
         for (PowerRadarTooltipSettings.Target target : PowerRadarTooltipSettings.Target.values()) {
-            assertLayoutValid(PowerRadarTooltipSettings.inventory(target, false));
-            assertLayoutValid(PowerRadarTooltipSettings.inventory(target, true));
+            List<PowerRadarTooltipSettings.Line> parameters =
+                    PowerRadarTooltipSettings.inventoryParameters(target);
+            List<PowerRadarTooltipSettings.Line> shiftText =
+                    PowerRadarTooltipSettings.inventoryShiftText(target);
+            assertLayoutValid(parameters);
+            assertLayoutValid(shiftText);
             assertLayoutValid(PowerRadarTooltipSettings.goggles(target));
+            assertTrue(parameters.stream().noneMatch(PowerRadarTooltipSettings.Line::isText));
+            assertTrue(shiftText.stream().allMatch(PowerRadarTooltipSettings.Line::isText));
         }
     }
 

@@ -1334,14 +1334,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     // Показывает электрическое состояние и итоговую причину готовности в очках Create.
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.TARGET_CONTROLLER)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.target_controller")
-                        .withStyle(ChatFormatting.GOLD));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
                         PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
                 case CURRENT -> tooltip.add(Component.translatable("power_radar.electrical.current",
@@ -1354,7 +1354,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     @Override

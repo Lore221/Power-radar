@@ -37,7 +37,11 @@ public final class PowerRadarCeeConstants {
         return Math.min(activePanelCount, maxRadarPanels());
     }
 
-    public static double radarConstantPowerWatts(RadarStructureType structureType, int phasedArrayPanelCount, int overviewModuleCount) {
+    public static double radarNominalPowerWatts(
+            RadarStructureType structureType,
+            int phasedArrayPanelCount,
+            int overviewModuleCount
+    ) {
         int panels = clampedRadarPanelCount(phasedArrayPanelCount);
         int overviewModules = Math.max(0, Math.min(overviewModuleCount, RadarModuleConstants.maxOverviewModules()));
         if (structureType == RadarStructureType.OVERVIEW) {
@@ -50,11 +54,11 @@ public final class PowerRadarCeeConstants {
                 + PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts() * panels;
     }
 
-    public static double radarConstantPowerWatts(int activePanelCount) {
-        return radarConstantPowerWatts(RadarStructureType.PHASED_ARRAY, activePanelCount, 0);
+    public static double radarNominalPowerWatts(int activePanelCount) {
+        return radarNominalPowerWatts(RadarStructureType.PHASED_ARRAY, activePanelCount, 0);
     }
 
-    public static double monitorConstantPowerWatts(int activeDisplayCount) {
+    public static double monitorNominalPowerWatts(int activeDisplayCount) {
         return activeDisplayCount <= 0 ? 0.0 : PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts()
                 + PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts() * activeDisplayCount;
     }
@@ -104,12 +108,20 @@ public final class PowerRadarCeeConstants {
         return clamp(0.5 + 0.5 * fraction, 0.5, 1.0);
     }
 
-    public static double constantPowerResistanceOhms(double measuredVoltageVolts, double nominalVoltageVolts, double powerWatts) {
-        if (!Double.isFinite(powerWatts) || powerWatts <= 0.0) {
+    /**
+     * Переводит паспортные напряжение и мощность в сопротивление, которое остаётся постоянным при работе.
+     * Фактические ток и мощность затем определяет CEE по закону Ома.
+     */
+    public static double nominalResistanceOhms(double nominalVoltageVolts, double nominalPowerWatts) {
+        if (!Double.isFinite(nominalPowerWatts) || nominalPowerWatts <= 0.0) {
             return PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         }
-        double voltage = sanitizeCalculationVoltage(measuredVoltageVolts, nominalVoltageVolts);
-        return Math.max(PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS, voltage * voltage / powerWatts);
+        double voltage = Double.isFinite(nominalVoltageVolts) && nominalVoltageVolts > 0.0
+                ? nominalVoltageVolts
+                : 1.0D;
+        return Math.max(
+                PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS,
+                voltage * voltage / nominalPowerWatts);
     }
 
     public static double parallelResistanceOhms(double firstOhms, double secondOhms) {
@@ -143,14 +155,6 @@ public final class PowerRadarCeeConstants {
             return PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         }
         return Math.max(PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS, resistanceOhms);
-    }
-
-    private static double sanitizeCalculationVoltage(double measuredVoltageVolts, double nominalVoltageVolts) {
-        double fallback = Double.isFinite(nominalVoltageVolts) && nominalVoltageVolts > 0.0 ? nominalVoltageVolts : 1.0;
-        if (!Double.isFinite(measuredVoltageVolts) || measuredVoltageVolts <= 1.0) {
-            return fallback;
-        }
-        return clamp(Math.abs(measuredVoltageVolts), 1.0, Math.max(fallback * 4.0, 1.0));
     }
 
     private static double clamp(double value, double min, double max) {

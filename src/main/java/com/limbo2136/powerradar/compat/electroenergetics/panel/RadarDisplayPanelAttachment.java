@@ -5,7 +5,7 @@ import com.george_vi.electroenergetics.content.electrical_panel.attachments.Pane
 import com.george_vi.electroenergetics.foundation.nodes.InWorldNode;
 import com.george_vi.electroenergetics.simulation.SimulationResults;
 import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -36,8 +36,8 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
     }
 
     @Override
-    protected double powerDrawWatts() {
-        return PowerRadarCeeConstants.monitorConstantPowerWatts(1);
+    protected double nominalPowerWatts() {
+        return PowerRadarElectricalParameters.Ratings.panelRadarDisplayPowerWatts();
     }
 
     @Override

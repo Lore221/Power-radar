@@ -8,11 +8,8 @@ public final class PowerRadarCeeLoadMath {
     private PowerRadarCeeLoadMath() {
     }
 
-    public static double constantPowerResistance(double voltageVolts, double powerWatts) {
-        return PowerRadarCeeConstants.constantPowerResistanceOhms(
-                voltageVolts,
-                PowerRadarElectricalParameters.Voltages.monitor().nominal(),
-                powerWatts);
+    public static double nominalResistance(double nominalVoltageVolts, double nominalPowerWatts) {
+        return PowerRadarCeeConstants.nominalResistanceOhms(nominalVoltageVolts, nominalPowerWatts);
     }
 
     public static PowerRadarCeeState resolveState(
@@ -29,9 +26,12 @@ public final class PowerRadarCeeLoadMath {
             return PowerRadarCeeState.REVERSE_POLARITY;
         }
         if (previousState == PowerRadarCeeState.OVERVOLTAGE) {
-            return voltage <= voltages.overvoltageRecovery()
+            if (voltage > voltages.overvoltageRecovery()) {
+                return PowerRadarCeeState.OVERVOLTAGE;
+            }
+            return voltage >= voltages.restart()
                     ? PowerRadarCeeState.POWERED
-                    : PowerRadarCeeState.OVERVOLTAGE;
+                    : PowerRadarCeeState.UNDERVOLTAGE;
         }
         if (voltage > voltages.maximum()) {
             return PowerRadarCeeState.OVERVOLTAGE;

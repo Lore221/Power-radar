@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.compat.electroenergetics;
 
 import com.george_vi.electroenergetics.devices.device.DevicesSavedData;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
+import com.george_vi.electroenergetics.simulation.BridgeCollector;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -18,6 +19,13 @@ public class LogicDockCeeDevice extends PowerRadarCeeLoadDevice {
         setLoad(true, PowerRadarElectricalParameters.Ratings.logicDockPowerWatts(),
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
                 PowerRadarElectricalParameters.Voltages.monitor().nominal());
+    }
+
+    @Override
+    public void preTick(BridgeCollector bridges) {
+        // Повторное применение дешёво и подхватывает новый конфиг у уже установленного блока.
+        configureLoad();
+        super.preTick(bridges);
     }
 
     @Override

@@ -29,7 +29,7 @@ public class RadarControllerCeeDevice extends PowerRadarCeeLoadDevice {
         }
         setLoad(
                 true,
-                PowerRadarCeeConstants.radarConstantPowerWatts(structureType, phasedArrayPanelCount, overviewModuleCount),
+                PowerRadarCeeConstants.radarNominalPowerWatts(structureType, phasedArrayPanelCount, overviewModuleCount),
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
                 PowerRadarElectricalParameters.Voltages.radar().nominal());
     }

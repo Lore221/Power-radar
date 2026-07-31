@@ -9,7 +9,7 @@ public final class PowerRadarCeeFormatter {
 
     public static String voltage(double volts) {
         double safeVolts = safeSigned(volts);
-        return decimal(safeVolts, Math.abs(safeVolts) >= 10.0 ? 0 : 1) + " V";
+        return decimal(safeVolts, Math.abs(safeVolts) >= 10.0 ? 0 : 1) + "V";
     }
 
     public static Component voltageComponent(double volts) {
@@ -18,7 +18,7 @@ public final class PowerRadarCeeFormatter {
     }
 
     public static String current(double amps) {
-        return decimal(safe(amps), safe(amps) >= 10.0 ? 1 : 2) + " A";
+        return decimal(safe(amps), safe(amps) >= 10.0 ? 1 : 2) + "A";
     }
 
     public static Component currentComponent(double amps) {
@@ -29,9 +29,9 @@ public final class PowerRadarCeeFormatter {
     public static String power(double watts) {
         double safeWatts = safe(watts);
         if (safeWatts >= 1000.0) {
-            return decimal(safeWatts / 1000.0, 2) + " kW";
+            return decimal(safeWatts / 1000.0, 2) + "kW";
         }
-        return decimal(safeWatts, safeWatts >= 10.0 ? 0 : 1) + " W";
+        return decimal(safeWatts, safeWatts >= 10.0 ? 0 : 1) + "W";
     }
 
     public static Component powerComponent(double watts) {
@@ -44,7 +44,7 @@ public final class PowerRadarCeeFormatter {
 
     public static String resistance(double ohms) {
         double safeOhms = safe(ohms);
-        return decimal(safeOhms, safeOhms >= 10.0 ? 2 : 1) + " Ohm";
+        return decimal(safeOhms, safeOhms >= 10.0 ? 2 : 1) + "Ω";
     }
 
     public static Component resistanceComponent(double ohms) {
@@ -63,7 +63,7 @@ public final class PowerRadarCeeFormatter {
     }
 
     public static String voltageRange(double minVolts, double maxVolts) {
-        return decimal(safe(minVolts), 0) + "-" + decimal(safe(maxVolts), 0) + " V";
+        return decimal(safe(minVolts), 0) + "-" + decimal(safe(maxVolts), 0) + "V";
     }
 
     private static double safe(double value) {

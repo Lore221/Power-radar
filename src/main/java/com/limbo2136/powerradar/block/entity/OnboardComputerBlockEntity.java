@@ -565,14 +565,14 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.ONBOARD_COMPUTER)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.onboard_computer")
-                        .withStyle(ChatFormatting.GOLD));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
                         Component.translatable(electricalState().translationKey())));
                 case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
@@ -582,7 +582,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     @Override

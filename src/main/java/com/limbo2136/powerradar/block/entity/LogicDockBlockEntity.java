@@ -7,13 +7,14 @@ import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
+import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -29,7 +30,7 @@ import net.minecraft.world.level.block.state.BlockState;
 public class LogicDockBlockEntity extends BlockEntity
         implements IHaveGoggleInformation, LogicDockPolicySource {
     private final LogicDockCardInventory cards = new LogicDockCardInventory();
-    private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
+    private PowerRadarCeeSnapshot electrical = PowerRadarCeeSnapshot.EMPTY;
 
     public LogicDockBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.LOGIC_DOCK.get(), pos, state);
@@ -55,14 +56,26 @@ public class LogicDockBlockEntity extends BlockEntity
     }
 
     public void applyElectricalSnapshot(PowerRadarCeeSnapshot snapshot) {
-        if (this.electricalState != snapshot.electricalState()) {
-            this.electricalState = snapshot.electricalState();
+        PowerRadarCeeSnapshot previous = this.electrical;
+        this.electrical = snapshot == null ? PowerRadarCeeSnapshot.EMPTY : snapshot;
+        boolean stateChanged = previous.electricalState() != this.electrical.electricalState();
+        boolean displayChanged = stateChanged
+                || Math.abs(previous.voltageVolts() - this.electrical.voltageVolts()) > 0.01D
+                || Math.abs(previous.currentAmps() - this.electrical.currentAmps()) > 0.001D
+                || Math.abs(previous.powerWatts() - this.electrical.powerWatts()) > 0.1D;
+        if (stateChanged) {
             invalidateNetworkPolicyCache();
+        }
+        if (displayChanged) {
+            setChanged();
+            if (this.level instanceof ServerLevel serverLevel) {
+                serverLevel.sendBlockUpdated(this.worldPosition, getBlockState(), getBlockState(), 2);
+            }
         }
     }
 
     public boolean isElectricallyOperational() {
-        return this.electricalState == PowerRadarCeeState.POWERED;
+        return this.electrical.electricalState() == PowerRadarCeeState.POWERED;
     }
 
     public boolean insertCard(RadarFilterCardItem.Kind kind, ItemStack held, Player player) {
@@ -131,21 +144,33 @@ public class LogicDockBlockEntity extends BlockEntity
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.LOGIC_DOCK)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.logic_dock")
-                        .withStyle(ChatFormatting.GOLD));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
+                case ELECTRICAL_STATE -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.state",
+                        Component.translatable(this.electrical.electricalState().translationKey())));
+                case VOLTAGE -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.voltage",
+                        PowerRadarCeeFormatter.voltageComponent(this.electrical.voltageVolts())));
+                case CURRENT -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.current",
+                        PowerRadarCeeFormatter.currentComponent(this.electrical.currentAmps())));
+                case POWER -> tooltip.add(Component.translatable(
+                        "power_radar.electrical.power",
+                        PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts())));
                 case CARD_SLOTS -> {
                     for (int i = 0; i < LogicDockCardInventory.SLOT_COUNT; i++) {
                         ItemStack card = this.cards.card(i);
                         tooltip.add(Component.translatable("goggles.power_radar.logic_dock.slot." + i,
                                 card.isEmpty()
                                         ? Component.translatable("goggles.power_radar.logic_dock.empty")
-                                        : card.getHoverName()));
+                                        : Component.translatable("goggles.power_radar.logic_dock.inserted")));
                     }
                 }
                 case NETWORK_STATUS -> {
@@ -156,7 +181,7 @@ public class LogicDockBlockEntity extends BlockEntity
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     // Вычисляет сетевой статус только если соответствующая строка включена в раскладке очков.
@@ -183,12 +208,33 @@ public class LogicDockBlockEntity extends BlockEntity
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         this.cards.write(tag, registries);
+        tag.putBoolean("ElectricalBridgeEnabled", this.electrical.bridgeEnabled());
+        tag.putString("ElectricalState", this.electrical.electricalState().name());
+        tag.putDouble("ElectricalVoltageVolts", this.electrical.voltageVolts());
+        tag.putDouble("ElectricalCurrentAmps", this.electrical.currentAmps());
+        tag.putDouble("ElectricalPowerWatts", this.electrical.powerWatts());
+        tag.putDouble("ElectricalResistanceOhms", this.electrical.resistanceOhms());
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         this.cards.read(tag, registries);
+        PowerRadarCeeState state;
+        try {
+            state = PowerRadarCeeState.valueOf(tag.getString("ElectricalState"));
+        } catch (IllegalArgumentException exception) {
+            state = PowerRadarCeeState.INVALID_STRUCTURE;
+        }
+        this.electrical = new PowerRadarCeeSnapshot(
+                tag.getBoolean("ElectricalBridgeEnabled"),
+                state,
+                finite(tag.getDouble("ElectricalVoltageVolts")),
+                Math.abs(finite(tag.getDouble("ElectricalCurrentAmps"))),
+                Math.max(0.0D, finite(tag.getDouble("ElectricalPowerWatts"))),
+                tag.contains("ElectricalResistanceOhms")
+                        ? tag.getDouble("ElectricalResistanceOhms")
+                        : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS);
     }
 
     @Override
@@ -219,5 +265,9 @@ public class LogicDockBlockEntity extends BlockEntity
                 && resolution.link().networkId() != null) {
             RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(resolution.link().networkId());
         }
+    }
+
+    private static double finite(double value) {
+        return Double.isFinite(value) ? value : 0.0D;
     }
 }

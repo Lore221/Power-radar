@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.registry;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
+import com.limbo2136.powerradar.item.PowerRadarDescriptionBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
@@ -69,8 +70,12 @@ public final class ModItems {
             "target_controller",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.TARGET_CONTROLLER.get(), new Item.Properties(),
                     Target.TARGET_CONTROLLER));
-    public static final DeferredItem<BlockItem> MECHANICAL_SIREN =
-            ITEMS.registerSimpleBlockItem(ModBlocks.MECHANICAL_SIREN);
+    public static final DeferredItem<BlockItem> MECHANICAL_SIREN = ITEMS.register(
+            "mechanical_siren",
+            () -> new PowerRadarDescriptionBlockItem(
+                    ModBlocks.MECHANICAL_SIREN.get(),
+                    new Item.Properties(),
+                    Target.MECHANICAL_SIREN));
     public static final DeferredItem<ShellAlarmBlockItem> SHELL_ALARM = ITEMS.register(
             "shell_alarm",
             () -> new ShellAlarmBlockItem(ModBlocks.SHELL_ALARM.get(), new Item.Properties()));

@@ -802,14 +802,14 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.SHELL_ALARM)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.shell_alarm")
-                        .withStyle(ChatFormatting.GRAY));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
                                 Component.translatable(this.electrical.electricalState().translationKey()))
                         .withStyle(ChatFormatting.DARK_GRAY));
@@ -830,9 +830,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                                 .withStyle(ChatFormatting.DARK_GRAY));
                     }
                 }
-                case SHELL_COUNT -> tooltip.add(Component.translatable(
-                                "goggles.power_radar.shell_alarm.shells", this.trackedShellCount)
-                        .withStyle(ChatFormatting.DARK_GRAY));
                 case ALARM_STATE -> tooltip.add(Component.translatable(this.alarmActive
                                 ? "goggles.power_radar.shell_alarm.danger"
                                 : "goggles.power_radar.shell_alarm.clear")
@@ -840,7 +837,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     private record ThreatEvaluation(

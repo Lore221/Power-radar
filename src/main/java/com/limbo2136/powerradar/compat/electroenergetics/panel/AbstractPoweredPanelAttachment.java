@@ -33,12 +33,17 @@ public abstract class AbstractPoweredPanelAttachment extends PanelAttachment {
         if (this.nodes.length < 2) {
             return;
         }
-        this.resistanceOhms = PowerRadarCeeLoadMath.constantPowerResistance(
-                this.voltageVolts, powerDrawWatts());
+        this.resistanceOhms = PowerRadarCeeLoadMath.nominalResistance(
+                PowerRadarElectricalParameters.Voltages.monitor().nominal(),
+                nominalPowerWatts());
+        // Отключённый модуль измеряет напряжение через высокое сопротивление, не нагружая щиток.
+        double connectedResistance = this.electricalState == PowerRadarCeeState.POWERED
+                ? this.resistanceOhms
+                : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
         bridges.bridge(
                 this.nodes[PowerRadarCeeTerminalPair.POSITIVE],
                 this.nodes[PowerRadarCeeTerminalPair.NEGATIVE],
-                ElectricalProperties.resistor(this.resistanceOhms));
+                ElectricalProperties.resistor(connectedResistance));
     }
 
     @Override
@@ -49,19 +54,20 @@ public abstract class AbstractPoweredPanelAttachment extends PanelAttachment {
         double previousVoltage = this.voltageVolts;
         PowerRadarCeeState previousState = this.electricalState;
         this.voltageVolts = finite(results.getVoltageAt(this.nodes[0], this.nodes[1]));
-        this.currentAmps = Math.abs(finite(results.getCurrentThrough(this.nodes[0], this.nodes[1])));
+        double measuredCurrent = Math.abs(finite(results.getCurrentThrough(this.nodes[0], this.nodes[1])));
         this.electricalState = PowerRadarCeeLoadMath.resolveState(
                 true,
                 previousState,
                 this.voltageVolts,
                 PowerRadarElectricalParameters.Voltages.monitor());
+        this.currentAmps = this.electricalState == PowerRadarCeeState.POWERED ? measuredCurrent : 0.0D;
         afterElectricalTick(results);
         if (previousState != this.electricalState || Math.abs(previousVoltage - this.voltageVolts) >= 0.1D) {
             sendData();
         }
     }
 
-    protected abstract double powerDrawWatts();
+    protected abstract double nominalPowerWatts();
 
     protected void afterElectricalTick(SimulationResults results) {
     }

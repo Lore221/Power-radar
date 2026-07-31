@@ -5,9 +5,9 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.PowerRadarServerConfig;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -346,11 +346,6 @@ public class InterceptionFuzeItem extends FuzeItem {
             TooltipFlag flag
     ) {
         super.appendHoverText(stack, context, tooltip, flag);
-        tooltip.add(Component.translatable("power_radar.tooltip.interception_fuze.range",
-                        Math.round(DETECTION_RANGE_BLOCKS))
-                .withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.translatable("power_radar.tooltip.interception_fuze.cone",
-                        Math.round(HALF_CONE_ANGLE_DEGREES * 2.0))
-                .withStyle(ChatFormatting.GRAY));
+        PowerRadarElectricalBlockItem.appendConfiguredText(Target.INTERCEPTION_FUZE, tooltip);
     }
 }

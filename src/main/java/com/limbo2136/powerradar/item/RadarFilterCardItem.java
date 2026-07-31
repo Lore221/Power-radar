@@ -5,17 +5,20 @@ import com.limbo2136.powerradar.network.TargetingCardOpenPayload;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.SableStructureName;
 import com.limbo2136.powerradar.registry.ModDataComponents;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -58,6 +61,17 @@ public class RadarFilterCardItem extends Item {
 
     public Kind kind() {
         return this.kind;
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, context, tooltip, flag);
+        Target target = switch (this.kind) {
+            case TARGETING -> Target.TARGETING_CARD;
+            case DISPLAY -> Target.DISPLAY_CARD;
+            case ALLOWLIST -> Target.ALLOWLIST_CARD;
+        };
+        PowerRadarElectricalBlockItem.appendConfiguredText(target, tooltip);
     }
 
     public static int filterMask(ItemStack stack, int fallback) {

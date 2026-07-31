@@ -740,36 +740,30 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.goggles(Target.RADAR_CONTROLLER)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
                 continue;
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller")
-                        .withStyle(ChatFormatting.GOLD));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case STATUS -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller.status",
                         Component.translatable(statusKey())));
                 case SCAN_MODE -> tooltip.add(Component.translatable("goggles.power_radar.radar_controller.scan_mode",
                         Component.translatable(scanModeKey())));
-                case CURRENT_RANGE -> tooltip.add(Component.translatable(
-                        "goggles.power_radar.radar_controller.range", this.currentRange));
                 case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
                         Component.translatable(this.electricalState.translationKey())));
                 case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
                         PowerRadarCeeFormatter.voltageComponent(electricalVoltageVolts())));
                 case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
                         PowerRadarCeeFormatter.powerComponent(electricalPowerWatts())));
-                case PANEL_COUNT -> tooltip.add(Component.translatable(
-                        "power_radar.electrical.panel_count", this.validPanelCount));
-                case BASIC_PANEL_COUNT -> tooltip.add(Component.translatable(
-                        "power_radar.electrical.basic_panel_count", this.basicPanelCount));
                 case EFFECTIVE_RANGE -> tooltip.add(Component.translatable(
                         "power_radar.electrical.effective_range", this.effectiveScanRangeBlocks()));
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     private String statusKey() {
@@ -894,10 +888,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         double voltage = safeSignedElectrical(snapshot.voltageVolts());
         double current = safeElectrical(snapshot.currentAmps());
         double resistance = PowerRadarCeeConstants.sanitizeResistance(snapshot.resistanceOhms());
-        double snapshotPower = safeElectrical(snapshot.powerWatts());
-        double power = snapshotPower > 0.0
-                ? snapshotPower
-                : PowerRadarCeeConstants.powerWatts(voltage, resistance);
+        double power = safeElectrical(snapshot.powerWatts());
         this.cachedElectricalVoltageVolts = voltage;
         this.cachedElectricalCurrentAmps = current;
         this.cachedElectricalResistanceOhms = resistance;

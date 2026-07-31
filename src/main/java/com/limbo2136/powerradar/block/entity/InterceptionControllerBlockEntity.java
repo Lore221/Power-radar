@@ -1552,6 +1552,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean isPlayerSneaking) {
+        int firstNewLine = tooltip.size();
         for (PowerRadarTooltipSettings.Line line
                 : PowerRadarTooltipSettings.goggles(Target.INTERCEPTION_CONTROLLER)) {
             if (PowerRadarTooltipSettings.appendText(tooltip, line)) {
@@ -1559,8 +1560,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             }
             PowerRadarTooltipSettings.GoggleField field = (PowerRadarTooltipSettings.GoggleField) line.field();
             switch (field) {
-                case TITLE -> tooltip.add(Component.translatable("goggles.power_radar.interception_controller")
-                        .withStyle(ChatFormatting.GOLD));
+                case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
                         PowerRadarCeeFormatter.voltageComponent(this.powerVoltageVolts)));
                 case CURRENT -> tooltip.add(Component.translatable("power_radar.electrical.current",
@@ -1570,17 +1570,10 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 case STATUS -> tooltip.add(Component.translatable(
                         "goggles.power_radar.interception_controller.status",
                         Component.translatable(this.status.translationKey)));
-                case INTERCEPT_TIME -> {
-                    if (this.assignedThreatUuid != null) {
-                        tooltip.add(Component.translatable(
-                                "goggles.power_radar.interception_controller.intercept_time",
-                                Math.round(this.interceptTicks)));
-                    }
-                }
                 default -> { }
             }
         }
-        return true;
+        return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     @Override

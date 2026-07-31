@@ -59,6 +59,8 @@ class PowerRadarElectricalParametersTest {
                 PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts());
         assertEquals(defaultDouble("ratings.radar_display_power_watts"),
                 PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts());
+        assertEquals(defaultDouble("ratings.panel_radar_display_power_watts"),
+                PowerRadarElectricalParameters.Ratings.panelRadarDisplayPowerWatts());
         assertEquals(defaultDouble("ratings.panel_radar_link_power_watts"),
                 PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts());
         assertEquals(defaultDouble("ratings.logic_dock_power_watts"),
@@ -90,6 +92,16 @@ class PowerRadarElectricalParametersTest {
         }
     }
 
+    @Test
+    void nominalRatingCreatesFixedResistanceInsteadOfConstantPower() {
+        double resistance = PowerRadarCeeConstants.nominalResistanceOhms(220.0D, 250.0D);
+
+        assertEquals(193.6D, resistance, 0.000_001D);
+        assertEquals(250.0D, PowerRadarCeeConstants.powerWatts(220.0D, resistance), 0.000_001D);
+        assertEquals(62.5D, PowerRadarCeeConstants.powerWatts(110.0D, resistance), 0.000_001D);
+        assertEquals(0.568_181_818D, PowerRadarCeeConstants.currentAmps(110.0D, resistance), 0.000_001D);
+    }
+
     private static double defaultDouble(String path) {
         ModConfigSpec.ConfigValue<?> value = PowerRadarServerConfig.SPEC.getValues().get(path);
         assertTrue(value != null, () -> "Missing server config path: " + path);
@@ -119,6 +131,7 @@ class PowerRadarElectricalParametersTest {
                 PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts(),
                 PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts(),
+                PowerRadarElectricalParameters.Ratings.panelRadarDisplayPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.logicDockPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts(),

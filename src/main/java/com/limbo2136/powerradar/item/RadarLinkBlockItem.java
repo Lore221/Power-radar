@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarLinkReconcileResult;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModDataComponents;
+import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -98,11 +99,7 @@ public class RadarLinkBlockItem extends BlockItem {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        boolean tuned = stack.has(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
-        tooltip.add(Component.translatable(tuned
-                ? "tooltip.power_radar.radar_link.tuned"
-                : "tooltip.power_radar.radar_link.untuned")
-                .withStyle(tuned ? ChatFormatting.GOLD : ChatFormatting.GRAY));
+        PowerRadarElectricalBlockItem.appendConfiguredText(Target.RADAR_LINK, tooltip);
     }
 
     private static Component messageFor(boolean newNetwork, RadarLinkReconcileResult result) {

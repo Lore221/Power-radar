@@ -17,27 +17,28 @@ public final class PowerRadarElectricalParameters {
 
     // Базовые значения напряжения. Порядок: номинал, минимум, перезапуск, максимум, сброс перенапряжения.
     private static final LoadVoltageRange DEFAULT_RADAR_VOLTAGE =
-            new LoadVoltageRange(380.0D, 220.0D, 220.0D, 500.0D, 400.0D);
+            new LoadVoltageRange(380.0D, 120.0D, 140.0D, 400.0D, 390.0D);
     private static final double DEFAULT_RADAR_FULL_RANGE_VOLTAGE = 380.0D;
     private static final LoadVoltageRange DEFAULT_MONITOR_VOLTAGE =
-            new LoadVoltageRange(24.0D, 18.0D, 20.0D, 30.0D, 28.0D);
+            new LoadVoltageRange(220.0D, 180.0D, 200.0D, 250.0D, 240.0D);
     private static final LoadVoltageRange DEFAULT_SHELL_ALARM_VOLTAGE =
-            new LoadVoltageRange(220.0D, 170.0D, 170.0D, 380.0D, 340.0D);
+            new LoadVoltageRange(220.0D, 180.0D, 200.0D, 250.0D, 240.0D);
 
     // Контроллеры наведения являются резистивной нагрузкой; скорость растёт до fullSpeed.
     private static final DriveVoltageRange DEFAULT_TARGET_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(170.0D, 220.0D, 380.0D);
+            new DriveVoltageRange(200.0D, 380.0D, 400.0D);
     private static final DriveVoltageRange DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(170.0D, 220.0D, 380.0D);
+            new DriveVoltageRange(200.0D, 380.0D, 400.0D);
     private static final double DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS = 20.0D;
     private static final double DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = 20.0D;
 
-    // Постоянная потребляемая мощность отдельных блоков и модулей в ваттах.
+    // Номинальная мощность задаётся при номинальном напряжении и определяет постоянное сопротивление.
     private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
     private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
     private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
-    private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 500.0D;
-    private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 50.0D;
+    private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 250.0D;
+    private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 25.0D;
+    private static final double DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS = 50.0D;
     private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
     private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
     private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
@@ -72,6 +73,7 @@ public final class PowerRadarElectricalParameters {
     private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
     private static ModConfigSpec.DoubleValue monitorControllerPowerWatts;
     private static ModConfigSpec.DoubleValue radarDisplayPowerWatts;
+    private static ModConfigSpec.DoubleValue panelRadarDisplayPowerWatts;
     private static ModConfigSpec.DoubleValue panelRadarLinkPowerWatts;
     private static ModConfigSpec.DoubleValue logicDockPowerWatts;
     private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
@@ -93,7 +95,7 @@ public final class PowerRadarElectricalParameters {
 
         builder.comment("Power supply for radar controllers and their modules, in volts.").push("radar");
         radarNominalVoltage = voltage(builder, "nominal", DEFAULT_RADAR_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage used to calculate the constant-power load.");
+                "Nominal voltage at which the configured nominal power is consumed.");
         radarMinimumVoltage = voltage(builder, "minimum", DEFAULT_RADAR_VOLTAGE.minimum(), 0.0D,
                 "The radar shuts down below this voltage.");
         radarRestartVoltage = voltage(builder, "restart", DEFAULT_RADAR_VOLTAGE.restart(), 0.0D,
@@ -110,7 +112,7 @@ public final class PowerRadarElectricalParameters {
         builder.comment("Shared low-voltage supply for monitors, the Logic Dock, and OnBoard, in volts.")
                 .push("monitor");
         monitorNominalVoltage = voltage(builder, "nominal", DEFAULT_MONITOR_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage used to calculate the constant-power load.");
+                "Nominal voltage at which the configured nominal power is consumed.");
         monitorMinimumVoltage = voltage(builder, "minimum", DEFAULT_MONITOR_VOLTAGE.minimum(), 0.0D,
                 "The device shuts down below this voltage.");
         monitorRestartVoltage = voltage(builder, "restart", DEFAULT_MONITOR_VOLTAGE.restart(), 0.0D,
@@ -124,7 +126,7 @@ public final class PowerRadarElectricalParameters {
 
         builder.comment("Shell Alarm power supply, in volts.").push("shell_alarm");
         shellAlarmNominalVoltage = voltage(builder, "nominal", DEFAULT_SHELL_ALARM_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage used to calculate the constant-power load.");
+                "Nominal voltage at which the configured nominal power is consumed.");
         shellAlarmMinimumVoltage = voltage(builder, "minimum", DEFAULT_SHELL_ALARM_VOLTAGE.minimum(), 0.0D,
                 "The alarm shuts down below this voltage.");
         shellAlarmRestartVoltage = voltage(builder, "restart", DEFAULT_SHELL_ALARM_VOLTAGE.restart(), 0.0D,
@@ -182,27 +184,31 @@ public final class PowerRadarElectricalParameters {
         builder.pop();
     }
 
-    // Для постоянной нагрузки CEE пересчитывает эквивалентное сопротивление по текущему напряжению.
+    // Эти мощности относятся к номинальному напряжению; CEE получает рассчитанное из них постоянное сопротивление.
     private static void definePowerRatings(ModConfigSpec.Builder builder) {
-        builder.comment("Nominal constant power draw of blocks, in watts.").push("ratings");
+        builder.comment("Power consumed at the device's nominal voltage, in watts.").push("ratings");
         radarControllerPowerWatts = power(builder, "radar_controller_power_watts",
-                DEFAULT_RADAR_CONTROLLER_POWER_WATTS, "Base power draw of one radar controller.");
+                DEFAULT_RADAR_CONTROLLER_POWER_WATTS, "Nominal base power of one radar controller.");
         phasedArrayPanelPowerWatts = power(builder, "phased_array_panel_power_watts",
-                DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS, "Additional power draw of each phased-array panel.");
+                DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS, "Nominal power added by each phased-array panel.");
         overviewModulePowerWatts = power(builder, "overview_module_power_watts",
-                DEFAULT_OVERVIEW_MODULE_POWER_WATTS, "Additional power draw of each overview module.");
+                DEFAULT_OVERVIEW_MODULE_POWER_WATTS, "Nominal power added by each overview module.");
         monitorControllerPowerWatts = power(builder, "monitor_controller_power_watts",
-                DEFAULT_MONITOR_CONTROLLER_POWER_WATTS, "Base power draw of the monitor controller.");
+                DEFAULT_MONITOR_CONTROLLER_POWER_WATTS, "Nominal base power of the monitor controller.");
         radarDisplayPowerWatts = power(builder, "radar_display_power_watts",
-                DEFAULT_RADAR_DISPLAY_POWER_WATTS, "Additional power draw of each radar display block.");
+                DEFAULT_RADAR_DISPLAY_POWER_WATTS, "Nominal power added by each display block in a large monitor.");
+        panelRadarDisplayPowerWatts = power(builder, "panel_radar_display_power_watts",
+                DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS,
+                "Nominal power of a standalone Radar Display installed in an electrical panel.");
         panelRadarLinkPowerWatts = power(builder, "panel_radar_link_power_watts",
-                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS, "Power draw of a Radar Link installed in an electrical panel.");
+                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS,
+                "Nominal power of a Radar Link installed in an electrical panel.");
         logicDockPowerWatts = power(builder, "logic_dock_power_watts",
-                DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock power draw.");
+                DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock nominal power.");
         onboardComputerPowerWatts = power(builder, "onboard_computer_power_watts",
-                DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer power draw.");
+                DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer nominal power.");
         shellAlarmPowerWatts = power(builder, "shell_alarm_power_watts",
-                DEFAULT_SHELL_ALARM_POWER_WATTS, "Shell Alarm power draw.");
+                DEFAULT_SHELL_ALARM_POWER_WATTS, "Shell Alarm nominal power.");
         builder.pop();
     }
 
@@ -308,6 +314,11 @@ public final class PowerRadarElectricalParameters {
         public static double radarDisplayPowerWatts() {
             ensureConfigDefined();
             return value(radarDisplayPowerWatts);
+        }
+
+        public static double panelRadarDisplayPowerWatts() {
+            ensureConfigDefined();
+            return value(panelRadarDisplayPowerWatts);
         }
 
         public static double panelRadarLinkPowerWatts() {
