@@ -129,7 +129,6 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.STATUS),
                     field(GoggleField.SCAN_MODE),
                     field(GoggleField.CURRENT_RANGE),
-                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.PANEL_COUNT),
@@ -137,7 +136,6 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.EFFECTIVE_RANGE))),
             Map.entry(Target.MONITOR_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
-                   
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.DISPLAY_COUNT))),
@@ -149,28 +147,23 @@ public final class PowerRadarTooltipSettings {
                     field(GoggleField.NETWORK_STATUS))),
             Map.entry(Target.ONBOARD_COMPUTER, List.of(
                     field(GoggleField.TITLE),
-                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER))),
             Map.entry(Target.TARGET_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
                     field(GoggleField.VOLTAGE),
-                    
                     field(GoggleField.POWER),
                     field(GoggleField.STATUS))),
             Map.entry(Target.INTERCEPTION_CONTROLLER, List.of(
                     field(GoggleField.TITLE),
                     field(GoggleField.VOLTAGE),
-                    
                     field(GoggleField.POWER),
                     field(GoggleField.STATUS))),
             Map.entry(Target.SHELL_ALARM, List.of(
                     field(GoggleField.TITLE),
-                    
                     field(GoggleField.VOLTAGE),
                     field(GoggleField.POWER),
                     field(GoggleField.PROTECTION_ZONE),
-                    
                     field(GoggleField.ALARM_STATE)))
     );
 
