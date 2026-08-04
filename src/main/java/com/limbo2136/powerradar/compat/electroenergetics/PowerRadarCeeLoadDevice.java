@@ -137,7 +137,7 @@ public abstract class PowerRadarCeeLoadDevice extends SimpleElectricalDevice {
 
     private PowerRadarCeeState resolveElectricalState(double voltage) {
         return PowerRadarCeeLoadMath.resolveState(
-                this.bridgeEnabled, this.electricalState, voltage, voltageRange());
+                this.bridgeEnabled, voltage, voltageRange());
     }
 
     private double calculateResistanceOhms() {

@@ -1,19 +1,34 @@
 {
-  "type": "minecraft:crafting_shaped",
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": true,
   "pattern": [
-    "RBR",
-    "BCB",
-    "RBR"
+    "A   A",
+    "A B A",
+    "AACAA",
+    "ADEDA",
+    "AFGFA"
   ],
   "key": {
-    "R": {
-      "item": "minecraft:redstone"
+    "A": {
+      "tag": "c:plates/brass"
     },
     "B": {
-      "item": "minecraft:copper_ingot"
+      "tag": "c:plates/gold"
     },
     "C": {
-      "item": "power_radar:radar_link"
+      "item": "create:precision_mechanism"
+    },
+    "D": {
+      "tag": "electroenergetics:electric_motors"
+    },
+    "E": {
+      "item": "create:electron_tube"
+    },
+    "F": {
+      "item": "electroenergetics:connector"
+    },
+    "G": {
+      "item": "electroenergetics:transformer"
     }
   },
   "result": {

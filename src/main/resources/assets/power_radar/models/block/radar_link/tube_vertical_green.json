@@ -1,0 +1,87 @@
+{
+  "ambientocclusion": false,
+  "texture_size": [
+    48,
+    48
+  ],
+  "textures": {
+    "0": "power_radar:block/radar_link"
+  },
+  "elements": [
+    {
+      "from": [
+        8.5,
+        6,
+        2.5
+      ],
+      "to": [
+        13.5,
+        11,
+        7.5
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "east": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "south": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "west": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "up": {
+          "uv": [
+            8.33333,
+            6,
+            6.66667,
+            4.33333
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "down": {
+          "uv": [
+            8.33333,
+            7.66667,
+            6.66667,
+            9.33333
+          ],
+          "texture": "#0",
+          "shade": false
+        }
+      }
+    }
+  ]
+}

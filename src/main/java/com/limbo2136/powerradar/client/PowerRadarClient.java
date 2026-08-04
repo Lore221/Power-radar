@@ -66,6 +66,9 @@ public final class PowerRadarClient {
     @SubscribeEvent
     public static void registerPonder(FMLClientSetupEvent event) {
         PonderIndex.addPlugin(new PowerRadarPonderPlugin());
-        event.enqueueWork(RadarCompassItemProperties::register);
+        event.enqueueWork(() -> {
+            RadarCompassItemProperties.register();
+            IncompleteOverviewModuleItemProperties.register();
+        });
     }
 }

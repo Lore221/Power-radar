@@ -815,7 +815,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         PowerRadarElectricalParameters.DriveVoltageRange voltages =
                 PowerRadarElectricalParameters.Voltages.targetController();
         double denominator = Math.max(0.001,
-                voltages.fullSpeed() - voltages.minimum());
+                voltages.nominal() - voltages.minimum());
         double fraction = clamp((voltage - voltages.minimum()) / denominator, 0.0, 1.0);
         double rpm = PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM
                 + (PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_RPM - PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM) * fraction;

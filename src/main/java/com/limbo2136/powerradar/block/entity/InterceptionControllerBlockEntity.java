@@ -1369,7 +1369,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         double fraction = clamp(
                 (voltage - voltages.minimum())
                         / Math.max(PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS,
-                        voltages.fullSpeed() - voltages.minimum()),
+                        voltages.nominal() - voltages.minimum()),
                 0.0, 1.0);
         double rpm = PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_RPM
                 + (PowerRadarCeeConstants.TARGET_CONTROLLER_MAX_RPM

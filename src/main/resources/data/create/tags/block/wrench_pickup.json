@@ -1,6 +1,19 @@
 {
   "replace": false,
   "values": [
-    "power_radar:radar_controller"
+    "power_radar:radar_controller",
+    "power_radar:air_radar_controller",
+    "power_radar:surf_radar_controller",
+    "power_radar:radar_panel",
+    "power_radar:overview_module",
+    "power_radar:logic_dock",
+    "power_radar:onboard_computer",
+    "power_radar:radar_monitor_controller",
+    "power_radar:radar_display",
+    "power_radar:radar_link",
+    "power_radar:target_controller",
+    "power_radar:mechanical_siren",
+    "power_radar:shell_alarm",
+    "power_radar:interception_controller"
   ]
 }

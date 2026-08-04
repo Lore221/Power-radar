@@ -1,0 +1,38 @@
+{
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": true,
+  "pattern": [
+    " ABA ",
+    "ABGBA",
+    "ADEDA",
+    "AFCFA"
+  ],
+  "key": {
+    "A": {
+        "tag": "c:ingots/steel"
+    },
+    "B": {
+        "tag": "c:plates/copper"
+    },
+    "C": {
+        "item": "electroenergetics:transformer_core"
+    },
+    "D": {
+        "item": "create:electron_tube"
+    },
+    "E": {
+        "item": "electroenergetics:high_voltage_capacitor"
+    },
+    "F": {
+        "item": "electroenergetics:connector"
+    },
+    "G": {
+        "item": "electroenergetics:magnet"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_controller",
+    "count": 1
+  },
+  "show_notification": false
+}

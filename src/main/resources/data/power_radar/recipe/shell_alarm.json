@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "ACA",
-    "AEA",
+    "FEF",
     "BDB"
   ],
   "key": {
@@ -16,12 +16,14 @@
       "item": "power_radar:radar_display"
     },
     "D": {
-      "item": "power_radar:radar_link"
+      "item": "electroenergetics:transformer"
     },
     "E": {
       "item": "create:electron_tube"
+    },
+    "F": {
+      "item": "create:transmitter"
     }
-    
   },
   "result": {
     "id": "power_radar:shell_alarm",

@@ -33,8 +33,9 @@ public abstract class AbstractPoweredPanelAttachment extends PanelAttachment {
         if (this.nodes.length < 2) {
             return;
         }
+        PowerRadarElectricalParameters.LoadVoltageRange voltages = voltageRange();
         this.resistanceOhms = PowerRadarCeeLoadMath.nominalResistance(
-                PowerRadarElectricalParameters.Voltages.monitor().nominal(),
+                voltages.nominal(),
                 nominalPowerWatts());
         // Отключённый модуль измеряет напряжение через высокое сопротивление, не нагружая щиток.
         double connectedResistance = this.electricalState == PowerRadarCeeState.POWERED
@@ -57,9 +58,8 @@ public abstract class AbstractPoweredPanelAttachment extends PanelAttachment {
         double measuredCurrent = Math.abs(finite(results.getCurrentThrough(this.nodes[0], this.nodes[1])));
         this.electricalState = PowerRadarCeeLoadMath.resolveState(
                 true,
-                previousState,
                 this.voltageVolts,
-                PowerRadarElectricalParameters.Voltages.monitor());
+                voltageRange());
         this.currentAmps = this.electricalState == PowerRadarCeeState.POWERED ? measuredCurrent : 0.0D;
         afterElectricalTick(results);
         if (previousState != this.electricalState || Math.abs(previousVoltage - this.voltageVolts) >= 0.1D) {
@@ -68,6 +68,8 @@ public abstract class AbstractPoweredPanelAttachment extends PanelAttachment {
     }
 
     protected abstract double nominalPowerWatts();
+
+    protected abstract PowerRadarElectricalParameters.LoadVoltageRange voltageRange();
 
     protected void afterElectricalTick(SimulationResults results) {
     }

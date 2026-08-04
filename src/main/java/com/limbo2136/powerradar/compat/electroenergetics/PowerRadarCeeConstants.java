@@ -99,12 +99,12 @@ public final class PowerRadarCeeConstants {
         if (!Double.isFinite(voltageVolts) || voltageVolts < voltages.minimum() || voltageVolts > voltages.maximum()) {
             return 0.0;
         }
-        if (voltageVolts >= PowerRadarElectricalParameters.Voltages.radarFullRange()) {
+        if (voltageVolts >= voltages.nominal()) {
             return 1.0;
         }
         double fraction = (voltageVolts - voltages.minimum()) / Math.max(
                 PowerRadarElectricalParameters.MIN_SAFE_RESISTANCE_OHMS,
-                PowerRadarElectricalParameters.Voltages.radarFullRange() - voltages.minimum());
+                voltages.nominal() - voltages.minimum());
         return clamp(0.5 + 0.5 * fraction, 0.5, 1.0);
     }
 

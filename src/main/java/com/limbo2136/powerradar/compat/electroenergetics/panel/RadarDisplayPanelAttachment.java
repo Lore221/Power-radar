@@ -41,6 +41,11 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
     }
 
     @Override
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.panelRadarDisplay();
+    }
+
+    @Override
     public void onInserted(ItemStack stack, Player player, InteractionHand hand, BlockHitResult hitResult) {
         retainBottomTerminalPair();
     }

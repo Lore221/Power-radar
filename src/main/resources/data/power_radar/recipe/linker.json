@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "A  ",
+    "BCB"
+  ],
+  "key": {
+    "A": {
+      "item": "create:transmitter"
+    },
+    "B": {
+      "item": "create:andesite_alloy"
+    },
+    "C": {
+      "item": "electroenergetics:momentary_switch"
+    }
+  },
+  "result": {
+    "id": "power_radar:linker",
+    "count": 1
+  }
+}

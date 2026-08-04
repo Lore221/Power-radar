@@ -1,0 +1,38 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:metal_girder"
+  },
+  "transitional_item": {
+    "id": "power_radar:incomplete_overview_module"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        { "item": "power_radar:incomplete_overview_module"},
+        { "item": "power_radar:radar_panel"}
+      ],
+      "results": [
+        { "id": "power_radar:incomplete_overview_module"}
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        { "item": "power_radar:incomplete_overview_module"},
+        { "item": "power_radar:radar_panel"}
+      ],
+      "results": [
+        { "id": "power_radar:incomplete_overview_module"}
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "power_radar:overview_module",
+      "chance": 1.0
+    }
+  ],
+  "loops": 3
+}

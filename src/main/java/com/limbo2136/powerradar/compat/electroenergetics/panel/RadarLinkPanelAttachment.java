@@ -37,6 +37,11 @@ public final class RadarLinkPanelAttachment extends AbstractPoweredPanelAttachme
         return PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts();
     }
 
+    @Override
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.panelRadarLink();
+    }
+
     @Nullable
     public UUID networkId() {
         return this.networkId;

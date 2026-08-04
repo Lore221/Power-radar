@@ -1,0 +1,37 @@
+{
+  "parent": "block/block",
+  "loader": "neoforge:obj",
+  "render_type": "minecraft:translucent",
+  "flip_v": true,
+  "model": "power_radar:models/item/incomplete/incomplete_1.obj",
+  "textures": {
+    "0": "power_radar:block/overview_module",
+    "particle": "power_radar:block/overview_module"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "power_radar:overview_assembly_stage": 2.0
+      },
+      "model": "power_radar:item/incomplete/incomplete_2"
+    },
+    {
+      "predicate": {
+        "power_radar:overview_assembly_stage": 3.0
+      },
+      "model": "power_radar:item/incomplete/incomplete_3"
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation": [30, 225, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.5, 0.5, 0.5]
+    },
+    "fixed": {
+      "rotation": [90, 0, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.5, 0.5, 0.5]
+    }
+  }
+}

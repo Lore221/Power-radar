@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.compat.electroenergetics;
 
 /**
  * Общая математика низковольтных нагрузок. Ею пользуются и самостоятельные CEE-устройства,
- * и вложения электрического щитка, поэтому пороги и гистерезис не расходятся.
+ * и вложения электрического щитка, поэтому рабочие пороги не расходятся.
  */
 public final class PowerRadarCeeLoadMath {
     private PowerRadarCeeLoadMath() {
@@ -14,7 +14,6 @@ public final class PowerRadarCeeLoadMath {
 
     public static PowerRadarCeeState resolveState(
             boolean enabled,
-            PowerRadarCeeState previousState,
             double voltageVolts,
             PowerRadarElectricalParameters.LoadVoltageRange voltages
     ) {
@@ -25,22 +24,8 @@ public final class PowerRadarCeeLoadMath {
         if (voltage < -0.001D) {
             return PowerRadarCeeState.REVERSE_POLARITY;
         }
-        if (previousState == PowerRadarCeeState.OVERVOLTAGE) {
-            if (voltage > voltages.overvoltageRecovery()) {
-                return PowerRadarCeeState.OVERVOLTAGE;
-            }
-            return voltage >= voltages.restart()
-                    ? PowerRadarCeeState.POWERED
-                    : PowerRadarCeeState.UNDERVOLTAGE;
-        }
         if (voltage > voltages.maximum()) {
             return PowerRadarCeeState.OVERVOLTAGE;
-        }
-        if (previousState == PowerRadarCeeState.UNDERVOLTAGE
-                || previousState == PowerRadarCeeState.INVALID_STRUCTURE) {
-            return voltage >= voltages.restart()
-                    ? PowerRadarCeeState.POWERED
-                    : PowerRadarCeeState.UNDERVOLTAGE;
         }
         return voltage >= voltages.minimum()
                 ? PowerRadarCeeState.POWERED

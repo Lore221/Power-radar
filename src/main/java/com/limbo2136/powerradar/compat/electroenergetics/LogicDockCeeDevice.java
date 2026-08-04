@@ -18,7 +18,7 @@ public class LogicDockCeeDevice extends PowerRadarCeeLoadDevice {
     public void configureLoad() {
         setLoad(true, PowerRadarElectricalParameters.Ratings.logicDockPowerWatts(),
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
-                PowerRadarElectricalParameters.Voltages.monitor().nominal());
+                PowerRadarElectricalParameters.Voltages.logicDock().nominal());
     }
 
     @Override
@@ -30,7 +30,7 @@ public class LogicDockCeeDevice extends PowerRadarCeeLoadDevice {
 
     @Override
     protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
-        return PowerRadarElectricalParameters.Voltages.monitor();
+        return PowerRadarElectricalParameters.Voltages.logicDock();
     }
 
     @Override

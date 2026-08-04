@@ -19,14 +19,14 @@ public class MonitorControllerCeeDevice extends PowerRadarCeeLoadDevice {
     public void configureLoad(boolean validStructure, int activeDisplayCount) {
         if (!validStructure || activeDisplayCount <= 0) {
             setLoad(false, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
-                    PowerRadarElectricalParameters.Voltages.monitor().nominal());
+                    PowerRadarElectricalParameters.Voltages.monitorController().nominal());
             return;
         }
         setLoad(
                 true,
                 PowerRadarCeeConstants.monitorNominalPowerWatts(activeDisplayCount),
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
-                PowerRadarElectricalParameters.Voltages.monitor().nominal());
+                PowerRadarElectricalParameters.Voltages.monitorController().nominal());
     }
 
     public void configureFixedLoad(boolean enabled, double powerWatts) {
@@ -34,7 +34,7 @@ public class MonitorControllerCeeDevice extends PowerRadarCeeLoadDevice {
                 enabled,
                 enabled ? powerWatts : 0.0D,
                 PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS,
-                PowerRadarElectricalParameters.Voltages.monitor().nominal());
+                voltageRange().nominal());
     }
 
     @Override
@@ -49,7 +49,9 @@ public class MonitorControllerCeeDevice extends PowerRadarCeeLoadDevice {
 
     @Override
     protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
-        return PowerRadarElectricalParameters.Voltages.monitor();
+        return loadedBlockEntity() instanceof OnboardComputerBlockEntity
+                ? PowerRadarElectricalParameters.Voltages.onboardComputer()
+                : PowerRadarElectricalParameters.Voltages.monitorController();
     }
 
     @Override

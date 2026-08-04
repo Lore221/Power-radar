@@ -14,34 +14,30 @@ class PowerRadarElectricalParametersTest {
         assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
                         defaultDouble("voltages.radar.nominal"),
                         defaultDouble("voltages.radar.minimum"),
-                        defaultDouble("voltages.radar.restart"),
-                        defaultDouble("voltages.radar.maximum"),
-                        defaultDouble("voltages.radar.overvoltage_recovery")),
+                        defaultDouble("voltages.radar.maximum")),
                 PowerRadarElectricalParameters.Voltages.radar());
-        assertEquals(defaultDouble("voltages.radar.full_range"),
-                PowerRadarElectricalParameters.Voltages.radarFullRange());
         assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
-                        defaultDouble("voltages.monitor.nominal"),
-                        defaultDouble("voltages.monitor.minimum"),
-                        defaultDouble("voltages.monitor.restart"),
-                        defaultDouble("voltages.monitor.maximum"),
-                        defaultDouble("voltages.monitor.overvoltage_recovery")),
-                PowerRadarElectricalParameters.Voltages.monitor());
+                        defaultDouble("voltages.monitor_controller.nominal"),
+                        defaultDouble("voltages.monitor_controller.minimum"),
+                        defaultDouble("voltages.monitor_controller.maximum")),
+                PowerRadarElectricalParameters.Voltages.monitorController());
         assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
                         defaultDouble("voltages.shell_alarm.nominal"),
                         defaultDouble("voltages.shell_alarm.minimum"),
-                        defaultDouble("voltages.shell_alarm.restart"),
-                        defaultDouble("voltages.shell_alarm.maximum"),
-                        defaultDouble("voltages.shell_alarm.overvoltage_recovery")),
+                        defaultDouble("voltages.shell_alarm.maximum")),
                 PowerRadarElectricalParameters.Voltages.shellAlarm());
+        assertLoadDefaults("logic_dock", PowerRadarElectricalParameters.Voltages.logicDock());
+        assertLoadDefaults("panel_radar_display", PowerRadarElectricalParameters.Voltages.panelRadarDisplay());
+        assertLoadDefaults("panel_radar_link", PowerRadarElectricalParameters.Voltages.panelRadarLink());
+        assertLoadDefaults("onboard_computer", PowerRadarElectricalParameters.Voltages.onboardComputer());
         assertEquals(new PowerRadarElectricalParameters.DriveVoltageRange(
                         defaultDouble("voltages.target_controller.minimum"),
-                        defaultDouble("voltages.target_controller.full_speed"),
+                        defaultDouble("voltages.target_controller.nominal"),
                         defaultDouble("voltages.target_controller.maximum")),
                 PowerRadarElectricalParameters.Voltages.targetController());
         assertEquals(new PowerRadarElectricalParameters.DriveVoltageRange(
                         defaultDouble("voltages.interception_controller.minimum"),
-                        defaultDouble("voltages.interception_controller.full_speed"),
+                        defaultDouble("voltages.interception_controller.nominal"),
                         defaultDouble("voltages.interception_controller.maximum")),
                 PowerRadarElectricalParameters.Voltages.interceptionController());
 
@@ -74,15 +70,14 @@ class PowerRadarElectricalParametersTest {
     @Test
     void electricalCatalogValuesStayPhysicallyValid() {
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.radar());
-        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.monitor());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.monitorController());
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.shellAlarm());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.logicDock());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.panelRadarDisplay());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.panelRadarLink());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.onboardComputer());
         assertDriveRangeValid(PowerRadarElectricalParameters.Voltages.targetController());
         assertDriveRangeValid(PowerRadarElectricalParameters.Voltages.interceptionController());
-
-        PowerRadarElectricalParameters.LoadVoltageRange radar =
-                PowerRadarElectricalParameters.Voltages.radar();
-        assertTrue(PowerRadarElectricalParameters.Voltages.radarFullRange() >= radar.minimum());
-        assertTrue(PowerRadarElectricalParameters.Voltages.radarFullRange() <= radar.maximum());
 
         assertTrue(PowerRadarElectricalParameters.Resistances.targetController() > 0.0D);
         assertTrue(PowerRadarElectricalParameters.Resistances.interceptionController() > 0.0D);
@@ -108,20 +103,27 @@ class PowerRadarElectricalParametersTest {
         return ((Number) value.getDefault()).doubleValue();
     }
 
+    private static void assertLoadDefaults(
+            String path,
+            PowerRadarElectricalParameters.LoadVoltageRange actual
+    ) {
+        assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
+                defaultDouble("voltages." + path + ".nominal"),
+                defaultDouble("voltages." + path + ".minimum"),
+                defaultDouble("voltages." + path + ".maximum")), actual);
+    }
+
     private static void assertLoadRangeValid(PowerRadarElectricalParameters.LoadVoltageRange range) {
         assertTrue(Double.isFinite(range.nominal()));
         assertTrue(range.minimum() >= 0.0D);
-        assertTrue(range.restart() >= range.minimum());
         assertTrue(range.nominal() >= range.minimum());
         assertTrue(range.nominal() <= range.maximum());
-        assertTrue(range.overvoltageRecovery() >= range.minimum());
-        assertTrue(range.overvoltageRecovery() <= range.maximum());
     }
 
     private static void assertDriveRangeValid(PowerRadarElectricalParameters.DriveVoltageRange range) {
         assertTrue(range.minimum() >= 0.0D);
-        assertTrue(range.fullSpeed() >= range.minimum());
-        assertTrue(range.maximum() >= range.fullSpeed());
+        assertTrue(range.nominal() >= range.minimum());
+        assertTrue(range.maximum() >= range.nominal());
     }
 
     private static List<Double> allPowerRatings() {

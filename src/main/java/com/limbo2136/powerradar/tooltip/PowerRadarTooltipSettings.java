@@ -92,7 +92,9 @@ public final class PowerRadarTooltipSettings {
             Map.entry(Target.MONITOR_CONTROLLER, List.of(
                 field(InventoryField.NOMINAL_POWER),
                 field(InventoryField.NOMINAL_VOLTAGE))),
-            Map.entry(Target.RADAR_DISPLAY, List.of(field(InventoryField.NOMINAL_POWER))),
+            Map.entry(Target.RADAR_DISPLAY, List.of(
+                field(InventoryField.NOMINAL_POWER),
+                field(InventoryField.NOMINAL_VOLTAGE))),
             Map.entry(Target.LOGIC_DOCK, List.of(
                 field(InventoryField.NOMINAL_POWER),
                 field(InventoryField.NOMINAL_VOLTAGE))),
@@ -108,7 +110,10 @@ public final class PowerRadarTooltipSettings {
             Map.entry(Target.SHELL_ALARM, List.of(
                 field(InventoryField.NOMINAL_POWER),
                 field(InventoryField.NOMINAL_VOLTAGE),
-                field(InventoryField.PROTECTION_ZONE)))
+                field(InventoryField.PROTECTION_ZONE))),
+            Map.entry(Target.RADAR_LINK, List.of(
+                field(InventoryField.NOMINAL_POWER),
+                field(InventoryField.NOMINAL_VOLTAGE)))
     );
 
     // Описания общие для режима с очками и без них и раскрываются только по Shift.

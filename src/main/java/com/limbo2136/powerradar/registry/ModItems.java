@@ -7,6 +7,7 @@ import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
 import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
+import com.limbo2136.powerradar.item.IncompleteOverviewModuleItem;
 import com.limbo2136.powerradar.item.LinkerItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
@@ -55,6 +56,9 @@ public final class ModItems {
             "overview_module",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.OVERVIEW_MODULE.get(), new Item.Properties(),
                     Target.OVERVIEW_MODULE));
+    public static final DeferredItem<IncompleteOverviewModuleItem> INCOMPLETE_OVERVIEW_MODULE = ITEMS.register(
+            "incomplete_overview_module",
+            () -> new IncompleteOverviewModuleItem(new Item.Properties()));
     public static final DeferredItem<BlockItem> RADAR_MONITOR_CONTROLLER = ITEMS.register(
             "radar_monitor_controller",
             () -> new PowerRadarElectricalBlockItem(ModBlocks.RADAR_MONITOR_CONTROLLER.get(), new Item.Properties(),

@@ -32,7 +32,6 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        boolean wearingGoggles = isClientPlayerWearingGoggles();
         boolean shiftDown = isShiftDown();
         List<PowerRadarTooltipSettings.Line> shiftText =
                 PowerRadarTooltipSettings.inventoryShiftText(this.tooltipTarget);
@@ -44,41 +43,54 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             appendShiftHint(tooltip);
         }
 
+        appendConfiguredParameters(this.tooltipTarget, tooltip);
+    }
+
+    static void appendConfiguredParameters(Target target, List<Component> tooltip) {
+        boolean wearingGoggles = isClientPlayerWearingGoggles();
         boolean electricalSectionStarted = false;
-        for (PowerRadarTooltipSettings.Line line
-                : PowerRadarTooltipSettings.inventoryParameters(this.tooltipTarget)) {
+        for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.inventoryParameters(target)) {
             InventoryField field = (InventoryField) line.field();
             if (!electricalSectionStarted && isElectricalStat(field)) {
                 tooltip.add(CommonComponents.EMPTY);
                 electricalSectionStarted = true;
             }
-            appendInventoryField(tooltip, field, wearingGoggles);
+            appendInventoryField(target, tooltip, field, wearingGoggles);
         }
     }
 
     // Преобразует выбранные в PowerRadarTooltipSettings поля в строки с актуальными параметрами блока.
-    private void appendInventoryField(List<Component> tooltip, InventoryField field, boolean wearingGoggles) {
+    private static void appendInventoryField(
+            Target target,
+            List<Component> tooltip,
+            InventoryField field,
+            boolean wearingGoggles
+    ) {
         switch (field) {
             case NOMINAL_POWER -> appendElectricalStat(
                     tooltip,
-                    "power_radar.tooltip.nominal_power",
-                    PowerRadarCeeFormatter.powerComponent(nominalPowerWatts()),
-                    powerLevel(nominalPowerWatts()),
+                    target == Target.RADAR_LINK
+                            ? "power_radar.tooltip.nominal_power_in_panel"
+                            : "power_radar.tooltip.nominal_power",
+                    PowerRadarCeeFormatter.powerComponent(nominalPowerWatts(target)),
+                    powerLevel(nominalPowerWatts(target)),
                     wearingGoggles);
             case NOMINAL_VOLTAGE -> appendElectricalStat(
                     tooltip,
-                    "power_radar.tooltip.nominal_voltage",
-                    PowerRadarCeeFormatter.voltageComponent(nominalVoltageVolts()),
-                    scaledLevel(nominalVoltageVolts(), 200.0D),
+                    target == Target.RADAR_DISPLAY || target == Target.RADAR_LINK
+                            ? "power_radar.tooltip.nominal_voltage_in_panel"
+                            : "power_radar.tooltip.nominal_voltage",
+                    PowerRadarCeeFormatter.voltageComponent(nominalVoltageVolts(target)),
+                    scaledLevel(nominalVoltageVolts(target), 200.0D),
                     wearingGoggles);
             case RANGE_BONUS -> tooltip.add(property(
                     "power_radar.tooltip.range_bonus",
-                    Component.translatable("power_radar.unit.blocks_bonus", rangeBonusBlocks())));
+                    Component.translatable("power_radar.unit.blocks_bonus", rangeBonusBlocks(target))));
             case INTERNAL_RESISTANCE -> appendElectricalStat(
                     tooltip,
                     "power_radar.tooltip.internal_resistance",
-                    PowerRadarCeeFormatter.resistanceComponent(internalResistanceOhms()),
-                    scaledLevel(internalResistanceOhms(), 300.0D),
+                    PowerRadarCeeFormatter.resistanceComponent(internalResistanceOhms(target)),
+                    scaledLevel(internalResistanceOhms(target), 300.0D),
                     wearingGoggles);
             case PROTECTION_ZONE -> tooltip.add(property(
                     "power_radar.tooltip.shell_alarm_zone",
@@ -152,8 +164,8 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         };
     }
 
-    private double nominalPowerWatts() {
-        return switch (this.tooltipTarget) {
+    private static double nominalPowerWatts(Target target) {
+        return switch (target) {
             case RADAR_CONTROLLER -> PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts();
             case PHASED_ARRAY_PANEL -> PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts();
             case OVERVIEW_MODULE -> PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
@@ -162,36 +174,40 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case LOGIC_DOCK -> PowerRadarElectricalParameters.Ratings.logicDockPowerWatts();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
-            case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, RADAR_LINK, MECHANICAL_SIREN,
+            case RADAR_LINK -> PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts();
+            case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, MECHANICAL_SIREN,
                     TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
         };
     }
 
-    private int rangeBonusBlocks() {
-        return switch (this.tooltipTarget) {
+    private static int rangeBonusBlocks(Target target) {
+        return switch (target) {
             case PHASED_ARRAY_PANEL -> PowerRadarRadarParameters.phasedArrayPanelRangeBlocks();
             case OVERVIEW_MODULE -> PowerRadarRadarParameters.overviewModuleRangeBlocks();
             default -> 0;
         };
     }
 
-    private double internalResistanceOhms() {
-        return this.tooltipTarget == Target.INTERCEPTION_CONTROLLER
+    private static double internalResistanceOhms(Target target) {
+        return target == Target.INTERCEPTION_CONTROLLER
                 ? PowerRadarElectricalParameters.Resistances.interceptionController()
                 : PowerRadarElectricalParameters.Resistances.targetController();
     }
 
-    private double nominalVoltageVolts() {
-        return switch (this.tooltipTarget) {
+    private static double nominalVoltageVolts(Target target) {
+        return switch (target) {
             case RADAR_CONTROLLER, PHASED_ARRAY_PANEL, OVERVIEW_MODULE ->
                     PowerRadarElectricalParameters.Voltages.radar().nominal();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Voltages.shellAlarm().nominal();
-            case TARGET_CONTROLLER -> PowerRadarElectricalParameters.Voltages.targetController().fullSpeed();
+            case TARGET_CONTROLLER -> PowerRadarElectricalParameters.Voltages.targetController().nominal();
             case INTERCEPTION_CONTROLLER ->
-                    PowerRadarElectricalParameters.Voltages.interceptionController().fullSpeed();
-            case MONITOR_CONTROLLER, RADAR_DISPLAY, LOGIC_DOCK, ONBOARD_COMPUTER ->
-                    PowerRadarElectricalParameters.Voltages.monitor().nominal();
-            case RADAR_LINK, MECHANICAL_SIREN,
+                    PowerRadarElectricalParameters.Voltages.interceptionController().nominal();
+            case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Voltages.monitorController().nominal();
+            case RADAR_DISPLAY -> PowerRadarElectricalParameters.Voltages.panelRadarDisplay().nominal();
+            case RADAR_LINK -> PowerRadarElectricalParameters.Voltages.panelRadarLink().nominal();
+            case LOGIC_DOCK -> PowerRadarElectricalParameters.Voltages.logicDock().nominal();
+            case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Voltages.onboardComputer().nominal();
+            case MECHANICAL_SIREN,
                     TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
         };
     }

@@ -99,6 +99,7 @@ public class RadarLinkBlockItem extends BlockItem {
     @Override
     public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
+        PowerRadarElectricalBlockItem.appendConfiguredParameters(Target.RADAR_LINK, tooltip);
         PowerRadarElectricalBlockItem.appendConfiguredText(Target.RADAR_LINK, tooltip);
     }
 

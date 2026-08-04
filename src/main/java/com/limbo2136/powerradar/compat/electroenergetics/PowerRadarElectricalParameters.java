@@ -5,363 +5,374 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * Единый каталог электрических характеристик блоков Power Radar.
- * Значения по умолчанию меняются здесь, а серверный TOML может переопределить их без пересборки мода.
+ * Значения по умолчанию меняются здесь, а серверный TOML может переопределить
+ * их без пересборки мода.
  */
 public final class PowerRadarElectricalParameters {
-    // Служебные пределы защищают расчёты цепи. Это не игровые настройки блоков.
-    public static final double MIN_SAFE_RESISTANCE_OHMS = 0.001D;
-    public static final double OFF_RESISTANCE_OHMS = 200_000_000.0D;
-    private static final double MAX_VOLTAGE_VOLTS = 1_000_000.0D;
-    private static final double MAX_RESISTANCE_OHMS = 1_000_000_000.0D;
-    private static final double MAX_POWER_WATTS = 1_000_000_000.0D;
+        // Служебные пределы защищают расчёты цепи. Это не игровые настройки блоков.
+        public static final double MIN_SAFE_RESISTANCE_OHMS = 0.001D;
+        public static final double OFF_RESISTANCE_OHMS = 200_000_000.0D;
+        private static final double MAX_VOLTAGE_VOLTS = 1_000_000.0D;
+        private static final double MAX_RESISTANCE_OHMS = 1_000_000_000.0D;
+        private static final double MAX_POWER_WATTS = 1_000_000_000.0D;
 
-    // Базовые значения напряжения. Порядок: номинал, минимум, перезапуск, максимум, сброс перенапряжения.
-    private static final LoadVoltageRange DEFAULT_RADAR_VOLTAGE =
-            new LoadVoltageRange(380.0D, 120.0D, 140.0D, 400.0D, 390.0D);
-    private static final double DEFAULT_RADAR_FULL_RANGE_VOLTAGE = 380.0D;
-    private static final LoadVoltageRange DEFAULT_MONITOR_VOLTAGE =
-            new LoadVoltageRange(220.0D, 180.0D, 200.0D, 250.0D, 240.0D);
-    private static final LoadVoltageRange DEFAULT_SHELL_ALARM_VOLTAGE =
-            new LoadVoltageRange(220.0D, 180.0D, 200.0D, 250.0D, 240.0D);
+        // Базовые значения напряжения. Порядок: номинал, минимум, максимум.
+        private static final LoadVoltageRange DEFAULT_RADAR_VOLTAGE = new LoadVoltageRange(380.0D, 120.0D, 400.0D);
+        private static final LoadVoltageRange DEFAULT_MONITOR_CONTROLLER_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
+                        250.0D);
+        private static final LoadVoltageRange DEFAULT_SHELL_ALARM_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
+                        250.0D);
+        private static final LoadVoltageRange DEFAULT_LOGIC_DOCK_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D, 26.0D);
+        private static final LoadVoltageRange DEFAULT_PANEL_RADAR_DISPLAY_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D,
+                        26.0D);
+        private static final LoadVoltageRange DEFAULT_PANEL_RADAR_LINK_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D,
+                        26.0D);
+        private static final LoadVoltageRange DEFAULT_ONBOARD_COMPUTER_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
+                        250.0D);
 
-    // Контроллеры наведения являются резистивной нагрузкой; скорость растёт до fullSpeed.
-    private static final DriveVoltageRange DEFAULT_TARGET_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(200.0D, 380.0D, 400.0D);
-    private static final DriveVoltageRange DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE =
-            new DriveVoltageRange(200.0D, 380.0D, 400.0D);
-    private static final double DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS = 20.0D;
-    private static final double DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = 20.0D;
+        // Контроллеры наведения являются резистивной нагрузкой; скорость растёт до
+        // номинального напряжения.
+        private static final DriveVoltageRange DEFAULT_TARGET_CONTROLLER_VOLTAGE = new DriveVoltageRange(200.0D, 380.0D,
+                        400.0D);
+        private static final DriveVoltageRange DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE = new DriveVoltageRange(200.0D,
+                        380.0D, 400.0D);
+        private static final double DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS = 20.0D;
+        private static final double DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS = 20.0D;
 
-    // Номинальная мощность задаётся при номинальном напряжении и определяет постоянное сопротивление.
-    private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
-    private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
-    private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
-    private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 250.0D;
-    private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 25.0D;
-    private static final double DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS = 50.0D;
-    private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
-    private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
-    private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
-    private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 750.0D;
+        // Номинальная мощность задаётся при номинальном напряжении и определяет
+        // постоянное сопротивление.
+        private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
+        private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
+        private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
+        private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 250.0D;
+        private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 25.0D;
+        private static final double DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS = 25.0D;
+        private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
+        private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
+        private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
+        private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 750.0D;
 
-    private static ModConfigSpec.DoubleValue radarNominalVoltage;
-    private static ModConfigSpec.DoubleValue radarMinimumVoltage;
-    private static ModConfigSpec.DoubleValue radarRestartVoltage;
-    private static ModConfigSpec.DoubleValue radarFullRangeVoltage;
-    private static ModConfigSpec.DoubleValue radarMaximumVoltage;
-    private static ModConfigSpec.DoubleValue radarOvervoltageRecovery;
-    private static ModConfigSpec.DoubleValue monitorNominalVoltage;
-    private static ModConfigSpec.DoubleValue monitorMinimumVoltage;
-    private static ModConfigSpec.DoubleValue monitorRestartVoltage;
-    private static ModConfigSpec.DoubleValue monitorMaximumVoltage;
-    private static ModConfigSpec.DoubleValue monitorOvervoltageRecovery;
-    private static ModConfigSpec.DoubleValue shellAlarmNominalVoltage;
-    private static ModConfigSpec.DoubleValue shellAlarmMinimumVoltage;
-    private static ModConfigSpec.DoubleValue shellAlarmRestartVoltage;
-    private static ModConfigSpec.DoubleValue shellAlarmMaximumVoltage;
-    private static ModConfigSpec.DoubleValue shellAlarmOvervoltageRecovery;
-    private static ModConfigSpec.DoubleValue targetControllerMinimumVoltage;
-    private static ModConfigSpec.DoubleValue targetControllerFullSpeedVoltage;
-    private static ModConfigSpec.DoubleValue targetControllerMaximumVoltage;
-    private static ModConfigSpec.DoubleValue interceptionControllerMinimumVoltage;
-    private static ModConfigSpec.DoubleValue interceptionControllerFullSpeedVoltage;
-    private static ModConfigSpec.DoubleValue interceptionControllerMaximumVoltage;
-    private static ModConfigSpec.DoubleValue targetControllerResistanceOhms;
-    private static ModConfigSpec.DoubleValue interceptionControllerResistanceOhms;
-    private static ModConfigSpec.DoubleValue radarControllerPowerWatts;
-    private static ModConfigSpec.DoubleValue phasedArrayPanelPowerWatts;
-    private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
-    private static ModConfigSpec.DoubleValue monitorControllerPowerWatts;
-    private static ModConfigSpec.DoubleValue radarDisplayPowerWatts;
-    private static ModConfigSpec.DoubleValue panelRadarDisplayPowerWatts;
-    private static ModConfigSpec.DoubleValue panelRadarLinkPowerWatts;
-    private static ModConfigSpec.DoubleValue logicDockPowerWatts;
-    private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
-    private static ModConfigSpec.DoubleValue shellAlarmPowerWatts;
+        private static LoadVoltageConfig radarVoltageConfig;
+        private static LoadVoltageConfig monitorControllerVoltageConfig;
+        private static LoadVoltageConfig shellAlarmVoltageConfig;
+        private static LoadVoltageConfig logicDockVoltageConfig;
+        private static LoadVoltageConfig panelRadarDisplayVoltageConfig;
+        private static LoadVoltageConfig panelRadarLinkVoltageConfig;
+        private static LoadVoltageConfig onboardComputerVoltageConfig;
+        private static ModConfigSpec.DoubleValue targetControllerMinimumVoltage;
+        private static ModConfigSpec.DoubleValue targetControllerNominalVoltage;
+        private static ModConfigSpec.DoubleValue targetControllerMaximumVoltage;
+        private static ModConfigSpec.DoubleValue interceptionControllerMinimumVoltage;
+        private static ModConfigSpec.DoubleValue interceptionControllerNominalVoltage;
+        private static ModConfigSpec.DoubleValue interceptionControllerMaximumVoltage;
+        private static ModConfigSpec.DoubleValue targetControllerResistanceOhms;
+        private static ModConfigSpec.DoubleValue interceptionControllerResistanceOhms;
+        private static ModConfigSpec.DoubleValue radarControllerPowerWatts;
+        private static ModConfigSpec.DoubleValue phasedArrayPanelPowerWatts;
+        private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
+        private static ModConfigSpec.DoubleValue monitorControllerPowerWatts;
+        private static ModConfigSpec.DoubleValue radarDisplayPowerWatts;
+        private static ModConfigSpec.DoubleValue panelRadarDisplayPowerWatts;
+        private static ModConfigSpec.DoubleValue panelRadarLinkPowerWatts;
+        private static ModConfigSpec.DoubleValue logicDockPowerWatts;
+        private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
+        private static ModConfigSpec.DoubleValue shellAlarmPowerWatts;
 
-    private PowerRadarElectricalParameters() {
-    }
-
-    /** Подключает электрические секции к общему серверному конфигу, не меняя существующие TOML-пути. */
-    public static void defineConfig(ModConfigSpec.Builder builder) {
-        defineVoltages(builder);
-        defineResistances(builder);
-        definePowerRatings(builder);
-    }
-
-    // Регистрирует пороги напряжения. restart/recovery создают гистерезис и не дают состоянию мигать на границе.
-    private static void defineVoltages(ModConfigSpec.Builder builder) {
-        builder.push("voltages");
-
-        builder.comment("Power supply for radar controllers and their modules, in volts.").push("radar");
-        radarNominalVoltage = voltage(builder, "nominal", DEFAULT_RADAR_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage at which the configured nominal power is consumed.");
-        radarMinimumVoltage = voltage(builder, "minimum", DEFAULT_RADAR_VOLTAGE.minimum(), 0.0D,
-                "The radar shuts down below this voltage.");
-        radarRestartVoltage = voltage(builder, "restart", DEFAULT_RADAR_VOLTAGE.restart(), 0.0D,
-                "After an undervoltage shutdown, the radar restarts only above this voltage.");
-        radarFullRangeVoltage = voltage(builder, "full_range", DEFAULT_RADAR_FULL_RANGE_VOLTAGE,
-                MIN_SAFE_RESISTANCE_OHMS, "Voltage at which the radar reaches its full range.");
-        radarMaximumVoltage = voltage(builder, "maximum", DEFAULT_RADAR_VOLTAGE.maximum(),
-                MIN_SAFE_RESISTANCE_OHMS, "Overvoltage protection trips above this voltage.");
-        radarOvervoltageRecovery = voltage(builder, "overvoltage_recovery",
-                DEFAULT_RADAR_VOLTAGE.overvoltageRecovery(), 0.0D,
-                "After an overvoltage shutdown, the radar recovers only below this voltage.");
-        builder.pop();
-
-        builder.comment("Shared low-voltage supply for monitors, the Logic Dock, and OnBoard, in volts.")
-                .push("monitor");
-        monitorNominalVoltage = voltage(builder, "nominal", DEFAULT_MONITOR_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage at which the configured nominal power is consumed.");
-        monitorMinimumVoltage = voltage(builder, "minimum", DEFAULT_MONITOR_VOLTAGE.minimum(), 0.0D,
-                "The device shuts down below this voltage.");
-        monitorRestartVoltage = voltage(builder, "restart", DEFAULT_MONITOR_VOLTAGE.restart(), 0.0D,
-                "After an undervoltage shutdown, the device restarts only above this voltage.");
-        monitorMaximumVoltage = voltage(builder, "maximum", DEFAULT_MONITOR_VOLTAGE.maximum(),
-                MIN_SAFE_RESISTANCE_OHMS, "Overvoltage protection trips above this voltage.");
-        monitorOvervoltageRecovery = voltage(builder, "overvoltage_recovery",
-                DEFAULT_MONITOR_VOLTAGE.overvoltageRecovery(), 0.0D,
-                "After an overvoltage shutdown, the device recovers only below this voltage.");
-        builder.pop();
-
-        builder.comment("Shell Alarm power supply, in volts.").push("shell_alarm");
-        shellAlarmNominalVoltage = voltage(builder, "nominal", DEFAULT_SHELL_ALARM_VOLTAGE.nominal(), 1.0D,
-                "Nominal voltage at which the configured nominal power is consumed.");
-        shellAlarmMinimumVoltage = voltage(builder, "minimum", DEFAULT_SHELL_ALARM_VOLTAGE.minimum(), 0.0D,
-                "The alarm shuts down below this voltage.");
-        shellAlarmRestartVoltage = voltage(builder, "restart", DEFAULT_SHELL_ALARM_VOLTAGE.restart(), 0.0D,
-                "After an undervoltage shutdown, the alarm restarts only above this voltage.");
-        shellAlarmMaximumVoltage = voltage(builder, "maximum", DEFAULT_SHELL_ALARM_VOLTAGE.maximum(),
-                MIN_SAFE_RESISTANCE_OHMS, "Overvoltage protection trips above this voltage.");
-        shellAlarmOvervoltageRecovery = voltage(builder, "overvoltage_recovery",
-                DEFAULT_SHELL_ALARM_VOLTAGE.overvoltageRecovery(), 0.0D,
-                "After an overvoltage shutdown, the alarm recovers only below this voltage.");
-        builder.pop();
-
-        defineDriveVoltages(builder, "target_controller", DEFAULT_TARGET_CONTROLLER_VOLTAGE, true);
-        defineDriveVoltages(builder, "interception_controller", DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE, false);
-        builder.pop();
-    }
-
-    // Оба привода используют одинаковую модель: минимум запуска, полная скорость и предел перенапряжения.
-    private static void defineDriveVoltages(
-            ModConfigSpec.Builder builder,
-            String path,
-            DriveVoltageRange defaults,
-            boolean targetController
-    ) {
-        builder.comment(targetController
-                        ? "Target Controller power supply, in volts."
-                        : "Interception Controller power supply, in volts.")
-                .push(path);
-        ModConfigSpec.DoubleValue minimum = voltage(builder, "minimum", defaults.minimum(), 0.0D,
-                "Minimum voltage at which the drive starts operating.");
-        ModConfigSpec.DoubleValue fullSpeed = voltage(builder, "full_speed", defaults.fullSpeed(),
-                MIN_SAFE_RESISTANCE_OHMS, "Voltage corresponding to full drive speed.");
-        ModConfigSpec.DoubleValue maximum = voltage(builder, "maximum", defaults.maximum(),
-                MIN_SAFE_RESISTANCE_OHMS, "Maximum operating voltage.");
-        if (targetController) {
-            targetControllerMinimumVoltage = minimum;
-            targetControllerFullSpeedVoltage = fullSpeed;
-            targetControllerMaximumVoltage = maximum;
-        } else {
-            interceptionControllerMinimumVoltage = minimum;
-            interceptionControllerFullSpeedVoltage = fullSpeed;
-            interceptionControllerMaximumVoltage = maximum;
-        }
-        builder.pop();
-    }
-
-    // Резистивные контроллеры потребляют мощность по закону P = U² / R.
-    private static void defineResistances(ModConfigSpec.Builder builder) {
-        builder.comment("Fixed resistance of resistive devices, in ohms.").push("resistances");
-        targetControllerResistanceOhms = builder.comment("Target Controller resistance.")
-                .defineInRange("target_controller_ohms", DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS,
-                        MIN_SAFE_RESISTANCE_OHMS, MAX_RESISTANCE_OHMS);
-        interceptionControllerResistanceOhms = builder.comment("Interception Controller resistance.")
-                .defineInRange("interception_controller_ohms", DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS,
-                        MIN_SAFE_RESISTANCE_OHMS, MAX_RESISTANCE_OHMS);
-        builder.pop();
-    }
-
-    // Эти мощности относятся к номинальному напряжению; CEE получает рассчитанное из них постоянное сопротивление.
-    private static void definePowerRatings(ModConfigSpec.Builder builder) {
-        builder.comment("Power consumed at the device's nominal voltage, in watts.").push("ratings");
-        radarControllerPowerWatts = power(builder, "radar_controller_power_watts",
-                DEFAULT_RADAR_CONTROLLER_POWER_WATTS, "Nominal base power of one radar controller.");
-        phasedArrayPanelPowerWatts = power(builder, "phased_array_panel_power_watts",
-                DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS, "Nominal power added by each phased-array panel.");
-        overviewModulePowerWatts = power(builder, "overview_module_power_watts",
-                DEFAULT_OVERVIEW_MODULE_POWER_WATTS, "Nominal power added by each overview module.");
-        monitorControllerPowerWatts = power(builder, "monitor_controller_power_watts",
-                DEFAULT_MONITOR_CONTROLLER_POWER_WATTS, "Nominal base power of the monitor controller.");
-        radarDisplayPowerWatts = power(builder, "radar_display_power_watts",
-                DEFAULT_RADAR_DISPLAY_POWER_WATTS, "Nominal power added by each display block in a large monitor.");
-        panelRadarDisplayPowerWatts = power(builder, "panel_radar_display_power_watts",
-                DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS,
-                "Nominal power of a standalone Radar Display installed in an electrical panel.");
-        panelRadarLinkPowerWatts = power(builder, "panel_radar_link_power_watts",
-                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS,
-                "Nominal power of a Radar Link installed in an electrical panel.");
-        logicDockPowerWatts = power(builder, "logic_dock_power_watts",
-                DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock nominal power.");
-        onboardComputerPowerWatts = power(builder, "onboard_computer_power_watts",
-                DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer nominal power.");
-        shellAlarmPowerWatts = power(builder, "shell_alarm_power_watts",
-                DEFAULT_SHELL_ALARM_POWER_WATTS, "Shell Alarm nominal power.");
-        builder.pop();
-    }
-
-    private static ModConfigSpec.DoubleValue voltage(
-            ModConfigSpec.Builder builder,
-            String path,
-            double defaultValue,
-            double minimum,
-            String comment
-    ) {
-        return builder.comment(comment).defineInRange(path, defaultValue, minimum, MAX_VOLTAGE_VOLTS);
-    }
-
-    private static ModConfigSpec.DoubleValue power(
-            ModConfigSpec.Builder builder,
-            String path,
-            double defaultValue,
-            String comment
-    ) {
-        return builder.comment(comment).defineInRange(path, defaultValue, 0.0D, MAX_POWER_WATTS);
-    }
-
-    public static final class Voltages {
-        private Voltages() {
+        private PowerRadarElectricalParameters() {
         }
 
-        public static LoadVoltageRange radar() {
-            ensureConfigDefined();
-            return new LoadVoltageRange(value(radarNominalVoltage), value(radarMinimumVoltage),
-                    value(radarRestartVoltage), value(radarMaximumVoltage), value(radarOvervoltageRecovery));
+        /**
+         * Подключает независимые электрические секции устройств к общему серверному
+         * конфигу.
+         */
+        public static void defineConfig(ModConfigSpec.Builder builder) {
+                defineVoltages(builder);
+                defineResistances(builder);
+                definePowerRatings(builder);
         }
 
-        public static double radarFullRange() {
-            ensureConfigDefined();
-            return value(radarFullRangeVoltage);
+        // Регистрирует независимые паспортные диапазоны напряжения без гистерезиса.
+        private static void defineVoltages(ModConfigSpec.Builder builder) {
+                builder.push("voltages");
+
+                radarVoltageConfig = defineLoadVoltages(builder, "radar", DEFAULT_RADAR_VOLTAGE,
+                                "Power supply for radar controllers and their modules, in volts.");
+                monitorControllerVoltageConfig = defineLoadVoltages(builder, "monitor_controller",
+                                DEFAULT_MONITOR_CONTROLLER_VOLTAGE,
+                                "Radar Monitor Controller power supply, in volts.");
+                shellAlarmVoltageConfig = defineLoadVoltages(builder, "shell_alarm", DEFAULT_SHELL_ALARM_VOLTAGE,
+                                "Shell Alarm power supply, in volts.");
+                logicDockVoltageConfig = defineLoadVoltages(builder, "logic_dock", DEFAULT_LOGIC_DOCK_VOLTAGE,
+                                "Logic Dock power supply for both the world block and electrical panel attachment, in volts.");
+                panelRadarDisplayVoltageConfig = defineLoadVoltages(builder, "panel_radar_display",
+                                DEFAULT_PANEL_RADAR_DISPLAY_VOLTAGE,
+                                "Radar Display power supply (in electrical panel), in volts.");
+                panelRadarLinkVoltageConfig = defineLoadVoltages(builder, "panel_radar_link",
+                                DEFAULT_PANEL_RADAR_LINK_VOLTAGE,
+                                "Radar Link power supply (in electrical panel), in volts.");
+                onboardComputerVoltageConfig = defineLoadVoltages(builder, "onboard_computer",
+                                DEFAULT_ONBOARD_COMPUTER_VOLTAGE, "OnBoard Computer power supply, in volts.");
+
+                defineDriveVoltages(builder, "target_controller", DEFAULT_TARGET_CONTROLLER_VOLTAGE, true);
+                defineDriveVoltages(builder, "interception_controller", DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE, false);
+                builder.pop();
         }
 
-        public static LoadVoltageRange monitor() {
-            ensureConfigDefined();
-            return new LoadVoltageRange(value(monitorNominalVoltage), value(monitorMinimumVoltage),
-                    value(monitorRestartVoltage), value(monitorMaximumVoltage), value(monitorOvervoltageRecovery));
+        private static LoadVoltageConfig defineLoadVoltages(
+                        ModConfigSpec.Builder builder,
+                        String path,
+                        LoadVoltageRange defaults,
+                        String comment) {
+                builder.comment(comment).push(path);
+                ModConfigSpec.DoubleValue nominal = voltage(builder, "nominal", defaults.nominal(), 1.0D,
+                                "Rated voltage used for nominal load calculations; scalable devices reach full performance at this voltage.");
+                ModConfigSpec.DoubleValue minimum = voltage(builder, "minimum", defaults.minimum(), 0.0D,
+                                "Minimum voltage at which the device operates.");
+                ModConfigSpec.DoubleValue maximum = voltage(builder, "maximum", defaults.maximum(),
+                                MIN_SAFE_RESISTANCE_OHMS, "Maximum operating voltage.");
+                builder.pop();
+                return new LoadVoltageConfig(nominal, minimum, maximum);
         }
 
-        public static LoadVoltageRange shellAlarm() {
-            ensureConfigDefined();
-            return new LoadVoltageRange(value(shellAlarmNominalVoltage), value(shellAlarmMinimumVoltage),
-                    value(shellAlarmRestartVoltage), value(shellAlarmMaximumVoltage),
-                    value(shellAlarmOvervoltageRecovery));
+        // Оба привода используют одинаковую модель: минимум запуска, номинал полной
+        // скорости и предел перенапряжения.
+        private static void defineDriveVoltages(
+                        ModConfigSpec.Builder builder,
+                        String path,
+                        DriveVoltageRange defaults,
+                        boolean targetController) {
+                builder.comment(targetController
+                                ? "Target Controller power supply, in volts."
+                                : "Interception Controller power supply, in volts.")
+                                .push(path);
+                ModConfigSpec.DoubleValue minimum = voltage(builder, "minimum", defaults.minimum(), 0.0D,
+                                "Minimum voltage at which the drive starts operating.");
+                ModConfigSpec.DoubleValue nominal = voltage(builder, "nominal", defaults.nominal(),
+                                MIN_SAFE_RESISTANCE_OHMS, "Rated voltage corresponding to full drive speed.");
+                ModConfigSpec.DoubleValue maximum = voltage(builder, "maximum", defaults.maximum(),
+                                MIN_SAFE_RESISTANCE_OHMS, "Maximum operating voltage.");
+                if (targetController) {
+                        targetControllerMinimumVoltage = minimum;
+                        targetControllerNominalVoltage = nominal;
+                        targetControllerMaximumVoltage = maximum;
+                } else {
+                        interceptionControllerMinimumVoltage = minimum;
+                        interceptionControllerNominalVoltage = nominal;
+                        interceptionControllerMaximumVoltage = maximum;
+                }
+                builder.pop();
         }
 
-        public static DriveVoltageRange targetController() {
-            ensureConfigDefined();
-            return new DriveVoltageRange(value(targetControllerMinimumVoltage),
-                    value(targetControllerFullSpeedVoltage), value(targetControllerMaximumVoltage));
+        // Резистивные контроллеры потребляют мощность по закону P = U² / R.
+        private static void defineResistances(ModConfigSpec.Builder builder) {
+                builder.comment("Fixed resistance of resistive devices, in ohms.").push("resistances");
+                targetControllerResistanceOhms = builder.comment("Target Controller resistance.")
+                                .defineInRange("target_controller_ohms", DEFAULT_TARGET_CONTROLLER_RESISTANCE_OHMS,
+                                                MIN_SAFE_RESISTANCE_OHMS, MAX_RESISTANCE_OHMS);
+                interceptionControllerResistanceOhms = builder.comment("Interception Controller resistance.")
+                                .defineInRange("interception_controller_ohms",
+                                                DEFAULT_INTERCEPTION_CONTROLLER_RESISTANCE_OHMS,
+                                                MIN_SAFE_RESISTANCE_OHMS, MAX_RESISTANCE_OHMS);
+                builder.pop();
         }
 
-        public static DriveVoltageRange interceptionController() {
-            ensureConfigDefined();
-            return new DriveVoltageRange(value(interceptionControllerMinimumVoltage),
-                    value(interceptionControllerFullSpeedVoltage), value(interceptionControllerMaximumVoltage));
-        }
-    }
-
-    public static final class Resistances {
-        private Resistances() {
-        }
-
-        public static double targetController() {
-            ensureConfigDefined();
-            return value(targetControllerResistanceOhms);
-        }
-
-        public static double interceptionController() {
-            ensureConfigDefined();
-            return value(interceptionControllerResistanceOhms);
-        }
-    }
-
-    public static final class Ratings {
-        private Ratings() {
-        }
-
-        public static double radarControllerPowerWatts() {
-            ensureConfigDefined();
-            return value(radarControllerPowerWatts);
-        }
-
-        public static double phasedArrayPanelPowerWatts() {
-            ensureConfigDefined();
-            return value(phasedArrayPanelPowerWatts);
+        // Эти мощности относятся к номинальному напряжению; CEE получает рассчитанное
+        // из них постоянное сопротивление.
+        private static void definePowerRatings(ModConfigSpec.Builder builder) {
+                builder.comment("Power consumed at the device's nominal voltage, in watts.").push("ratings");
+                radarControllerPowerWatts = power(builder, "radar_controller_power_watts",
+                                DEFAULT_RADAR_CONTROLLER_POWER_WATTS, "Nominal base power of one radar controller.");
+                phasedArrayPanelPowerWatts = power(builder, "phased_array_panel_power_watts",
+                                DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS,
+                                "Nominal power added by each phased-array panel.");
+                overviewModulePowerWatts = power(builder, "overview_module_power_watts",
+                                DEFAULT_OVERVIEW_MODULE_POWER_WATTS, "Nominal power added by each overview module.");
+                monitorControllerPowerWatts = power(builder, "monitor_controller_power_watts",
+                                DEFAULT_MONITOR_CONTROLLER_POWER_WATTS,
+                                "Nominal base power of the monitor controller.");
+                radarDisplayPowerWatts = power(builder, "radar_display_power_watts",
+                                DEFAULT_RADAR_DISPLAY_POWER_WATTS,
+                                "Nominal power added by each display block in a large monitor.");
+                panelRadarDisplayPowerWatts = power(builder, "panel_radar_display_power_watts",
+                                DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS,
+                                "Nominal power of a standalone Radar Display installed in an electrical panel.");
+                panelRadarLinkPowerWatts = power(builder, "panel_radar_link_power_watts",
+                                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS,
+                                "Nominal power of a Radar Link installed in an electrical panel.");
+                logicDockPowerWatts = power(builder, "logic_dock_power_watts",
+                                DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock nominal power.");
+                onboardComputerPowerWatts = power(builder, "onboard_computer_power_watts",
+                                DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer nominal power.");
+                shellAlarmPowerWatts = power(builder, "shell_alarm_power_watts",
+                                DEFAULT_SHELL_ALARM_POWER_WATTS, "Shell Alarm nominal power.");
+                builder.pop();
         }
 
-        public static double overviewModulePowerWatts() {
-            ensureConfigDefined();
-            return value(overviewModulePowerWatts);
+        private static ModConfigSpec.DoubleValue voltage(
+                        ModConfigSpec.Builder builder,
+                        String path,
+                        double defaultValue,
+                        double minimum,
+                        String comment) {
+                return builder.comment(comment).defineInRange(path, defaultValue, minimum, MAX_VOLTAGE_VOLTS);
         }
 
-        public static double monitorControllerPowerWatts() {
-            ensureConfigDefined();
-            return value(monitorControllerPowerWatts);
+        private static ModConfigSpec.DoubleValue power(
+                        ModConfigSpec.Builder builder,
+                        String path,
+                        double defaultValue,
+                        String comment) {
+                return builder.comment(comment).defineInRange(path, defaultValue, 0.0D, MAX_POWER_WATTS);
         }
 
-        public static double radarDisplayPowerWatts() {
-            ensureConfigDefined();
-            return value(radarDisplayPowerWatts);
+        public static final class Voltages {
+                private Voltages() {
+                }
+
+                public static LoadVoltageRange radar() {
+                        ensureConfigDefined();
+                        return value(radarVoltageConfig);
+                }
+
+                public static LoadVoltageRange monitorController() {
+                        ensureConfigDefined();
+                        return value(monitorControllerVoltageConfig);
+                }
+
+                public static LoadVoltageRange shellAlarm() {
+                        ensureConfigDefined();
+                        return value(shellAlarmVoltageConfig);
+                }
+
+                public static LoadVoltageRange logicDock() {
+                        ensureConfigDefined();
+                        return value(logicDockVoltageConfig);
+                }
+
+                public static LoadVoltageRange panelRadarDisplay() {
+                        ensureConfigDefined();
+                        return value(panelRadarDisplayVoltageConfig);
+                }
+
+                public static LoadVoltageRange panelRadarLink() {
+                        ensureConfigDefined();
+                        return value(panelRadarLinkVoltageConfig);
+                }
+
+                public static LoadVoltageRange onboardComputer() {
+                        ensureConfigDefined();
+                        return value(onboardComputerVoltageConfig);
+                }
+
+                public static DriveVoltageRange targetController() {
+                        ensureConfigDefined();
+                        return new DriveVoltageRange(value(targetControllerMinimumVoltage),
+                                        value(targetControllerNominalVoltage), value(targetControllerMaximumVoltage));
+                }
+
+                public static DriveVoltageRange interceptionController() {
+                        ensureConfigDefined();
+                        return new DriveVoltageRange(value(interceptionControllerMinimumVoltage),
+                                        value(interceptionControllerNominalVoltage),
+                                        value(interceptionControllerMaximumVoltage));
+                }
         }
 
-        public static double panelRadarDisplayPowerWatts() {
-            ensureConfigDefined();
-            return value(panelRadarDisplayPowerWatts);
+        public static final class Resistances {
+                private Resistances() {
+                }
+
+                public static double targetController() {
+                        ensureConfigDefined();
+                        return value(targetControllerResistanceOhms);
+                }
+
+                public static double interceptionController() {
+                        ensureConfigDefined();
+                        return value(interceptionControllerResistanceOhms);
+                }
         }
 
-        public static double panelRadarLinkPowerWatts() {
-            ensureConfigDefined();
-            return value(panelRadarLinkPowerWatts);
+        public static final class Ratings {
+                private Ratings() {
+                }
+
+                public static double radarControllerPowerWatts() {
+                        ensureConfigDefined();
+                        return value(radarControllerPowerWatts);
+                }
+
+                public static double phasedArrayPanelPowerWatts() {
+                        ensureConfigDefined();
+                        return value(phasedArrayPanelPowerWatts);
+                }
+
+                public static double overviewModulePowerWatts() {
+                        ensureConfigDefined();
+                        return value(overviewModulePowerWatts);
+                }
+
+                public static double monitorControllerPowerWatts() {
+                        ensureConfigDefined();
+                        return value(monitorControllerPowerWatts);
+                }
+
+                public static double radarDisplayPowerWatts() {
+                        ensureConfigDefined();
+                        return value(radarDisplayPowerWatts);
+                }
+
+                public static double panelRadarDisplayPowerWatts() {
+                        ensureConfigDefined();
+                        return value(panelRadarDisplayPowerWatts);
+                }
+
+                public static double panelRadarLinkPowerWatts() {
+                        ensureConfigDefined();
+                        return value(panelRadarLinkPowerWatts);
+                }
+
+                public static double logicDockPowerWatts() {
+                        ensureConfigDefined();
+                        return value(logicDockPowerWatts);
+                }
+
+                public static double onboardComputerPowerWatts() {
+                        ensureConfigDefined();
+                        return value(onboardComputerPowerWatts);
+                }
+
+                public static double shellAlarmPowerWatts() {
+                        ensureConfigDefined();
+                        return value(shellAlarmPowerWatts);
+                }
         }
 
-        public static double logicDockPowerWatts() {
-            ensureConfigDefined();
-            return value(logicDockPowerWatts);
+        // При раннем обращении электрического блока принудительно строим общий SPEC до
+        // чтения его полей.
+        private static void ensureConfigDefined() {
+                if (radarVoltageConfig == null) {
+                        ModConfigSpec ignored = PowerRadarServerConfig.SPEC;
+                }
         }
 
-        public static double onboardComputerPowerWatts() {
-            ensureConfigDefined();
-            return value(onboardComputerPowerWatts);
+        private static LoadVoltageRange value(LoadVoltageConfig config) {
+                return new LoadVoltageRange(value(config.nominal()), value(config.minimum()), value(config.maximum()));
         }
 
-        public static double shellAlarmPowerWatts() {
-            ensureConfigDefined();
-            return value(shellAlarmPowerWatts);
+        private static double value(ModConfigSpec.DoubleValue configValue) {
+                return PowerRadarServerConfig.SPEC.isLoaded() ? configValue.get() : configValue.getDefault();
         }
-    }
 
-    // При раннем обращении электрического блока принудительно строим общий SPEC до чтения его полей.
-    private static void ensureConfigDefined() {
-        if (radarNominalVoltage == null) {
-            ModConfigSpec ignored = PowerRadarServerConfig.SPEC;
+        private record LoadVoltageConfig(
+                        ModConfigSpec.DoubleValue nominal,
+                        ModConfigSpec.DoubleValue minimum,
+                        ModConfigSpec.DoubleValue maximum) {
         }
-    }
 
-    private static double value(ModConfigSpec.DoubleValue configValue) {
-        return PowerRadarServerConfig.SPEC.isLoaded() ? configValue.get() : configValue.getDefault();
-    }
+        public record LoadVoltageRange(double nominal, double minimum, double maximum) {
+        }
 
-    public record LoadVoltageRange(
-            double nominal,
-            double minimum,
-            double restart,
-            double maximum,
-            double overvoltageRecovery
-    ) {
-    }
-
-    public record DriveVoltageRange(double minimum, double fullSpeed, double maximum) {
-    }
+        public record DriveVoltageRange(double minimum, double nominal, double maximum) {
+        }
 }

@@ -1,21 +1,90 @@
 {
   "ambientocclusion": false,
-  "texture_size": [48, 48],
+  "texture_size": [
+    48,
+    48
+  ],
   "textures": {
     "0": "power_radar:block/radar_link"
   },
   "elements": [
     {
-      "from": [2.52, 2.52, 5.02],
-      "to": [7.48, 7.48, 9.98],
+      "from": [
+        8,
+        2,
+        4.5
+      ],
+      "to": [
+        14,
+        8,
+        10.5
+      ],
       "shade": false,
       "faces": {
-        "north": {"uv": [8.33333, 6, 6.66667, 4.33333], "texture": "#0", "shade": false},
-        "east": {"uv": [6.66667, 6, 8.33333, 7.66667], "texture": "#0", "shade": false},
-        "south": {"uv": [8.33333, 7.66667, 6.66667, 9.33333], "texture": "#0", "shade": false},
-        "west": {"uv": [6.66667, 6, 8.33333, 7.66667], "texture": "#0", "shade": false},
-        "up": {"uv": [6.66667, 6, 8.33333, 7.66667], "texture": "#0", "shade": false},
-        "down": {"uv": [6.66667, 6, 8.33333, 7.66667], "texture": "#0", "shade": false}
+        "north": {
+          "uv": [
+            8.33333,
+            6,
+            6.66667,
+            4.33333
+          ],
+          "rotation": 180,
+          "texture": "#0",
+          "shade": false
+        },
+        "east": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "rotation": 90,
+          "texture": "#0",
+          "shade": false
+        },
+        "south": {
+          "uv": [
+            8.33333,
+            7.66667,
+            6.66667,
+            9.33333
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "west": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "rotation": 270,
+          "texture": "#0",
+          "shade": false
+        },
+        "up": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "texture": "#0",
+          "shade": false
+        },
+        "down": {
+          "uv": [
+            6.66667,
+            6,
+            8.33333,
+            7.66667
+          ],
+          "rotation": 180,
+          "texture": "#0",
+          "shade": false
+        }
       }
     }
   ]

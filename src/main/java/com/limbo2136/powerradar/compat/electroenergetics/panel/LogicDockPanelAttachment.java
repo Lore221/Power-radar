@@ -53,6 +53,11 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
     }
 
     @Override
+    protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
+        return PowerRadarElectricalParameters.Voltages.logicDock();
+    }
+
+    @Override
     protected void afterElectricalTick(SimulationResults results) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return;
