@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.client.ponder;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import com.limbo2136.powerradar.registry.ModItems;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 
 import net.createmod.ponder.api.registration.PonderPlugin;
 import net.createmod.ponder.api.registration.PonderSceneRegistrationHelper;
@@ -40,7 +41,8 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
         )
         .addStoryBoard("link_basic", RadarScenes::linkBasic);
 
-        helper.forComponents(
+        if (CreateBigCannonsIntegration.isLoaded()) {
+            helper.forComponents(
             ModBlocks.RADAR_CONTROLLER.getId(),
             ModBlocks.AIR_RADAR_CONTROLLER.getId(),
             ModBlocks.SURFACE_RADAR_CONTROLLER.getId(),
@@ -69,23 +71,26 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             ModItems.INTERCEPTION_FUZE.getId()
         )
         .addStoryBoard("interception", DefenceScenes::ShellAlarm);
+        }
 
-        helper.forComponents(
-            ModBlocks.ONBOARD_COMPUTER.getId()
-        )
-        .addStoryBoard("onboard", DefenceScenes::OnBoardComputer);
+        if (CreateBigCannonsIntegration.isLoaded()) {
+            helper.forComponents(
+                ModBlocks.ONBOARD_COMPUTER.getId()
+            )
+            .addStoryBoard("onboard", DefenceScenes::OnBoardComputer);
 
-        helper.forComponents(
-            ModBlocks.SHELL_ALARM.getId(),
-            ModBlocks.INTERCEPTION_CONTROLLER.getId(),
-            ModItems.INTERCEPTION_FUZE.getId(),
-            ModBlocks.ONBOARD_COMPUTER.getId()
-        )
-        .addStoryBoard("interception", DefenceScenes::InterceptController);
+            helper.forComponents(
+                ModBlocks.SHELL_ALARM.getId(),
+                ModBlocks.INTERCEPTION_CONTROLLER.getId(),
+                ModItems.INTERCEPTION_FUZE.getId(),
+                ModBlocks.ONBOARD_COMPUTER.getId()
+            )
+            .addStoryBoard("interception", DefenceScenes::InterceptController);
+        }
     }
 
     @Override public void registerTags(PonderTagRegistrationHelper<ResourceLocation> helper) {
-        ResourceLocation radars = ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radars");
+        ResourceLocation radars = PowerRadar.id("radars");
         helper.registerTag(radars)
             .title("Radars")
             .description("Components involved in target detection and navigation")
@@ -105,40 +110,43 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             .add(ModBlocks.RADAR_LINK.getId())
             .add(ModItems.LINKER.getId())
             .add(ModItems.DISPLAY_CARD.getId())
-            .add(ModItems.ALLOWLIST_CARD.getId())
             .add(ResourceLocation.fromNamespaceAndPath("minecraft", "compass"))
             .add(ResourceLocation.fromNamespaceAndPath("minecraft", "clock"))
             .add(ResourceLocation.fromNamespaceAndPath("simulated", "altitude_sensor"))
             .add(ResourceLocation.fromNamespaceAndPath("simulated", "velocity_sensor"))
             .add(ResourceLocation.fromNamespaceAndPath("simulated", "gimbal_sensor"));
 
-        ResourceLocation targeting = ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "targeting");
-        helper.registerTag(targeting)
-            .title("Target system")
-            .description("Components involved in the destruction of targets")
-            .item(ModBlocks.TARGET_CONTROLLER.get())
-            .addToIndex()
-            .register();
-        helper.addToTag(targeting)
-            .add(ModBlocks.TARGET_CONTROLLER.getId())
-            .add(ModBlocks.RADAR_LINK.getId())
-            .add(ModItems.LINKER.getId())
-            .add(ModItems.TARGETING_CARD.getId());
+        if (CreateBigCannonsIntegration.isLoaded()) {
+            helper.addToTag(radars).add(ModItems.ALLOWLIST_CARD.getId());
 
-        ResourceLocation interception = ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "interception");
-        helper.registerTag(interception)
-            .title("Defense system")
-            .description("Components involved in defense")
-            .item(ModBlocks.INTERCEPTION_CONTROLLER.get())
-            .addToIndex()
-            .register();
-        helper.addToTag(interception)
-            .add(ModBlocks.ONBOARD_COMPUTER.getId())
-            .add(ModBlocks.RADAR_LINK.getId())
-            .add(ModBlocks.MECHANICAL_SIREN.getId())
-            .add(ModBlocks.SHELL_ALARM.getId())
-            .add(ModBlocks.INTERCEPTION_CONTROLLER.getId())
-            .add(ModItems.INTERCEPTION_FUZE.getId())
-            .add(ModItems.LINKER.getId());
+            ResourceLocation targeting = PowerRadar.id("targeting");
+            helper.registerTag(targeting)
+                .title("Target system")
+                .description("Components involved in the destruction of targets")
+                .item(ModBlocks.TARGET_CONTROLLER.get())
+                .addToIndex()
+                .register();
+            helper.addToTag(targeting)
+                .add(ModBlocks.TARGET_CONTROLLER.getId())
+                .add(ModBlocks.RADAR_LINK.getId())
+                .add(ModItems.LINKER.getId())
+                .add(ModItems.TARGETING_CARD.getId());
+
+            ResourceLocation interception = PowerRadar.id("interception");
+            helper.registerTag(interception)
+                .title("Defense system")
+                .description("Components involved in defense")
+                .item(ModBlocks.INTERCEPTION_CONTROLLER.get())
+                .addToIndex()
+                .register();
+            helper.addToTag(interception)
+                .add(ModBlocks.ONBOARD_COMPUTER.getId())
+                .add(ModBlocks.RADAR_LINK.getId())
+                .add(ModBlocks.MECHANICAL_SIREN.getId())
+                .add(ModBlocks.SHELL_ALARM.getId())
+                .add(ModBlocks.INTERCEPTION_CONTROLLER.getId())
+                .add(ModItems.INTERCEPTION_FUZE.getId())
+                .add(ModItems.LINKER.getId());
+        }
     }
 }

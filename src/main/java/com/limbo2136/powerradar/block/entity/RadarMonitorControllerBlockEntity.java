@@ -21,6 +21,7 @@ import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.OnlinePlayersSnapshotCache;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
@@ -47,7 +48,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -57,7 +57,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
-    private static final java.util.Map<MinecraftServer, OnlinePlayersCache> ONLINE_PLAYERS_CACHE = new java.util.WeakHashMap<>();
     private static final int NEARBY_PLAYERS_CACHE_TICKS = 20;
 
     @Nullable
@@ -101,6 +100,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private long nearbyPlayersCacheGameTime = Long.MIN_VALUE;
     private List<ServerPlayer> cachedNearbyPlayers = List.of();
     private boolean dynamicSnapshotResolution;
+    private boolean movingPosePublished;
 
     public RadarMonitorControllerBlockEntity(BlockPos pos, BlockState blockState) {
         this(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), pos, blockState);
@@ -186,6 +186,10 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private void sendMovingPoses(ServerLevel serverLevel, BlockPos monitorPos) {
+        List<ServerPlayer> players = nearbyPlayers(serverLevel);
+        if (players.isEmpty()) {
+            return;
+        }
         refreshCachedSnapshotResolutionIfNeeded(serverLevel, monitorPos);
         RadarMonitorBlockPosePayload payload = RadarMonitorPosePayloadFactory.create(
                 serverLevel,
@@ -193,15 +197,16 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                 facingFromState(getBlockState()),
                 this.cachedSnapshotControllers);
         if (payload == null) {
-            return;
-        }
-        List<ServerPlayer> players = nearbyPlayers(serverLevel);
-        if (players.isEmpty()) {
-            return;
+            if (!this.movingPosePublished) {
+                return;
+            }
+            payload = new RadarMonitorBlockPosePayload(
+                    monitorPos, serverLevel.getGameTime(), null, List.of());
         }
         for (ServerPlayer player : players) {
             PacketDistributor.sendToPlayer(player, payload);
         }
+        this.movingPosePublished = payload.monitorPose() != null || !payload.poses().isEmpty();
     }
 
     private boolean shouldPollSnapshot(ServerLevel level) {
@@ -316,6 +321,16 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         return buildSnapshotPayload(level, controllerPos, null, level.getGameTime());
     }
 
+    public int displayLinkTargetCount(ServerLevel level) {
+        return getOrCreateSnapshotPayload(level, this.worldPosition).displayedTargetCount();
+    }
+
+    @Nullable
+    public UUID displayLinkNetworkId(ServerLevel level) {
+        RadarMonitorSnapshotPayload snapshot = getOrCreateSnapshotPayload(level, this.worldPosition);
+        return snapshot.linked() ? this.cachedSnapshotNetworkId : null;
+    }
+
     private static RadarMonitorSnapshotPayload buildSnapshotPayload(
             ServerLevel level,
             BlockPos controllerPos,
@@ -353,9 +368,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         UUID networkId = monitorController.cachedSnapshotNetworkId;
         List<RadarControllerBlockEntity> controllers = monitorController.cachedSnapshotControllers;
         if (monitorController.hasRemovedCachedSnapshotController()) {
-            controllers = controllers.stream()
-                    .filter(controller -> controller != null && !controller.isRemoved())
-                    .toList();
+            controllers = activeControllers(controllers);
         }
         if (controllers.isEmpty()
                 || monitorController.cachedSnapshotConnectionStatus != RadarNetworkConnectionStatus.CONNECTED) {
@@ -367,7 +380,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                             monitorController.cachedSnapshotConnectionStatus),
                     revision);
         }
-        OnlinePlayersSnapshot onlinePlayers = onlinePlayersSnapshot(level);
+        OnlinePlayersSnapshotCache.Snapshot onlinePlayers = OnlinePlayersSnapshotCache.snapshot(level);
         RadarMonitorDisplayData displayData = networkManager.displayDataForConsumer(
                         networkId,
                         monitorController.cachedSnapshotLinkPos,
@@ -440,7 +453,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             }
             controllerDisplayRevision = revisionHash;
         }
-        int onlinePlayersHash = onlinePlayersSnapshot(level).hash();
+        int onlinePlayersHash = OnlinePlayersSnapshotCache.snapshot(level).hash();
         return new SnapshotKey(
                 snapshotRevision(
                         this.localSnapshotRevision,
@@ -492,8 +505,8 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.cachedSnapshotControllers = resolution.controllers();
             this.cachedSnapshotConnectionStatus = resolution.status();
             this.cachedSnapshotResolutionGameTime = gameTime;
-            this.dynamicSnapshotResolution = monitorOnSable || this.cachedSnapshotControllers.stream()
-                    .anyMatch(controller -> controller.worldPoseAt(gameTime).onSableStructure());
+            this.dynamicSnapshotResolution = monitorOnSable
+                    || hasControllerOnSableStructure(this.cachedSnapshotControllers, gameTime);
             return;
         }
         RadarLinkConnectionResolver.Resolution linkResolution =
@@ -517,8 +530,7 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.cachedSnapshotLinkPos = consumerLinkPos;
             this.cachedSnapshotControllers = controllerResolution.controllers();
             this.cachedSnapshotConnectionStatus = controllerResolution.status();
-            if (monitorOnSable || this.cachedSnapshotControllers.stream()
-                    .anyMatch(controller -> controller.worldPoseAt(gameTime).onSableStructure())) {
+            if (monitorOnSable || hasControllerOnSableStructure(this.cachedSnapshotControllers, gameTime)) {
                 this.dynamicSnapshotResolution = true;
             }
         }
@@ -536,6 +548,32 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private boolean hasRemovedCachedSnapshotController() {
         for (RadarControllerBlockEntity controller : this.cachedSnapshotControllers) {
             if (controller == null || controller.isRemoved()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<RadarControllerBlockEntity> activeControllers(
+            List<RadarControllerBlockEntity> controllers
+    ) {
+        ArrayList<RadarControllerBlockEntity> active = new ArrayList<>(controllers.size());
+        for (RadarControllerBlockEntity controller : controllers) {
+            if (controller != null && !controller.isRemoved()) {
+                active.add(controller);
+            }
+        }
+        return List.copyOf(active);
+    }
+
+    private static boolean hasControllerOnSableStructure(
+            List<RadarControllerBlockEntity> controllers,
+            long gameTime
+    ) {
+        for (RadarControllerBlockEntity controller : controllers) {
+            if (controller != null
+                    && !controller.isRemoved()
+                    && controller.worldPoseAt(gameTime).onSableStructure()) {
                 return true;
             }
         }
@@ -564,12 +602,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
         revision = 31 * revision + Objects.hashCode(controllerPos);
         revision = 31 * revision + Objects.hashCode(connectionStatus);
         return revision;
-    }
-
-    private static OnlinePlayersSnapshot onlinePlayersSnapshot(ServerLevel level) {
-        return ONLINE_PLAYERS_CACHE
-                .computeIfAbsent(level.getServer(), ignored -> new OnlinePlayersCache())
-                .snapshot(level);
     }
 
     private void invalidateSnapshotCache() {
@@ -981,29 +1013,4 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     ) {
     }
 
-    private static final class OnlinePlayersCache {
-        private long lastRefreshGameTime = Long.MIN_VALUE;
-        private OnlinePlayersSnapshot snapshot = new OnlinePlayersSnapshot(List.of(), 1);
-
-        private OnlinePlayersSnapshot snapshot(ServerLevel level) {
-            long gameTime = level.getGameTime();
-            if (gameTime - this.lastRefreshGameTime < 20L) {
-                return this.snapshot;
-            }
-            List<String> names = level.getServer().getPlayerList().getPlayers().stream()
-                    .map(player -> player.getGameProfile().getName())
-                    .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .toList();
-            int hash = 1;
-            for (String name : names) {
-                hash = 31 * hash + name.toLowerCase(java.util.Locale.ROOT).hashCode();
-            }
-            this.snapshot = new OnlinePlayersSnapshot(List.copyOf(names), hash);
-            this.lastRefreshGameTime = gameTime;
-            return this.snapshot;
-        }
-    }
-
-    private record OnlinePlayersSnapshot(List<String> names, int hash) {
-    }
 }

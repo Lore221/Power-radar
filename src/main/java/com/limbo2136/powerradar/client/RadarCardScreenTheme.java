@@ -11,10 +11,8 @@ import net.minecraft.world.item.ItemStack;
 
 /** Общая неизменяемая тема экранов карт: атласы, кнопки, звук и предпросмотр предмета. */
 final class RadarCardScreenTheme {
-    static final ResourceLocation CARDS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/cards.png");
-    static final ResourceLocation ICONS = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
+    static final ResourceLocation CARDS = PowerRadar.id("textures/gui/radar_ui/cards.png");
+    static final ResourceLocation ICONS = PowerRadar.id("textures/gui/radar_ui/icons.png");
     static final int TEXTURE_SIZE = 256;
 
     private static final int BUTTON_NORMAL_U = 120;

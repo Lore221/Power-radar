@@ -200,16 +200,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         });
         shellCount = tracks.size();
         MovingProtectedZone zone = this.protectedZone;
-        MovingProtectedZone initialZone = zone;
         // Дорогие геометрия и кинематика Sable обновляются поэтапно только для снарядов,
         // прошедших дешёвую широкую фазу на текущем снимке радара.
-        List<TrackedTargetView> candidateTracks = tracks.stream()
-                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
-                        projectileLevel,
-                        initialZone,
-                        track,
-                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
-                .toList();
+        List<TrackedTargetView> candidateTracks = ProtectedZoneThreatEvaluator.initialBroadPhaseCandidates(
+                projectileLevel,
+                zone,
+                tracks,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
         if (!candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.refreshGeometryIfDue(
                     level, zone, sableProtectionMarginPercent());
@@ -227,14 +224,11 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             clearInactiveState(level, state);
             return;
         }
-        MovingProtectedZone sampledZone = zone;
-        candidateTracks = candidateTracks.stream()
-                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
-                        projectileLevel,
-                        sampledZone,
-                        track,
-                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
-                .toList();
+        ProtectedZoneThreatEvaluator.retainInitialBroadPhaseCandidates(
+                projectileLevel,
+                zone,
+                candidateTracks,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
         if (!candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.completeMotionSample(zone);
             this.protectedZone = zone;
@@ -470,6 +464,12 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
 
     public boolean sableProtectionMode() {
         return this.sableProtectionMode;
+    }
+
+    public int dangerousShellCount() {
+        return (int) this.evaluations.values().stream()
+                .filter(ThreatEvaluation::dangerous)
+                .count();
     }
 
     @Nullable

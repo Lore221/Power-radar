@@ -1,4 +1,4 @@
-package com.limbo2136.powerradar.client;
+package com.limbo2136.powerradar.config;
 
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import net.neoforged.neoforge.common.ModConfigSpec;

@@ -33,7 +33,6 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3d;
 
 final class SableStructureScanner {
-    private static final int REBUILD_CYCLE_TICKS = 200;
     private static final int CACHE_TTL_TICKS = 6_000;
     private static final int MIN_REBUILD_WORK_PER_TICK = 4_096;
     // Кэш принадлежит экземпляру сервера; слабый ключ не удерживает завершённую локальную сессию.
@@ -125,10 +124,6 @@ final class SableStructureScanner {
             return Optional.empty();
         }
         return Optional.of(serverSubLevel.logicalPose().transformPosition(localCenter));
-    }
-
-    static int geometryRefreshIntervalTicks() {
-        return REBUILD_CYCLE_TICKS;
     }
 
     static Optional<UUID> containingStructureUuid(ServerLevel level, net.minecraft.core.BlockPos pos) {
@@ -248,9 +243,10 @@ final class SableStructureScanner {
         private void tick(MinecraftServer server) {
             long gameTime = server.overworld().getGameTime();
             if (this.cycleStart == Long.MIN_VALUE) {
-                this.cycleStart = gameTime - Math.floorMod(gameTime, REBUILD_CYCLE_TICKS);
+                this.cycleStart = gameTime - Math.floorMod(
+                        gameTime, SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS);
             }
-            if (gameTime - this.cycleStart >= REBUILD_CYCLE_TICKS) {
+            if (gameTime - this.cycleStart >= SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS) {
                 beginNextCycle(server, gameTime);
             }
             int remaining = this.rebuildWorkPerTick;
@@ -288,7 +284,8 @@ final class SableStructureScanner {
             }
             this.rebuildWorkPerTick = (int) Math.min(Integer.MAX_VALUE, Math.max(
                     MIN_REBUILD_WORK_PER_TICK,
-                    (totalWork + REBUILD_CYCLE_TICKS - 1L) / REBUILD_CYCLE_TICKS));
+                    (totalWork + SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS - 1L)
+                            / SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS));
         }
 
         private Optional<SableSilhouetteSnapshot> snapshot(StructureKey key) {

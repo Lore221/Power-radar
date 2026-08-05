@@ -19,12 +19,7 @@ public final class PowerRadarMovementChecks {
             return;
         }
         registered = true;
-        BlockMovementChecks.registerMovementAllowedCheck(PowerRadarMovementChecks::canMoveBlock);
         BlockMovementChecks.registerAttachedCheck(PowerRadarMovementChecks::isAttachedTowards);
-    }
-
-    private static BlockMovementChecks.CheckResult canMoveBlock(BlockState state, Level level, BlockPos pos) {
-        return BlockMovementChecks.CheckResult.PASS;
     }
 
     private static BlockMovementChecks.CheckResult isAttachedTowards(

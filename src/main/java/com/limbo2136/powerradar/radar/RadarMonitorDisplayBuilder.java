@@ -29,16 +29,6 @@ public final class RadarMonitorDisplayBuilder {
             BlockPos monitorPos,
             Direction monitorFacing,
             long serverGameTime,
-            PowerRadarCeeState monitorElectricalState
-    ) {
-        return noLink(monitorPos, monitorFacing, serverGameTime, RadarNetworkConnectionStatus.NO_LINK,
-                monitorElectricalState, 0.0, PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS, 0, 0, false);
-    }
-
-    public static RadarMonitorDisplayData noLink(
-            BlockPos monitorPos,
-            Direction monitorFacing,
-            long serverGameTime,
             RadarNetworkConnectionStatus connectionStatus
     ) {
         return noLink(monitorPos, monitorFacing, serverGameTime, connectionStatus,
@@ -100,51 +90,6 @@ public final class RadarMonitorDisplayBuilder {
         );
     }
 
-    public static RadarMonitorDisplayData fromController(
-            BlockPos monitorPos,
-            Direction monitorFacing,
-            RadarControllerBlockEntity controller,
-            long serverGameTime
-    ) {
-        return fromController(monitorPos, monitorFacing, controller, serverGameTime,
-                PowerRadarCeeState.POWERED, 0.0, 0.0, 0, 0, true, 0, null, List.of(), List.of(), List.of());
-    }
-
-    public static RadarMonitorDisplayData fromController(
-            BlockPos monitorPos,
-            Direction monitorFacing,
-            RadarControllerBlockEntity controller,
-            long serverGameTime,
-            PowerRadarCeeState monitorElectricalState,
-            double monitorVoltageVolts,
-            double monitorResistanceOhms,
-            int monitorDisplayCount,
-            int monitorScreenSize,
-            boolean monitorRendererEnabled,
-            int autotargetFilterMask,
-            UUID manualTargetUuid,
-            List<String> onlinePlayerNames,
-            List<String> whitelistedPlayerNames,
-            List<String> whitelistedSableNames
-    ) {
-        return fromControllers(
-                monitorPos,
-                monitorFacing,
-                List.of(controller),
-                serverGameTime,
-                monitorElectricalState,
-                monitorVoltageVolts,
-                monitorResistanceOhms,
-                monitorDisplayCount,
-                monitorScreenSize,
-                monitorRendererEnabled,
-                autotargetFilterMask,
-                manualTargetUuid,
-                onlinePlayerNames,
-                whitelistedPlayerNames,
-                whitelistedSableNames);
-    }
-
     public static RadarMonitorDisplayData fromControllers(
             BlockPos monitorPos,
             Direction monitorFacing,
@@ -156,6 +101,7 @@ public final class RadarMonitorDisplayBuilder {
             int monitorDisplayCount,
             int monitorScreenSize,
             boolean monitorRendererEnabled,
+            int displayFilterMask,
             int autotargetFilterMask,
             UUID manualTargetUuid,
             List<String> onlinePlayerNames,
@@ -228,7 +174,8 @@ public final class RadarMonitorDisplayBuilder {
                     ? radarLastScanGameTime
                     : serverGameTime;
             radar.forEachTargetTrack(track -> {
-                if (!RadarDetectionFilters.enabled(radar.detectionFilterMask(), track.category())) {
+                if (!RadarDetectionFilters.enabled(radar.detectionFilterMask(), track.category())
+                        || !RadarDetectionFilters.enabled(displayFilterMask, track.category())) {
                     return;
                 }
                 RadarDisplayTarget candidate = RadarDisplayTarget.fromTrack(track, targetDisplayGameTime, radarTrackUpdateIntervalTicks);

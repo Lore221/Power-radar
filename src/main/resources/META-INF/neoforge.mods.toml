@@ -49,14 +49,14 @@ side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="createbigcannons"
-type="required"
+type="optional"
 versionRange="[${create_big_cannons_version},)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="ritchiesprojectilelib"
-type="required"
+type="optional"
 versionRange="[${ritchies_projectile_lib_version},)"
 ordering="AFTER"
 side="BOTH"

@@ -145,6 +145,20 @@ public record SelectedTargetRuntimeSnapshot(
                     live.approximateSize());
         }
 
+        public TargetView withVelocity(Vec3 velocity) {
+            return copyWithLiveState(
+                    this,
+                    this.targetId,
+                    this.dimensionId,
+                    this.position,
+                    velocity,
+                    true,
+                    this.lastSeenGameTime,
+                    this.lastConfirmedAliveGameTime,
+                    this.boundingHeight,
+                    this.approximateSize);
+        }
+
         private static TargetView copyWithLiveState(
                 TrackedTargetView source,
                 int targetId,

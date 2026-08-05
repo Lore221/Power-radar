@@ -196,6 +196,12 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
 
+tasks.named('jar', Jar).configure {
+    from('LICENSE') {
+        rename { 'LICENSE_power_radar' }
+    }
+}
+
 idea {
     // Исходники зависимостей нужны для проверки интеграционных границ и сигнатур API.
     module {

@@ -8,7 +8,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 
 public record RadarMonitorBlockPosePayload(
         BlockPos monitorPos,
@@ -17,7 +16,7 @@ public record RadarMonitorBlockPosePayload(
         List<RadarPose> poses
 ) implements CustomPacketPayload {
     public static final Type<RadarMonitorBlockPosePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_block_pose"));
+            PowerRadar.id("radar_monitor_block_pose"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorBlockPosePayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorBlockPosePayload::write, RadarMonitorBlockPosePayload::new);
 

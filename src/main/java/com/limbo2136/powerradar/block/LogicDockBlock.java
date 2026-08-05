@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeo
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -41,7 +42,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.util.RandomSource;
 
-public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceBlock<LogicDockCeeDevice> {
+public class LogicDockBlock extends BaseEntityBlock
+        implements IWrenchable, ElectricalDeviceBlock<LogicDockCeeDevice> {
     public static final MapCodec<LogicDockBlock> CODEC = simpleCodec(LogicDockBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     // Кубы повторяют корпус из models/block/logic_dock/model.json.
@@ -229,6 +231,11 @@ public class LogicDockBlock extends BaseEntityBlock implements ElectricalDeviceB
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         return PowerRadarCeeContactGeometry.logicDock(state.getValue(FACING));
+    }
+
+    @Override
+    public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
+        return originalState.setValue(FACING, originalState.getValue(FACING).getClockWise());
     }
 
     private static VoxelShape shapeFor(Direction facing) {

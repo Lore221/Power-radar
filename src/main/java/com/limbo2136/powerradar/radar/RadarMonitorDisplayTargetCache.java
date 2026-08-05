@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -16,10 +15,11 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class RadarMonitorDisplayTargetCache {
     private static final ResourceLocation RADAR_STRUCTURE_TYPE =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_structure");
+            PowerRadar.id("radar_structure");
     private static final double RADAR_MARKER_BIND_DISTANCE_SQUARED = 16.0D;
     private final Map<String, Entry> entries = new HashMap<>();
     private final Map<String, RadarId> radarMarkerBindings = new HashMap<>();
+    private final Set<String> sourceKeys = new HashSet<>();
 
     public RadarMonitorDisplayData update(RadarMonitorDisplayData displayData, long serverGameTime) {
         return update(displayData, serverGameTime, Set.of());
@@ -33,15 +33,16 @@ public final class RadarMonitorDisplayTargetCache {
         if (!displayData.linked() || !displayData.structureValid() || displayData.currentRange() <= 0) {
             this.entries.clear();
             this.radarMarkerBindings.clear();
+            this.sourceKeys.clear();
             return displayData;
         }
 
         ArrayList<RadarDisplayTarget> visibleTargets = new ArrayList<>(displayData.targets().size());
-        Set<String> sourceKeys = new HashSet<>();
+        this.sourceKeys.clear();
         int expirationTicks = expirationTicks();
         for (RadarDisplayTarget sourceTarget : displayData.targets()) {
             String key = sourceTarget.stableSelectionKey();
-            sourceKeys.add(key);
+            this.sourceKeys.add(key);
             Entry entry = this.entries.get(key);
             RadarDisplayTarget anchoredMarker = anchoredRadarMarker(displayData, sourceTarget);
             if (anchoredMarker != null) {
@@ -86,8 +87,8 @@ public final class RadarMonitorDisplayTargetCache {
 
         // Пропавший из исходного снимка ключ удаляется сразу: радар уже признал цель мёртвой,
         // отсутствующей или просроченной, поэтому монитор не должен продлевать её жизнь сам.
-        this.entries.keySet().removeIf(key -> !sourceKeys.contains(key));
-        this.radarMarkerBindings.keySet().removeIf(key -> !sourceKeys.contains(key));
+        this.entries.keySet().removeIf(key -> !this.sourceKeys.contains(key));
+        this.radarMarkerBindings.keySet().removeIf(key -> !this.sourceKeys.contains(key));
         return displayData.withTargets(visibleTargets);
     }
 
@@ -230,13 +231,11 @@ public final class RadarMonitorDisplayTargetCache {
         if (coverage.orientationState().structureType() == RadarStructureType.OVERVIEW) {
             return RadarCoverageFilter.isInsideOverviewFootprint(dx, dz, range);
         }
-        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-        if (horizontalDistance > range) {
+        if (dx * dx + dz * dz > range * range) {
             return false;
         }
         double bearing = RadarCoverageFilter.bearingDegrees(
-                coverage.orientationState().yawAt(serverGameTime),
-                new Vec3(dx, 0.0D, dz));
+                coverage.orientationState().yawAt(serverGameTime), dx, dz);
         return Math.abs(bearing) <= coverage.sectorAngle() / 2.0D;
     }
 
@@ -250,13 +249,11 @@ public final class RadarMonitorDisplayTargetCache {
         if (displayData.orientationState().structureType() == RadarStructureType.OVERVIEW) {
             return RadarCoverageFilter.isInsideOverviewFootprint(dx, dz, range);
         }
-        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
-        if (horizontalDistance > range) {
+        if (dx * dx + dz * dz > range * range) {
             return false;
         }
         double bearing = RadarCoverageFilter.bearingDegrees(
-                displayData.orientationState().yawAt(displayData.serverGameTime()),
-                new Vec3(dx, 0.0D, dz));
+                displayData.orientationState().yawAt(displayData.serverGameTime()), dx, dz);
         return Math.abs(bearing) <= displayData.sectorAngle() / 2.0D;
     }
 

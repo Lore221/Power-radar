@@ -5,18 +5,18 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -40,7 +40,8 @@ public final class RadarScanCoordinator {
             if (entry.getKey().getServer() != server) {
                 return false;
             }
-            ready.add(Map.entry(entry.getKey(), List.copyOf(entry.getValue())));
+            // Список уже исключается из PENDING и больше никем не изменяется, поэтому копия здесь не нужна.
+            ready.add(Map.entry(entry.getKey(), entry.getValue()));
             return true;
         });
         for (Map.Entry<ServerLevel, List<RadarScanRequest>> entry : ready) {
@@ -69,50 +70,64 @@ public final class RadarScanCoordinator {
         }
 
         List<SharedBatch> batches = groupWork(work);
-        boolean sableFilterEnabled = batches.stream()
-                .flatMap(batch -> batch.profiles().stream())
-                .anyMatch(RadarScanProfile::detectSableStructures);
+        boolean sableFilterEnabled = false;
+        for (SharedBatch batch : batches) {
+            if (batch.detectsSableStructures()) {
+                sableFilterEnabled = true;
+                break;
+            }
+        }
         List<SableStructureObservation> loadedSableStructures = sableFilterEnabled
                 ? SableRadarIntegration.loadedStructures(level)
                 : List.of();
         Map<RadarScanRequest, Set<TargetKey>> seenByRequest = new IdentityHashMap<>();
+        Map<RadarScanRequest, RadarCoverageFilter.PreparedCoverage> coverageByRequest = new IdentityHashMap<>();
+        RadarSurfaceHeightCache surfaceHeights = new RadarSurfaceHeightCache(level);
         int entityCandidates = 0;
         int sableCandidates = 0;
 
         // Этап 2: общий запрос даёт кандидатов, но точное покрытие и запись трека выполняются отдельно.
         for (SharedBatch batch : batches) {
-            List<RadarScanProfile> profiles = batch.profiles();
-            List<Entity> entities = RadarScanner.queryCandidates(level, batch.queryBox(), profiles);
-            entityCandidates += entities.size();
+            Collection<RadarScanProfile> profiles = batch.profiles();
+            List<RadarScanner.RadarCandidate> candidates = RadarScanner.queryCandidates(
+                    level, batch.queryBox(), profiles);
+            entityCandidates += candidates.size();
             for (SliceWork member : batch.members) {
                 Set<TargetKey> seen = seenByRequest.computeIfAbsent(member.request, ignored -> new HashSet<>());
-                for (Entity entity : entities) {
-                    if (!entity.getBoundingBox().intersects(member.slice)) {
+                RadarCoverageFilter.PreparedCoverage coverage = coverageFor(
+                        coverageByRequest, member.request, member.request.discoveryProfile());
+                for (RadarScanner.RadarCandidate candidate : candidates) {
+                    if (!candidate.entity().getBoundingBox().intersects(member.slice)) {
                         continue;
                     }
                     RadarScanner.processSharedCandidate(
                             member.request.discoveryProfile(), member.request.context(),
-                            member.request.targetCache(), entity, seen);
+                            member.request.targetCache(), candidate, seen, coverage, surfaceHeights);
                 }
             }
 
-            if (profiles.stream().anyMatch(RadarScanProfile::detectSableStructures)) {
-                List<SableStructureObservation> structures = loadedSableStructures.stream()
-                        .filter(structure -> intersectsHorizontally(structure.worldBounds(), batch.queryBox()))
-                        .toList();
+            if (batch.detectsSableStructures()) {
+                List<SableStructureObservation> structures = new ArrayList<>();
+                for (SableStructureObservation structure : loadedSableStructures) {
+                    if (intersectsHorizontally(structure.worldBounds(), batch.queryBox())) {
+                        structures.add(structure);
+                    }
+                }
                 sableCandidates += structures.size();
                 for (SliceWork member : batch.members) {
                     if (!member.request.discoveryProfile().detectSableStructures()) {
                         continue;
                     }
                     Set<TargetKey> seen = seenByRequest.computeIfAbsent(member.request, ignored -> new HashSet<>());
+                    RadarCoverageFilter.PreparedCoverage coverage = coverageFor(
+                            coverageByRequest, member.request, member.request.discoveryProfile());
                     for (SableStructureObservation structure : structures) {
                         if (!intersectsHorizontally(structure.worldBounds(), member.slice)) {
                             continue;
                         }
                         RadarScanner.processSableCandidate(
                                 member.request.discoveryProfile(), member.request.context(),
-                                member.request.targetCache(), structure, seen);
+                                member.request.targetCache(), structure, seen, coverage, surfaceHeights);
                     }
                 }
             }
@@ -124,7 +139,9 @@ public final class RadarScanCoordinator {
                 continue;
             }
             if (request.refreshProfile() != null) {
-                RadarScanner.refreshTrackedEntities(request.refreshProfile(), request.context(), request.targetCache());
+                RadarScanner.refreshTrackedEntities(
+                        request.refreshProfile(), request.context(), request.targetCache(),
+                        coverageFor(coverageByRequest, request, request.refreshProfile()), surfaceHeights);
             }
             RadarScanner.housekeeping(request.context(), request.targetCache());
             if (request.publishCompletion() != null) {
@@ -140,25 +157,43 @@ public final class RadarScanCoordinator {
         }
     }
 
+    private static RadarCoverageFilter.PreparedCoverage coverageFor(
+            Map<RadarScanRequest, RadarCoverageFilter.PreparedCoverage> coverages,
+            RadarScanRequest request,
+            RadarScanProfile profile
+    ) {
+        RadarCoverageFilter.PreparedCoverage coverage = coverages.get(request);
+        if (coverage == null) {
+            coverage = RadarCoverageFilter.prepare(profile, request.context());
+            coverages.put(request, coverage);
+        }
+        return coverage;
+    }
+
     private static List<SharedBatch> groupWork(List<SliceWork> work) {
         if (work.isEmpty()) {
             return List.of();
         }
         double cellSize = Math.max(1.0D, RadarConstants.entityQuerySliceSize());
-        Map<CellKey, List<SharedBatch>> buckets = new HashMap<>();
+        Long2ObjectOpenHashMap<List<SharedBatch>> buckets = new Long2ObjectOpenHashMap<>();
         List<SharedBatch> batches = new ArrayList<>();
         for (SliceWork item : work) {
-            CellKey key = CellKey.forBox(item.slice, cellSize);
+            int cellX = cellCoordinate((item.slice.minX + item.slice.maxX) * 0.5D, cellSize);
+            int cellZ = cellCoordinate((item.slice.minZ + item.slice.maxZ) * 0.5D, cellSize);
             SharedBatch best = null;
             double bestRatio = MAX_SHARED_UNION_RATIO;
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    for (SharedBatch candidate : buckets.getOrDefault(new CellKey(key.x + dx, key.z + dz), List.of())) {
+                    List<SharedBatch> nearby = buckets.get(cellKey(cellX + dx, cellZ + dz));
+                    if (nearby == null) {
+                        continue;
+                    }
+                    for (SharedBatch candidate : nearby) {
                         if (candidate.containsRadar(item.request.radarId())) {
                             continue;
                         }
-                        double ratio = mergeRatio(candidate.queryBox, candidate.sourceVolume, item.slice);
-                        if (isBeneficialMerge(candidate.queryBox, candidate.sourceVolume, item.slice)
+                        double ratio = mergeRatio(candidate.queryBox, item.slice);
+                        if (isBeneficialMerge(candidate.queryBox, item.slice)
                                 && ratio < bestRatio) {
                             bestRatio = ratio;
                             best = candidate;
@@ -169,12 +204,12 @@ public final class RadarScanCoordinator {
             if (best == null) {
                 SharedBatch batch = new SharedBatch(item);
                 batches.add(batch);
-                buckets.computeIfAbsent(key, ignored -> new ArrayList<>()).add(batch);
+                buckets.computeIfAbsent(cellKey(cellX, cellZ), ignored -> new ArrayList<>()).add(batch);
             } else {
                 best.add(item);
             }
         }
-        return List.copyOf(batches);
+        return batches;
     }
 
     private static AABB union(AABB first, AABB second) {
@@ -192,30 +227,32 @@ public final class RadarScanCoordinator {
         return Math.max(0.0D, box.getXsize()) * Math.max(0.0D, box.getYsize()) * Math.max(0.0D, box.getZsize());
     }
 
-    static boolean isBeneficialMerge(AABB existingUnion, double existingSourceVolume, AABB next) {
-        return mergeRatio(existingUnion, existingSourceVolume, next) < MAX_SHARED_UNION_RATIO;
+    static boolean isBeneficialMerge(AABB existingUnion, AABB next) {
+        return mergeRatio(existingUnion, next) < MAX_SHARED_UNION_RATIO;
     }
 
-    private static double mergeRatio(AABB existingUnion, double existingSourceVolume, AABB next) {
+    private static double mergeRatio(AABB existingUnion, AABB next) {
         return volume(union(existingUnion, next))
-                / Math.max(1.0D, existingSourceVolume + volume(next));
+                / Math.max(1.0D, volume(existingUnion) + volume(next));
     }
 
     private record SliceWork(RadarScanRequest request, AABB slice) {
     }
 
-    private record CellKey(int x, int z) {
-        private static CellKey forBox(AABB box, double cellSize) {
-            return new CellKey((int) Math.floor(((box.minX + box.maxX) * 0.5D) / cellSize),
-                    (int) Math.floor(((box.minZ + box.maxZ) * 0.5D) / cellSize));
-        }
+    private static int cellCoordinate(double coordinate, double cellSize) {
+        return (int) Math.floor(coordinate / cellSize);
+    }
+
+    private static long cellKey(int x, int z) {
+        return ((long) x << 32) ^ (z & 0xFFFF_FFFFL);
     }
 
     private static final class SharedBatch {
         private final List<SliceWork> members = new ArrayList<>();
         private final Set<RadarId> radarIds = new HashSet<>();
+        private final Set<RadarScanProfile> profiles = new LinkedHashSet<>();
         private AABB queryBox;
-        private double sourceVolume;
+        private boolean detectsSableStructures;
 
         private SharedBatch(SliceWork first) {
             add(first);
@@ -224,8 +261,10 @@ public final class RadarScanCoordinator {
         private void add(SliceWork item) {
             this.members.add(item);
             this.radarIds.add(item.request.radarId());
+            RadarScanProfile profile = item.request.discoveryProfile();
+            this.profiles.add(profile);
+            this.detectsSableStructures |= profile.detectSableStructures();
             this.queryBox = this.queryBox == null ? item.slice : union(this.queryBox, item.slice);
-            this.sourceVolume += volume(item.slice);
         }
 
         private boolean containsRadar(RadarId radarId) {
@@ -236,12 +275,12 @@ public final class RadarScanCoordinator {
             return this.queryBox;
         }
 
-        private List<RadarScanProfile> profiles() {
-            Map<RadarScanProfile, RadarScanProfile> unique = new LinkedHashMap<>();
-            for (SliceWork member : this.members) {
-                unique.put(member.request.discoveryProfile(), member.request.discoveryProfile());
-            }
-            return List.copyOf(unique.values());
+        private Collection<RadarScanProfile> profiles() {
+            return this.profiles;
+        }
+
+        private boolean detectsSableStructures() {
+            return this.detectsSableStructures;
         }
     }
 }

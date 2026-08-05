@@ -7,14 +7,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 
 public record RadarMonitorTargetSelectionPayload(
         BlockPos monitorPos,
         @Nullable UUID targetUuid
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<RadarMonitorTargetSelectionPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_target_selection"));
+            new CustomPacketPayload.Type<>(PowerRadar.id("radar_monitor_target_selection"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorTargetSelectionPayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorTargetSelectionPayload::write, RadarMonitorTargetSelectionPayload::new);
 

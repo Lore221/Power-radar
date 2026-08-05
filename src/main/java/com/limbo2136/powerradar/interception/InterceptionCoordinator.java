@@ -26,15 +26,12 @@ public final class InterceptionCoordinator {
     private static final long DEFAULT_THREAT_TTL_TICKS = 20L;
     private static final long THREAT_TTL_SAFETY_MARGIN_TICKS = 10L;
     private static final long MAX_THREAT_TTL_TICKS = 1210L;
-    private static final long RESERVATION_TTL_TICKS = 10L;
     private static final long PENDING_LAUNCH_TTL_TICKS = 40L;
     private static final long INTERCEPTOR_ASSIGNMENT_TTL_TICKS = 5L;
     private static final long DESTRUCTION_CHANCE_TTL_TICKS = 1200L;
     private static final long CONTROLLER_SNAPSHOT_TTL_TICKS = 20L;
     private static final long REJECTED_ASSIGNMENT_TTL_TICKS = 8L;
     private static final double PENDING_LAUNCH_BIND_DISTANCE = 20.0;
-    private static final double RESERVATION_STEAL_MARGIN_TICKS = 2.0;
-    private static final double TARGET_SWITCH_MARGIN_TICKS = 3.0;
     private static final Map<MinecraftServer, ServerState> SERVERS = new WeakHashMap<>();
 
     private InterceptionCoordinator() {
@@ -46,8 +43,9 @@ public final class InterceptionCoordinator {
             BlockPos alarmPos,
             Set<UUID> threatUuids
     ) {
-        List<ThreatSnapshot> snapshots = threatUuids.stream()
-                .map(uuid -> new ThreatSnapshot(
+        List<ThreatSnapshot> snapshots = new ArrayList<>(threatUuids.size());
+        for (UUID uuid : threatUuids) {
+            snapshots.add(new ThreatSnapshot(
                         uuid,
                         level.dimension(),
                         Vec3.ZERO,
@@ -61,8 +59,8 @@ public final class InterceptionCoordinator {
                         Vec3.ZERO,
                         level.getGameTime(),
                         null,
-                        null))
-                .toList();
+                        null));
+        }
         publishThreats(level, networkId, alarmPos, snapshots);
     }
 
@@ -203,19 +201,6 @@ public final class InterceptionCoordinator {
     }
 
     @Nullable
-    public static synchronized Vec3 threatReferencePoint(
-            MinecraftServer server,
-            UUID networkId,
-            UUID threatUuid,
-            long gameTime
-    ) {
-        NetworkState network = network(server, networkId);
-        cleanup(network, gameTime);
-        Threat threat = network.threats.get(threatUuid);
-        return threat == null ? null : projectedReference(threat, gameTime);
-    }
-
-    @Nullable
     public static synchronized ThreatSnapshot threatSnapshot(
             MinecraftServer server,
             UUID networkId,
@@ -259,81 +244,6 @@ public final class InterceptionCoordinator {
         network.rejections.keySet().removeIf(key -> key.controllerPos.equals(controllerKey));
     }
 
-    @Nullable
-    public static synchronized UUID claimBestThreat(
-            ServerLevel level,
-            UUID networkId,
-            BlockPos controllerPos,
-            @Nullable UUID currentThreat,
-            List<ThreatBid> bids
-    ) {
-        long gameTime = level.getGameTime();
-        NetworkState network = network(level.getServer(), networkId);
-        cleanup(network, gameTime);
-
-        // Резервацию можно забрать только при заметно более раннем перехвате; текущая цель имеет гистерезис.
-        ThreatBid currentBid = null;
-        ThreatBid bestBid = null;
-        for (ThreatBid bid : bids) {
-            if (!network.threats.containsKey(bid.threatUuid)) {
-                continue;
-            }
-            Threat threat = network.threats.get(bid.threatUuid);
-            if (threat.dimension != level.dimension()) {
-                continue;
-            }
-            Reservation reservation = network.reservations.get(bid.threatUuid);
-            boolean owned = reservation != null
-                    && reservation.controllerPos.equals(controllerKey(level, controllerPos));
-            boolean available = reservation == null
-                    || reservation.expiresAt < gameTime
-                    || owned
-                    || bid.engagementTicks + RESERVATION_STEAL_MARGIN_TICKS < reservation.engagementTicks;
-            if (!available) {
-                continue;
-            }
-            if (currentThreat != null && currentThreat.equals(bid.threatUuid) && owned) {
-                currentBid = bid;
-            }
-            if (bestBid == null || bid.priorityScore < bestBid.priorityScore) {
-                bestBid = bid;
-            }
-        }
-
-        ThreatBid selected = bestBid;
-        if (currentBid != null && (bestBid == null
-                || currentBid.priorityScore <= bestBid.priorityScore + TARGET_SWITCH_MARGIN_TICKS)) {
-            selected = currentBid;
-        }
-        if (selected == null) {
-            releaseOwnedReservation(network, controllerKey(level, controllerPos), currentThreat);
-            return null;
-        }
-        if (currentThreat != null && !currentThreat.equals(selected.threatUuid)) {
-            releaseOwnedReservation(network, controllerKey(level, controllerPos), currentThreat);
-        }
-        network.reservations.put(selected.threatUuid,
-                new Reservation(controllerKey(level, controllerPos), selected.engagementTicks,
-                        gameTime + RESERVATION_TTL_TICKS));
-        return selected.threatUuid;
-    }
-
-    public static synchronized void releaseThreat(
-            ServerLevel level,
-            UUID networkId,
-            BlockPos controllerPos,
-            @Nullable UUID threatUuid
-    ) {
-        if (threatUuid == null) {
-            return;
-        }
-        NetworkState network = network(level.getServer(), networkId);
-        Reservation reservation = network.reservations.get(threatUuid);
-        if (reservation != null && reservation.controllerPos.equals(controllerKey(level, controllerPos))) {
-            network.reservations.remove(threatUuid);
-        }
-    }
-
     public static synchronized void registerPendingLaunch(
             ServerLevel level,
             UUID networkId,
@@ -367,7 +277,7 @@ public final class InterceptionCoordinator {
             cleanup(network, gameTime);
             for (Map.Entry<InterceptionControllerKey, PendingLaunch> entry : network.pendingLaunches.entrySet()) {
                 PendingLaunch launch = entry.getValue();
-                if (entry.getKey().dimension() != level.dimension() || launch.expiresAt < gameTime) {
+                if (!entry.getKey().dimension().equals(level.dimension()) || launch.expiresAt < gameTime) {
                     continue;
                 }
                 double distance = launch.muzzlePos.distanceToSqr(position);
@@ -426,7 +336,7 @@ public final class InterceptionCoordinator {
         List<ThreatSnapshot> snapshots = new ArrayList<>();
         for (Map.Entry<UUID, Threat> entry : network.threats.entrySet()) {
             Threat threat = entry.getValue();
-            if (threat.dimension != level.dimension()) {
+            if (!threat.dimension.equals(level.dimension())) {
                 continue;
             }
             snapshots.add(snapshot(entry.getKey(), threat));
@@ -467,31 +377,10 @@ public final class InterceptionCoordinator {
         ServerState state = server(server);
         for (NetworkState network : state.networks.values()) {
             network.threats.remove(threatUuid);
-            network.reservations.remove(threatUuid);
             network.pendingLaunches.values().removeIf(launch -> launch.threatUuid.equals(threatUuid));
         }
         state.interceptorTargets.values().removeIf(assignment -> assignment.targetUuid.equals(threatUuid));
         state.destructionChances.remove(threatUuid);
-    }
-
-    public static synchronized Set<UUID> activeThreats(MinecraftServer server, UUID networkId, long gameTime) {
-        NetworkState network = network(server, networkId);
-        cleanup(network, gameTime);
-        return Set.copyOf(network.threats.keySet());
-    }
-
-    private static void releaseOwnedReservation(
-            NetworkState network,
-            InterceptionControllerKey controllerPos,
-            @Nullable UUID threatUuid
-    ) {
-        if (threatUuid == null) {
-            return;
-        }
-        Reservation reservation = network.reservations.get(threatUuid);
-        if (reservation != null && reservation.controllerPos.equals(controllerPos)) {
-            network.reservations.remove(threatUuid);
-        }
     }
 
     private static ThreatSnapshot snapshot(UUID threatUuid, Threat threat) {
@@ -519,8 +408,6 @@ public final class InterceptionCoordinator {
         if (threatsRemoved) {
             network.threatRevision++;
         }
-        network.reservations.entrySet().removeIf(entry ->
-                entry.getValue().expiresAt < gameTime || !network.threats.containsKey(entry.getKey()));
         network.pendingLaunches.entrySet().removeIf(entry ->
                 entry.getValue().expiresAt < gameTime || !network.threats.containsKey(entry.getValue().threatUuid));
         network.controllers.entrySet().removeIf(entry -> entry.getValue().expiresAt < gameTime);
@@ -534,21 +421,24 @@ public final class InterceptionCoordinator {
     private static void rebuildAssignments(ServerLevel level, NetworkState network) {
         long gameTime = level.getGameTime();
         cleanup(network, gameTime);
-        network.assignments.keySet().removeIf(controllerPos -> controllerPos.dimension() == level.dimension());
+        network.assignments.keySet().removeIf(controllerPos -> controllerPos.dimension().equals(level.dimension()));
         if (network.controllers.isEmpty() || network.threats.isEmpty()) {
             return;
         }
 
-        List<Map.Entry<UUID, Threat>> threats = network.threats.entrySet().stream()
-                .filter(entry -> entry.getValue().dimension == level.dimension())
-                .sorted(Comparator.comparingDouble(entry -> threatUrgency(level, entry.getKey(), entry.getValue())))
-                .toList();
+        List<RankedThreat> threats = new ArrayList<>();
+        for (Map.Entry<UUID, Threat> entry : network.threats.entrySet()) {
+            if (entry.getValue().dimension.equals(level.dimension())) {
+                threats.add(rankThreat(level, entry.getKey(), entry.getValue()));
+            }
+        }
+        threats.sort(Comparator.comparingDouble(RankedThreat::urgency));
         if (threats.isEmpty()) {
             return;
         }
         List<InterceptionControllerKey> availableControllers = new ArrayList<>();
         for (Map.Entry<InterceptionControllerKey, ControllerState> entry : network.controllers.entrySet()) {
-            if (entry.getKey().dimension() == level.dimension() && entry.getValue().snapshot.available) {
+            if (entry.getKey().dimension().equals(level.dimension()) && entry.getValue().snapshot.available) {
                 availableControllers.add(entry.getKey());
             }
         }
@@ -556,15 +446,13 @@ public final class InterceptionCoordinator {
             return;
         }
 
-        // Угрозы сначала образуют слоты по срочности, затем каждый слот получает самый дешёвый контроллер.
+        // Угрозы образуют циклические слоты по срочности; координаты сущности вычисляются
+        // один раз на перестроение, а не повторно для каждого контроллера.
         int controllerCount = availableControllers.size();
-        List<UUID> slots = new ArrayList<>(controllerCount);
-        for (int index = 0; index < controllerCount; index++) {
-            slots.add(threats.get(index % threats.size()).getKey());
-        }
-
         Set<InterceptionControllerKey> assignedControllers = new HashSet<>();
-        for (UUID threatUuid : slots) {
+        for (int index = 0; index < controllerCount; index++) {
+            RankedThreat threat = threats.get(index % threats.size());
+            UUID threatUuid = threat.uuid();
             InterceptionControllerKey bestController = null;
             double bestCost = Double.MAX_VALUE;
             for (InterceptionControllerKey controllerPos : availableControllers) {
@@ -572,12 +460,8 @@ public final class InterceptionCoordinator {
                         || network.rejections.containsKey(new ControllerThreat(controllerPos, threatUuid))) {
                     continue;
                 }
-                Threat threat = network.threats.get(threatUuid);
-                if (threat == null) {
-                    continue;
-                }
                 ControllerSnapshot snapshot = network.controllers.get(controllerPos).snapshot;
-                double cost = roughEngagementCost(level, snapshot, threatUuid);
+                double cost = roughEngagementCost(snapshot, threat.position());
                 if (cost < bestCost) {
                     bestCost = cost;
                     bestController = controllerPos;
@@ -590,29 +474,29 @@ public final class InterceptionCoordinator {
         }
     }
 
-    private static double threatUrgency(ServerLevel level, UUID threatUuid, Threat threat) {
+    private static RankedThreat rankThreat(ServerLevel level, UUID threatUuid, Threat threat) {
         net.minecraft.world.entity.Entity entity = level.getEntity(threatUuid);
         if (entity == null || !entity.isAlive()) {
-            return Double.MAX_VALUE;
+            return new RankedThreat(threatUuid, null, Double.MAX_VALUE);
         }
         double elapsedTicks = Math.max(0L, level.getGameTime() - threat.referenceGameTime);
         Vec3 referenceVelocity = threat.referenceVelocity.add(
                 threat.referenceAcceleration.scale(elapsedTicks));
         double speed = Math.max(0.05, entity.getDeltaMovement().subtract(referenceVelocity).length());
-        return entity.position().distanceTo(projectedReference(threat, level.getGameTime())) / speed;
+        Vec3 position = entity.position();
+        double urgency = position.distanceTo(projectedReference(threat, level.getGameTime())) / speed;
+        return new RankedThreat(threatUuid, position, urgency);
     }
 
     private static double roughEngagementCost(
-            ServerLevel level,
             ControllerSnapshot snapshot,
-            UUID threatUuid
+            @Nullable Vec3 threatPosition
     ) {
-        net.minecraft.world.entity.Entity entity = level.getEntity(threatUuid);
-        if (entity == null || !entity.isAlive() || snapshot.maxStepDegreesPerTick <= 0.0001
+        if (threatPosition == null || snapshot.maxStepDegreesPerTick <= 0.0001
                 || snapshot.interceptorSpeedBlocksPerTick <= 0.0001) {
             return Double.MAX_VALUE;
         }
-        Vec3 delta = entity.position().subtract(snapshot.muzzle);
+        Vec3 delta = threatPosition.subtract(snapshot.muzzle);
         double horizontal = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
         float desiredYaw = normalize360((float) (Math.toDegrees(Math.atan2(delta.z, delta.x)) + 270.0));
         float desiredPitch = (float) Math.toDegrees(Math.atan2(delta.y, horizontal));
@@ -690,7 +574,6 @@ public final class InterceptionCoordinator {
 
     private static final class NetworkState {
         private final Map<UUID, Threat> threats = new HashMap<>();
-        private final Map<UUID, Reservation> reservations = new HashMap<>();
         private final Map<InterceptionControllerKey, PendingLaunch> pendingLaunches = new HashMap<>();
         private final Map<InterceptionControllerKey, ControllerState> controllers = new HashMap<>();
         private final Map<InterceptionControllerKey, UUID> assignments = new HashMap<>();
@@ -716,7 +599,7 @@ public final class InterceptionCoordinator {
     ) {
     }
 
-    private record Reservation(InterceptionControllerKey controllerPos, double engagementTicks, long expiresAt) {
+    private record RankedThreat(UUID uuid, @Nullable Vec3 position, double urgency) {
     }
 
     private record InterceptorAssignment(UUID networkId, UUID targetUuid, long expiresAt) {
@@ -730,13 +613,6 @@ public final class InterceptionCoordinator {
             double roll,
             double nextProbability,
             boolean destroyed
-    ) {
-    }
-
-    public record ThreatBid(
-            UUID threatUuid,
-            double priorityScore,
-            double engagementTicks
     ) {
     }
 

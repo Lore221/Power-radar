@@ -21,11 +21,11 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 /** Рисует карты, физически вставленные в фиксированные слоты док-станции. */
 public final class LogicDockRenderer implements BlockEntityRenderer<LogicDockBlockEntity> {
     private static final ResourceLocation TARGETING_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/targeting_card");
+            PowerRadar.id("block/logic_dock/targeting_card");
     private static final ResourceLocation DISPLAY_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/display_card");
+            PowerRadar.id("block/logic_dock/display_card");
     private static final ResourceLocation ALLOWLIST_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/logic_dock/allowlist_card");
+            PowerRadar.id("block/logic_dock/allowlist_card");
 
     private static final PartialModel TARGETING = PartialModel.of(TARGETING_LOCATION);
     private static final PartialModel DISPLAY = PartialModel.of(DISPLAY_LOCATION);

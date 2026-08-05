@@ -14,6 +14,7 @@ import net.neoforged.fml.ModList;
 
 /** Фасад необязательной интеграции; прямые Sable-вызовы допустимы только за этой границей. */
 public final class SableRadarIntegration {
+    static final int GEOMETRY_REFRESH_INTERVAL_TICKS = 200;
     private static final boolean SABLE_LOADED = ModList.get().isLoaded("sable");
     private static final boolean AERONAUTICS_LOADED = ModList.get().isLoaded("aeronautics");
 
@@ -22,6 +23,10 @@ public final class SableRadarIntegration {
 
     public static boolean isAeronauticsLoaded() {
         return AERONAUTICS_LOADED && SABLE_LOADED;
+    }
+
+    public static boolean isSableLoaded() {
+        return SABLE_LOADED;
     }
 
     public static boolean canPlaceOnStructure(Level level, BlockPos pos) {
@@ -97,7 +102,8 @@ public final class SableRadarIntegration {
     }
 
     public static int geometryRefreshIntervalTicks() {
-        return SableStructureScanner.geometryRefreshIntervalTicks();
+        // Значение доступно даже без Sable и не заставляет JVM загружать классы опционального мода.
+        return GEOMETRY_REFRESH_INTERVAL_TICKS;
     }
 
     public static Optional<UUID> containingStructureUuid(ServerLevel level, BlockPos pos) {

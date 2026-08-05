@@ -167,8 +167,10 @@ public final class PowerRadarCeeConstants {
     public static int groundUpBlocks() { return PowerRadarRadarParameters.groundUpBlocks(); }
     public static int groundDownBlocks() { return PowerRadarRadarParameters.groundDownBlocks(); }
     public static int surfaceDownBlocks() { return PowerRadarRadarParameters.surfaceDownBlocks(); }
+    public static int surfaceMinYOffset() { return PowerRadarRadarParameters.surfaceMinYOffset(); }
+    public static int surfaceMaxYOffset() { return PowerRadarRadarParameters.surfaceMaxYOffset(); }
     public static double airRangeMultiplier() { return PowerRadarRadarParameters.airRangeMultiplier(); }
-    public static double airFovDegrees() { return PowerRadarRadarParameters.airFovDegrees(); }
+    public static int airFovDegrees() { return PowerRadarRadarParameters.airFovDegrees(); }
     public static int airMinYOffset() { return PowerRadarRadarParameters.airMinYOffset(); }
     public static int airMaxYOffset() { return PowerRadarRadarParameters.airMaxYOffset(); }
 

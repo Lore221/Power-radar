@@ -8,6 +8,7 @@ import com.limbo2136.powerradar.api.weapon.WeaponMount;
 import com.limbo2136.powerradar.block.InterceptionControllerBlock;
 import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
 import com.limbo2136.powerradar.compat.electroenergetics.InterceptionControllerCeeSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
@@ -46,7 +47,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import net.neoforged.fml.ModList;
 
 public class InterceptionControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
     // Времена заданы в серверных тиках, углы — в градусах, скорости — в блоках за тик.
@@ -260,7 +260,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private Solution solve(ServerLevel level, BlockState state) {
         // Сначала проверяются неизменяемые контракты: интеграция, сеть и питание.
-        if (!ModList.get().isLoaded("createbigcannons")) {
+        if (!CreateBigCannonsIntegration.isLoaded()) {
             this.lastSolveReason = "cbc-missing";
             releaseAssignment(level);
             return Solution.invalid();
@@ -331,7 +331,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         Vec3 worldCurrentDirection = RadarWorldPoseResolver.worldDirection(
                 level,
                 this.worldPosition,
-                directionFromAngles(currentAngles.yawDegrees(), currentAngles.pitchDegrees()));
+                TargetingMath.directionFromAngles(currentAngles.yawDegrees(), currentAngles.pitchDegrees()));
         float worldCurrentYaw = TargetingMath.yawTo(worldCurrentDirection);
         float worldCurrentPitch = pitchTo(worldCurrentDirection);
         if (threatRevision != this.lastPublishedThreatRevision
@@ -411,7 +411,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
                     level,
                     this.worldPosition,
-                    directionFromAngles(TargetingMath.yawTo(delta), burstAim.pitchDegrees));
+                    TargetingMath.directionFromAngles(TargetingMath.yawTo(delta), burstAim.pitchDegrees));
             float desiredYaw = TargetingMath.yawTo(localAimDirection);
             float desiredPitch = pitchTo(localAimDirection);
             this.lastSolveReason = "burst";
@@ -491,7 +491,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
                 level,
                 this.worldPosition,
-                directionFromAngles(TargetingMath.yawTo(delta), intercept.pitchDegrees));
+                TargetingMath.directionFromAngles(TargetingMath.yawTo(delta), intercept.pitchDegrees));
         float desiredYaw = TargetingMath.yawTo(localAimDirection);
         float desiredPitch = pitchTo(localAimDirection);
         return new Solution(
@@ -1188,16 +1188,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 snapshot.referenceAcceleration());
     }
 
-    private static Vec3 directionFromAngles(float yawDegrees, float pitchDegrees) {
-        double yaw = Math.toRadians(yawDegrees);
-        double pitch = Math.toRadians(pitchDegrees);
-        double horizontal = Math.cos(pitch);
-        return new Vec3(
-                -Math.sin(yaw) * horizontal,
-                Math.sin(pitch),
-                Math.cos(yaw) * horizontal);
-    }
-
     private static float pitchTo(Vec3 direction) {
         return (float) Math.toDegrees(Math.atan2(
                 direction.y,
@@ -1223,9 +1213,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 commandPitchError * PowerRadarCeeConstants.TARGET_CONTROLLER_AIM_RESPONSE_PER_TICK
                         + feedForward.pitchDegreesPerTick,
                 -maxStep, maxStep);
-        this.yawVelocityDegreesPerTick = approach(
+        this.yawVelocityDegreesPerTick = TargetingMath.approach(
                 this.yawVelocityDegreesPerTick, targetYawVelocity, acceleration);
-        this.pitchVelocityDegreesPerTick = approach(
+        this.pitchVelocityDegreesPerTick = TargetingMath.approach(
                 this.pitchVelocityDegreesPerTick, targetPitchVelocity, acceleration);
         float yawStep = (float) clamp(
                 this.yawVelocityDegreesPerTick, -Math.abs(commandYawError), Math.abs(commandYawError));
@@ -1588,16 +1578,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
-    }
-
-    private static double approach(double current, double target, double maxDelta) {
-        if (current < target) {
-            return Math.min(target, current + maxDelta);
-        }
-        if (current > target) {
-            return Math.max(target, current - maxDelta);
-        }
-        return current;
     }
 
     private static double lerp(double from, double to, double factor) {

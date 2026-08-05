@@ -13,8 +13,7 @@ import com.limbo2136.powerradar.api.weapon.WeaponKind;
 import com.limbo2136.powerradar.api.weapon.WeaponMount;
 import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
-import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
-import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
@@ -22,6 +21,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeSnap
 import com.limbo2136.powerradar.bridge.TrajectoryIconBridge;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
 import com.limbo2136.powerradar.targeting.TargetLeadSolver;
+import com.limbo2136.powerradar.targeting.LiveTrackedTargetResolver;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
@@ -54,7 +54,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -64,7 +63,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.fml.ModList;
 
 public class TargetControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
     // Временные интервалы и допуски задаются в серверных тиках, блоках и градусах.
@@ -326,7 +324,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
 
     // Собирает единое неизменяемое решение из сети радара, живой цели, CBC и баллистики.
     private TargetSolution solve(ServerLevel level, BlockState state) {
-        if (!ModList.get().isLoaded("createbigcannons")) {
+        if (!CreateBigCannonsIntegration.isLoaded()) {
             return TargetSolution.invalid("cbc-missing");
         }
         ServerLevel worldLevel = authoritativeLevel(level);
@@ -355,18 +353,22 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         RadarNetworkManager.ControllersResolution controllerResolution = networkManager.resolveControllersForConsumer(
                         networkId,
                         GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
-        RadarTargetingDataSource radarController = new CombinedRadarDataSource(controllerResolution.controllers());
         if (controllerResolution.status() != RadarNetworkConnectionStatus.CONNECTED
                 || controllerResolution.controllers().isEmpty()) {
             return TargetSolution.invalid("radar-offline");
         }
+        RadarTargetingDataSource radarController = new CombinedRadarDataSource(controllerResolution.controllers());
         TrackedTargetView track = null;
         if (manualTarget) {
             SelectedTargetRuntimeSnapshot manualSnapshot =
                     networkManager.selectedTargetSnapshot(networkId);
-            boolean confirmedByAccessibleRadar = controllerResolution.controllers().stream()
-                    .map(RadarControllerBlockEntity::radarId)
-                    .anyMatch(manualSnapshot.confirmingRadars()::contains);
+            boolean confirmedByAccessibleRadar = false;
+            for (RadarControllerBlockEntity controller : controllerResolution.controllers()) {
+                if (manualSnapshot.confirmingRadars().contains(controller.radarId())) {
+                    confirmedByAccessibleRadar = true;
+                    break;
+                }
+            }
             if (!selectedTarget.equals(manualSnapshot.selectedTargetUuid())
                     || !manualSnapshot.confirmedByLatestScan()
                     || !confirmedByAccessibleRadar) {
@@ -448,7 +450,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         int lockTicks = updateTargetLock(selectedTarget);
         long gameTime = level.getGameTime();
-        TrackedTargetView aimTrack = manualTarget ? track : liveTargetView(worldLevel, track, gameTime);
+        TrackedTargetView aimTrack = manualTarget
+                ? track
+                : LiveTrackedTargetResolver.resolve(worldLevel, track, gameTime);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
                 cannonState.kind(),
                 preferHighArc,
@@ -468,7 +472,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
                 level,
                 this.worldPosition,
-                directionFromAngles(worldDesiredYaw, ballisticAim.pitchDegrees()));
+                TargetingMath.directionFromAngles(worldDesiredYaw, ballisticAim.pitchDegrees()));
         float desiredYaw = TargetingMath.yawTo(localAimDirection);
         float desiredPitch = (float) Math.toDegrees(Math.atan2(
                 localAimDirection.y,
@@ -636,7 +640,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             boolean preferHighArc,
             WeaponKind cannonKind
     ) {
-        TrackedTargetView aimTrack = liveTargetView(level, track, level.getGameTime());
+        TrackedTargetView aimTrack = LiveTrackedTargetResolver.resolve(level, track, level.getGameTime());
         if (!preferHighArc && !hasLineOfSightToTrack(level, origin, aimTrack)) {
             return false;
         }
@@ -688,8 +692,10 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 targetVelocityForError(commandPitchError, targetMaxStep) + feedForward.pitchDegreesPerTick(),
                 -targetMaxStep,
                 targetMaxStep);
-        this.yawVelocityDegreesPerTick = approach(this.yawVelocityDegreesPerTick, targetYawVelocity, acceleration);
-        this.pitchVelocityDegreesPerTick = approach(this.pitchVelocityDegreesPerTick, targetPitchVelocity, acceleration);
+        this.yawVelocityDegreesPerTick = TargetingMath.approach(
+                this.yawVelocityDegreesPerTick, targetYawVelocity, acceleration);
+        this.pitchVelocityDegreesPerTick = TargetingMath.approach(
+                this.pitchVelocityDegreesPerTick, targetPitchVelocity, acceleration);
         float yawStep = (float) clamp(this.yawVelocityDegreesPerTick, -Math.abs(commandYawError), Math.abs(commandYawError));
         float pitchStep = (float) clamp(this.pitchVelocityDegreesPerTick, -Math.abs(commandPitchError), Math.abs(commandPitchError));
         float nextYaw = TargetingMath.normalize360(solution.currentYawDegrees() + yawStep);
@@ -1082,42 +1088,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return entity != null && entity.isAlive();
     }
 
-    // Подменяет снимок радара текущими данными загруженной сущности, не меняя её устойчивую идентичность.
-    private static TrackedTargetView liveTargetView(ServerLevel level, TrackedTargetView track, long gameTime) {
-        if (!level.dimension().location().equals(track.dimensionId()) || track.targetUuid() == null) {
-            return track;
-        }
-        if (track.sourceType() == TargetSourceType.STRUCTURE) {
-            return SableRadarIntegration.loadedStructure(level, track.targetUuid())
-                    .<TrackedTargetView>map(observation -> liveSableTargetView(track, observation, gameTime))
-                    .orElse(track);
-        }
-        Entity entity = level.getEntity(track.targetUuid());
-        if (entity == null || !entity.isAlive()) {
-            return track;
-        }
-        return new LiveTrackedTargetView(track, entity, gameTime);
-    }
-
-    // Переносит Sable-контакт из сохранённой позы снимка в текущую мировую позу конструкции.
-    private static TrackedTargetView liveSableTargetView(
-            TrackedTargetView track,
-            SableStructureObservation observation,
-            long gameTime
-    ) {
-        double height = Math.max(0.1D, observation.worldBounds().getYsize());
-        Vec3 targetingBase = observation.worldOrigin().subtract(0.0D, height * 0.5D, 0.0D);
-        return new AdjustedTrackedTargetView(
-                track,
-                targetingBase,
-                observation.velocity(),
-                true,
-                track.acceleration(),
-                track.hasAcceleration(),
-                gameTime,
-                gameTime,
-                height);
-    }
 
     // Не повторяет трассировку одной цели несколько раз в пределах одного серверного тика.
     private boolean cachedTargetVisible(ServerLevel level, TrackedTargetView track, Vec3 origin, long gameTime) {
@@ -1268,16 +1238,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 clamp(acceleration.y, -limit, limit),
                 clamp(acceleration.z, -limit, limit));
     }
-    private static Vec3 directionFromAngles(float yawDegrees, float pitchDegrees) {
-        double yaw = Math.toRadians(yawDegrees);
-        double pitch = Math.toRadians(pitchDegrees);
-        double horizontal = Math.cos(pitch);
-        return new Vec3(
-                -Math.sin(yaw) * horizontal,
-                Math.sin(pitch),
-                Math.cos(yaw) * horizontal);
-    }
-
     // Подбирает допуск выстрела по типу оружия и времени полёта рассчитанного решения.
     private static double aimToleranceDegrees(TargetSolution solution) {
         return "BIG_CANNON".equals(solution.cannonKind())
@@ -1498,16 +1458,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return Math.max(min, Math.min(max, value));
     }
 
-    private static double approach(double current, double target, double maxDelta) {
-        if (current < target) {
-            return Math.min(target, current + maxDelta);
-        }
-        if (current > target) {
-            return Math.max(target, current - maxDelta);
-        }
-        return current;
-    }
-
     // Новый UUID начинает прогрев захвата заново; непрерывная цель накапливает тики готовности.
     private int updateTargetLock(UUID targetUuid) {
         if (!targetUuid.equals(this.lockedTargetUuid)) {
@@ -1674,156 +1624,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         @Override
         public String getTranslationKey() {
             return this.translationKey;
-        }
-    }
-
-    // Оборачивает снимок цели скорректированной кинематикой, сохраняя остальные поля источника.
-    private record AdjustedTrackedTargetView(
-            TrackedTargetView fallback,
-            Vec3 position,
-            Vec3 velocity,
-            boolean hasVelocity,
-            Vec3 acceleration,
-            boolean hasAcceleration,
-            long lastSeenGameTime,
-            long lastConfirmedAliveGameTime,
-            double boundingHeight
-    ) implements TrackedTargetView {
-        @Override
-        public UUID targetUuid() {
-            return this.fallback.targetUuid();
-        }
-
-        @Override
-        public int targetId() {
-            return this.fallback.targetId();
-        }
-
-        @Override
-        public ResourceLocation entityTypeId() {
-            return this.fallback.entityTypeId();
-        }
-
-        @Override
-        public TargetSourceType sourceType() {
-            return this.fallback.sourceType();
-        }
-
-        @Override
-        public String displayName() {
-            return this.fallback.displayName();
-        }
-
-        @Override
-        public TargetClassification classification() {
-            return this.fallback.classification();
-        }
-
-        @Override
-        public ResourceLocation dimensionId() {
-            return this.fallback.dimensionId();
-        }
-
-        @Override
-        public long firstSeenGameTime() {
-            return this.fallback.firstSeenGameTime();
-        }
-
-        @Override
-        public double approximateSize() {
-            return this.fallback.approximateSize();
-        }
-    }
-
-    // Оборачивает загруженную сущность актуальной позицией и скоростью текущего серверного тика.
-    private record LiveTrackedTargetView(
-            TrackedTargetView fallback,
-            Entity entity,
-            long gameTime
-    ) implements TrackedTargetView {
-        @Override
-        public UUID targetUuid() {
-            return this.fallback.targetUuid();
-        }
-
-        @Override
-        public int targetId() {
-            return this.entity.getId();
-        }
-
-        @Override
-        public ResourceLocation entityTypeId() {
-            return this.fallback.entityTypeId();
-        }
-
-        @Override
-        public TargetSourceType sourceType() {
-            return this.fallback.sourceType();
-        }
-
-        @Override
-        public String displayName() {
-            return this.fallback.displayName();
-        }
-
-        @Override
-        public TargetClassification classification() {
-            return this.fallback.classification();
-        }
-
-        @Override
-        public ResourceLocation dimensionId() {
-            return this.entity.level().dimension().location();
-        }
-
-        @Override
-        public Vec3 position() {
-            return this.entity.position();
-        }
-
-        @Override
-        public Vec3 velocity() {
-            return this.entity.getDeltaMovement();
-        }
-
-        @Override
-        public boolean hasVelocity() {
-            return true;
-        }
-
-        @Override
-        public Vec3 acceleration() {
-            return this.fallback.acceleration();
-        }
-
-        @Override
-        public boolean hasAcceleration() {
-            return this.fallback.hasAcceleration();
-        }
-
-        @Override
-        public long firstSeenGameTime() {
-            return this.fallback.firstSeenGameTime();
-        }
-
-        @Override
-        public long lastSeenGameTime() {
-            return this.gameTime;
-        }
-
-        @Override
-        public long lastConfirmedAliveGameTime() {
-            return this.gameTime;
-        }
-
-        @Override
-        public double boundingHeight() {
-            return Math.max(0.1D, this.entity.getBbHeight());
-        }
-
-        @Override
-        public double approximateSize() {
-            return Math.max(this.fallback.approximateSize(), Math.max(this.entity.getBbWidth(), this.entity.getBbHeight()));
         }
     }
 

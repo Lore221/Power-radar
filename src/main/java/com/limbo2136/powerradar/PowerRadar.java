@@ -1,13 +1,15 @@
 package com.limbo2136.powerradar;
 
-import com.limbo2136.powerradar.client.PowerRadarClientConfig;
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.PowerRadarPanelAttachmentTypes;
 import com.limbo2136.powerradar.compat.create.PowerRadarMovementChecks;
 import com.limbo2136.powerradar.compat.create.PowerRadarStressValues;
 import com.limbo2136.powerradar.compat.create.display.PowerRadarDisplaySources;
 import com.limbo2136.powerradar.network.ModNetwork;
+import com.limbo2136.powerradar.radar.OnlinePlayersSnapshotCache;
 import com.limbo2136.powerradar.radar.RadarScanCoordinator;
+import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
@@ -16,6 +18,7 @@ import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.registry.ModItems;
 import com.limbo2136.powerradar.registry.ModSounds;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -31,6 +34,10 @@ import org.slf4j.LoggerFactory;
 public final class PowerRadar {
     public static final String MOD_ID = "power_radar";
     public static final Logger LOGGER = LoggerFactory.getLogger("PowerRadar");
+
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    }
 
     public PowerRadar(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.SERVER, PowerRadarServerConfig.SPEC);
@@ -65,6 +72,8 @@ public final class PowerRadar {
 
     private static void onServerStopped(ServerStoppedEvent event) {
         RadarScanCoordinator.stopServer(event.getServer());
+        OnlinePlayersSnapshotCache.stopServer(event.getServer());
+        RadarLinkConnectionResolver.stopServer(event.getServer());
         ModNetwork.stopServer(event.getServer());
         RadarNetworkManager.stopServer(event.getServer());
     }

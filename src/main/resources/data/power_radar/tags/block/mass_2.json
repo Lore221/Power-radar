@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "power_radar:overview_module",
+    {
+      "id": "power_radar:interception_controller",
+      "required": false
+    },
+    {
+      "id": "power_radar:target_controller",
+      "required": false
+    }
+  ]
+}

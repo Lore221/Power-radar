@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPa
 import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeDevice;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -34,7 +35,8 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
-public class TargetControllerBlock extends BaseEntityBlock implements ElectricalDeviceBlock<TargetControllerCeeDevice> {
+public class TargetControllerBlock extends BaseEntityBlock
+        implements IWrenchable, ElectricalDeviceBlock<TargetControllerCeeDevice> {
     public static final MapCodec<TargetControllerBlock> CODEC = simpleCodec(TargetControllerBlock::new);
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
 
@@ -50,7 +52,11 @@ public class TargetControllerBlock extends BaseEntityBlock implements Electrical
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(FACING, context.getClickedFace().getOpposite());
+        Direction clickedFace = context.getClickedFace();
+        Direction facing = clickedFace.getAxis().isHorizontal()
+                ? clickedFace.getOpposite()
+                : context.getHorizontalDirection().getOpposite();
+        return defaultBlockState().setValue(FACING, facing);
     }
 
     @Override
@@ -123,6 +129,14 @@ public class TargetControllerBlock extends BaseEntityBlock implements Electrical
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         return PowerRadarCeeContactGeometry.targetController(state.getValue(FACING));
+    }
+
+    @Override
+    public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
+        Direction facing = originalState.getValue(FACING);
+        return originalState.setValue(FACING, facing.getAxis().isHorizontal()
+                ? facing.getClockWise(Direction.Axis.Y)
+                : Direction.NORTH);
     }
 
     @Nullable

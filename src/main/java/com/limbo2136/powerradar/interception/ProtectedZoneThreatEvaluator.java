@@ -2,6 +2,9 @@ package com.limbo2136.powerradar.interception;
 
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -26,6 +29,35 @@ public final class ProtectedZoneThreatEvaluator {
                 sample.velocity(),
                 sample.radius(),
                 maximumTicks);
+    }
+
+    public static List<TrackedTargetView> initialBroadPhaseCandidates(
+            ServerLevel level,
+            MovingProtectedZone zone,
+            List<TrackedTargetView> tracks,
+            double maximumTicks
+    ) {
+        List<TrackedTargetView> candidates = new ArrayList<>(tracks.size());
+        for (TrackedTargetView track : tracks) {
+            if (passesInitialBroadPhase(level, zone, track, maximumTicks)) {
+                candidates.add(track);
+            }
+        }
+        return candidates;
+    }
+
+    public static void retainInitialBroadPhaseCandidates(
+            ServerLevel level,
+            MovingProtectedZone zone,
+            List<TrackedTargetView> candidates,
+            double maximumTicks
+    ) {
+        Iterator<TrackedTargetView> iterator = candidates.iterator();
+        while (iterator.hasNext()) {
+            if (!passesInitialBroadPhase(level, zone, iterator.next(), maximumTicks)) {
+                iterator.remove();
+            }
+        }
     }
 
     public static Evaluation evaluate(

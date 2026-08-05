@@ -40,9 +40,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -50,13 +48,11 @@ import net.minecraft.world.phys.Vec3;
 // Единственная точка изменения постоянной топологии и её загруженного runtime-представления.
 public class RadarNetworkManager {
     private static final Map<MinecraftServer, RadarNetworkManager> MANAGERS = new WeakHashMap<>();
-    private static final TicketType<UUID> RADAR_LINK_TICKET =
-            TicketType.create("power_radar:radar_link", UUID::compareTo);
-    private static final int RADAR_LINK_TICKET_DISTANCE = 2;
     private static final long PANEL_LOGIC_DOCK_LEASE_TIMEOUT_TICKS = 40L;
 
     private final MinecraftServer server;
     private final RadarNetworkSavedData savedData;
+    private final RadarNetworkChunkTicketManager chunkTickets;
     private final Map<UUID, RadarNetworkRuntime> runtimeNetworks = new HashMap<>();
     private final Map<UUID, LogicDockResolution> logicDockResolutionCache = new HashMap<>();
     private final Map<UUID, LogicDockPolicy> logicDockPolicyCache = new HashMap<>();
@@ -66,6 +62,7 @@ public class RadarNetworkManager {
     private RadarNetworkManager(MinecraftServer server) {
         this.server = server;
         this.savedData = RadarNetworkSavedData.get(server);
+        this.chunkTickets = new RadarNetworkChunkTicketManager(server);
         // Из сохранения восстанавливаются только постоянные настройки; ссылки, кэши и tickets
         // заново формируются событиями загрузки мира.
         for (RadarNetworkRecord record : this.savedData.records()) {
@@ -193,6 +190,11 @@ public class RadarNetworkManager {
     public void attachMonitorFromLink(UUID id, GlobalPos linkPos, GlobalPos monitorPos) {
         this.runtime(id).monitorLinkToMonitorPos().put(linkPos, monitorPos);
         this.reconcileConsumerLease(id, linkPos);
+    }
+
+    public boolean isMonitorAttachedAt(UUID id, GlobalPos linkPos, GlobalPos monitorPos) {
+        RadarNetworkRuntime runtime = this.runtimeNetworks.get(id);
+        return runtime != null && monitorPos.equals(runtime.monitorLinkToMonitorPos().get(linkPos));
     }
 
     public void detachMonitorFromLink(UUID id, GlobalPos linkPos) {
@@ -485,11 +487,13 @@ public class RadarNetworkManager {
         int mask = RadarDetectionFilters.DEFAULT_MASK;
         boolean bound = false;
         for (RadarNetworkRecord record : this.savedData.records()) {
-            boolean matches = record.controllerBindings().stream()
-                    .anyMatch(binding -> binding.controllerPos().equals(controllerPos));
-            if (matches) {
+            for (RadarControllerEndpointBinding binding : record.controllerBindings()) {
+                if (!binding.controllerPos().equals(controllerPos)) {
+                    continue;
+                }
                 bound = true;
                 mask &= displayFilterMask(record.id());
+                break;
             }
         }
         return bound ? mask : RadarDetectionFilters.DEFAULT_MASK;
@@ -541,14 +545,12 @@ public class RadarNetworkManager {
                     0,
                     0,
                     true,
+                    displayMask,
                     targetingMask,
                     runtime.selectedTargetUuid().orElse(null),
                     onlinePlayerNames,
                     allowlistedPlayers,
                     allowlistedSables);
-            baseData = baseData.withTargets(baseData.targets().stream()
-                    .filter(target -> RadarDetectionFilters.enabled(displayMask, target.category()))
-                    .toList());
             if (!policy.present()) {
                 runtime.putDisplaySnapshot(revision, baseData);
             }
@@ -635,11 +637,19 @@ public class RadarNetworkManager {
 
     private static boolean matchesAllowlist(LogicDockPolicy policy, String name, boolean sable) {
         if (!sable) {
-            return policy.playerNames().stream().anyMatch(name::equalsIgnoreCase);
+            return containsIgnoringCase(policy.playerNames(), name);
         }
         String structureName = SableStructureName.normalize(name);
-        return structureName != null
-                && policy.sableNames().stream().anyMatch(structureName::equalsIgnoreCase);
+        return structureName != null && containsIgnoringCase(policy.sableNames(), structureName);
+    }
+
+    private static boolean containsIgnoringCase(List<String> values, String candidate) {
+        for (String value : values) {
+            if (candidate.equalsIgnoreCase(value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private LogicDockResolution cachedLogicDockResolution(UUID id) {
@@ -721,32 +731,33 @@ public class RadarNetworkManager {
             return new LogicDockResolution(null, false);
         }
         List<LogicDockPolicySource> docks = new ArrayList<>();
-        this.runtime(id).loadedLinks().stream()
-                .sorted(Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
-                        .thenComparingLong(pos -> pos.pos().asLong()))
-                .forEach(linkPos -> {
-                    ServerLevel level = this.server.getLevel(linkPos.dimension());
-                    if (level == null || !level.isLoaded(linkPos.pos())
-                            || !(level.getBlockEntity(linkPos.pos()) instanceof RadarLinkBlockEntity link)
-                            || link.endpointRole() != RadarLinkEndpointRole.LOGIC_DOCK
-                            || link.endpointPos() == null
-                            || !link.endpointPos().dimension().equals(linkPos.dimension())
-                            || !level.isLoaded(link.endpointPos().pos())
-                            || !(level.getBlockEntity(link.endpointPos().pos()) instanceof LogicDockBlockEntity dock)) {
-                        return;
-                    }
-                    if (!docks.contains(dock)) {
-                        docks.add(dock);
-                    }
-                });
+        List<GlobalPos> loadedLinks = new ArrayList<>(this.runtime(id).loadedLinks());
+        loadedLinks.sort(Comparator.comparing((GlobalPos pos) -> pos.dimension().location().toString())
+                .thenComparingLong(pos -> pos.pos().asLong()));
+        for (GlobalPos linkPos : loadedLinks) {
+            ServerLevel level = this.server.getLevel(linkPos.dimension());
+            if (level == null || !level.isLoaded(linkPos.pos())
+                    || !(level.getBlockEntity(linkPos.pos()) instanceof RadarLinkBlockEntity link)
+                    || link.endpointRole() != RadarLinkEndpointRole.LOGIC_DOCK
+                    || link.endpointPos() == null
+                    || !link.endpointPos().dimension().equals(linkPos.dimension())
+                    || !level.isLoaded(link.endpointPos().pos())
+                    || !(level.getBlockEntity(link.endpointPos().pos()) instanceof LogicDockBlockEntity dock)) {
+                continue;
+            }
+            if (!docks.contains(dock)) {
+                docks.add(dock);
+            }
+        }
         Map<PanelLogicDockKey, PanelLogicDockRegistration> panelRegistrations =
                 this.panelLogicDocks.get(id);
         if (panelRegistrations != null) {
-            panelRegistrations.values().stream()
-                    .map(registration -> registration.source)
-                    .filter(source -> source.isAvailableForNetwork(id))
-                    .filter(source -> !docks.contains(source))
-                    .forEach(docks::add);
+            for (PanelLogicDockRegistration registration : panelRegistrations.values()) {
+                LogicDockPolicySource source = registration.source;
+                if (source.isAvailableForNetwork(id) && !docks.contains(source)) {
+                    docks.add(source);
+                }
+            }
         }
         return new LogicDockResolution(docks.size() == 1 ? docks.get(0) : null, docks.size() > 1);
     }
@@ -801,13 +812,19 @@ public class RadarNetworkManager {
     private boolean upsertControllerBinding(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         RadarNetworkRecord record = this.ensureNetwork(id);
         RadarControllerEndpointBinding newBinding = new RadarControllerEndpointBinding(linkPos, controllerPos);
-        Optional<RadarControllerEndpointBinding> previous = record.controllerBindings().stream()
-                .filter(binding -> binding.radarLinkPos().equals(linkPos))
-                .findFirst();
-        if (previous.filter(newBinding::equals).isPresent()) {
+        RadarControllerEndpointBinding previous = null;
+        for (RadarControllerEndpointBinding binding : record.controllerBindings()) {
+            if (binding.radarLinkPos().equals(linkPos)) {
+                previous = binding;
+                break;
+            }
+        }
+        if (newBinding.equals(previous)) {
             return false;
         }
-        previous.ifPresent(record.controllerBindings()::remove);
+        if (previous != null) {
+            record.controllerBindings().remove(previous);
+        }
         record.controllerBindings().add(newBinding);
         this.savedData.setDirty();
         this.runtime(id).invalidateDisplaySnapshots();
@@ -942,54 +959,11 @@ public class RadarNetworkManager {
 
     // В runtime хранится один ticket-anchor на сеть; смена выбранного radar link атомарно заменяет регион.
     private void applyTicketsIfNeeded(UUID id, GlobalPos radarLinkPos) {
-        RadarNetworkRuntime runtime = this.runtime(id);
-        RadarNetworkChunkLoadState state = runtime.chunkLoadState();
-        ServerLevel level = this.server.getLevel(radarLinkPos.dimension());
-        if (level != null && RadarWorldPoseResolver.isOnSableStructure(level, radarLinkPos.pos())) {
-            this.removeAllTickets(id);
-            return;
-        }
-        if (state.radarLinkPos().filter(radarLinkPos::equals).isPresent() && state.ticketsApplied()) {
-            return;
-        }
-        this.removeAllTickets(id);
-        if (level == null || runtime.chunkLoadState().activeConsumerLeaseLinks().isEmpty()) {
-            return;
-        }
-        for (ChunkPos chunkPos : chunkRegion(radarLinkPos)) {
-            if (state.appliedChunks().add(chunkPos)) {
-                level.getChunkSource().addRegionTicket(RADAR_LINK_TICKET, chunkPos, RADAR_LINK_TICKET_DISTANCE, id, true);
-            }
-        }
-        state.setRadarLinkPos(radarLinkPos);
+        this.chunkTickets.apply(id, this.runtime(id), radarLinkPos);
     }
 
     private void removeAllTickets(UUID id) {
-        RadarNetworkRuntime runtime = this.runtime(id);
-        RadarNetworkChunkLoadState state = runtime.chunkLoadState();
-        Optional<GlobalPos> radarLinkPos = state.radarLinkPos();
-        if (radarLinkPos.isEmpty() || !state.ticketsApplied()) {
-            return;
-        }
-        ServerLevel level = this.server.getLevel(radarLinkPos.get().dimension());
-        if (level != null) {
-            for (ChunkPos chunkPos : state.appliedChunks()) {
-                level.getChunkSource().removeRegionTicket(RADAR_LINK_TICKET, chunkPos, RADAR_LINK_TICKET_DISTANCE, id, true);
-            }
-        }
-        state.clearAppliedTickets();
-    }
-
-    private static Set<ChunkPos> chunkRegion(GlobalPos radarLinkPos) {
-        ChunkPos center = new ChunkPos(radarLinkPos.pos());
-        Set<ChunkPos> chunks = new HashSet<>();
-        int radius = RadarConstants.radarLinkForceLoadRadiusChunks();
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                chunks.add(new ChunkPos(center.x + dx, center.z + dz));
-            }
-        }
-        return chunks;
+        this.chunkTickets.remove(id, this.runtime(id));
     }
 
     private boolean isWithinLinkRange(GlobalPos consumerLinkPos, GlobalPos radarLinkPos) {

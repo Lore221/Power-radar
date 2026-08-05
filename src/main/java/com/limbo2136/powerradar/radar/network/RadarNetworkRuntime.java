@@ -1,7 +1,7 @@
 package com.limbo2136.powerradar.radar.network;
 
-import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.RadarId;
+import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -16,14 +16,10 @@ public class RadarNetworkRuntime {
     private final Set<GlobalPos> loadedLinks = new HashSet<>();
     private final Map<GlobalPos, GlobalPos> monitorLinkToMonitorPos = new HashMap<>();
     private final RadarNetworkChunkLoadState chunkLoadState = new RadarNetworkChunkLoadState();
-    private UUID selectedTargetUuid;
+    private final SelectedTargetRuntimeState selectedTarget = new SelectedTargetRuntimeState();
+    @Nullable
     private DisplaySnapshotCacheEntry displaySnapshot;
     private long settingsRevision;
-    private long selectedTargetRevision;
-    private long selectedTargetScanFingerprint = Long.MIN_VALUE;
-    private long selectedTargetLiveUpdateGameTime = Long.MIN_VALUE;
-    private SelectedTargetTrackSelection selectedTargetTrack = SelectedTargetTrackSelection.EMPTY;
-    private SelectedTargetRuntimeSnapshot selectedTargetSnapshot = SelectedTargetRuntimeSnapshot.EMPTY;
 
     public Set<GlobalPos> loadedLinks() {
         return this.loadedLinks;
@@ -38,23 +34,20 @@ public class RadarNetworkRuntime {
     }
 
     public Optional<UUID> selectedTargetUuid() {
-        return Optional.ofNullable(this.selectedTargetUuid);
+        return this.selectedTarget.selectedTargetUuid();
     }
 
-    public void setSelectedTargetUuid(UUID selectedTargetUuid) {
-        if (!java.util.Objects.equals(this.selectedTargetUuid, selectedTargetUuid)) {
-            this.selectedTargetUuid = selectedTargetUuid;
+    public void setSelectedTargetUuid(@Nullable UUID selectedTargetUuid) {
+        if (this.selectedTarget.select(selectedTargetUuid)) {
             this.settingsRevision++;
             invalidateDisplaySnapshots();
-            resetSelectedTargetRuntime(selectedTargetUuid, 0L);
         }
     }
 
-    public void loadPersistentSettings(UUID selectedTargetUuid) {
-        this.selectedTargetUuid = selectedTargetUuid;
+    public void loadPersistentSettings(@Nullable UUID selectedTargetUuid) {
+        this.selectedTarget.load(selectedTargetUuid);
         this.settingsRevision++;
         invalidateDisplaySnapshots();
-        resetSelectedTargetRuntime(selectedTargetUuid, 0L);
     }
 
     public long settingsRevision() {
@@ -67,6 +60,7 @@ public class RadarNetworkRuntime {
         invalidateDisplaySnapshots();
     }
 
+    @Nullable
     public DisplaySnapshotCacheEntry displaySnapshot() {
         return this.displaySnapshot;
     }
@@ -80,19 +74,19 @@ public class RadarNetworkRuntime {
     }
 
     public long selectedTargetScanFingerprint() {
-        return this.selectedTargetScanFingerprint;
+        return this.selectedTarget.scanFingerprint();
     }
 
     public SelectedTargetTrackSelection selectedTargetTrack() {
-        return this.selectedTargetTrack;
+        return this.selectedTarget.track();
     }
 
     public SelectedTargetRuntimeSnapshot selectedTargetSnapshot() {
-        return this.selectedTargetSnapshot;
+        return this.selectedTarget.snapshot();
     }
 
     public boolean selectedTargetUpdatedAt(long gameTime) {
-        return this.selectedTargetLiveUpdateGameTime == gameTime;
+        return this.selectedTarget.updatedAt(gameTime);
     }
 
     public void putSelectedTargetTrack(
@@ -102,52 +96,8 @@ public class RadarNetworkRuntime {
             Set<RadarId> confirmingRadars,
             long gameTime
     ) {
-        this.selectedTargetScanFingerprint = scanFingerprint;
-        if (measuredTarget == null || confirmingRadars.isEmpty()) {
-            this.selectedTargetLiveUpdateGameTime = Long.MIN_VALUE;
-            this.selectedTargetTrack = SelectedTargetTrackSelection.EMPTY;
-            putSelectedTargetSnapshot(
-                    SelectedTargetRuntimeSnapshot.Status.WAITING_FOR_TRACK,
-                    targetUuid,
-                    Set.of(),
-                    gameTime,
-                    null,
-                    false);
-            return;
-        }
-        this.selectedTargetTrack = new SelectedTargetTrackSelection(
-                targetUuid, measuredTarget, Set.copyOf(confirmingRadars));
-
-        // ServerTick.Post публикует radar track после тиков block entity. Если контроллер
-        // уже прочитал Entity в этот тик, новый track не должен провоцировать второй запрос.
-        if (this.selectedTargetLiveUpdateGameTime == gameTime
-                && targetUuid.equals(this.selectedTargetSnapshot.selectedTargetUuid())
-                && (this.selectedTargetSnapshot.status() == SelectedTargetRuntimeSnapshot.Status.LIVE
-                        || this.selectedTargetSnapshot.status()
-                                == SelectedTargetRuntimeSnapshot.Status.ENTITY_UNAVAILABLE)) {
-            SelectedTargetRuntimeSnapshot.TargetView liveTarget =
-                    this.selectedTargetSnapshot.target() == null
-                            ? null
-                            : SelectedTargetRuntimeSnapshot.TargetView.rebaseLive(
-                                    measuredTarget, this.selectedTargetSnapshot.target());
-            putSelectedTargetSnapshot(
-                    this.selectedTargetSnapshot.status(),
-                    targetUuid,
-                    confirmingRadars,
-                    gameTime,
-                    liveTarget,
-                    false);
-            return;
-        }
-
-        this.selectedTargetLiveUpdateGameTime = Long.MIN_VALUE;
-        putSelectedTargetSnapshot(
-                SelectedTargetRuntimeSnapshot.Status.TRACK_CONFIRMED,
-                targetUuid,
-                confirmingRadars,
-                gameTime,
-                null,
-                false);
+        this.selectedTarget.putTrack(
+                scanFingerprint, targetUuid, measuredTarget, confirmingRadars, gameTime);
     }
 
     public void putLiveSelectedTarget(
@@ -157,50 +107,7 @@ public class RadarNetworkRuntime {
             long gameTime,
             @Nullable SelectedTargetRuntimeSnapshot.TargetView target
     ) {
-        if (status != SelectedTargetRuntimeSnapshot.Status.LIVE
-                && this.selectedTargetSnapshot.status() == status
-                && java.util.Objects.equals(this.selectedTargetSnapshot.selectedTargetUuid(), targetUuid)
-                && this.selectedTargetSnapshot.confirmingRadars().equals(confirmingRadars)) {
-            this.selectedTargetLiveUpdateGameTime = gameTime;
-            return;
-        }
-        putSelectedTargetSnapshot(status, targetUuid, confirmingRadars, gameTime, target, true);
-    }
-
-    private void putSelectedTargetSnapshot(
-            SelectedTargetRuntimeSnapshot.Status status,
-            @Nullable UUID targetUuid,
-            Set<RadarId> confirmingRadars,
-            long gameTime,
-            @Nullable SelectedTargetRuntimeSnapshot.TargetView target,
-            boolean liveUpdate
-    ) {
-        this.selectedTargetRevision++;
-        if (liveUpdate) {
-            this.selectedTargetLiveUpdateGameTime = gameTime;
-        }
-        this.selectedTargetSnapshot = new SelectedTargetRuntimeSnapshot(
-                this.selectedTargetRevision,
-                status,
-                targetUuid,
-                confirmingRadars,
-                gameTime,
-                target);
-    }
-
-    private void resetSelectedTargetRuntime(@Nullable UUID targetUuid, long gameTime) {
-        this.selectedTargetScanFingerprint = Long.MIN_VALUE;
-        this.selectedTargetLiveUpdateGameTime = Long.MIN_VALUE;
-        this.selectedTargetTrack = SelectedTargetTrackSelection.EMPTY;
-        putSelectedTargetSnapshot(
-                targetUuid == null
-                        ? SelectedTargetRuntimeSnapshot.Status.NO_SELECTION
-                        : SelectedTargetRuntimeSnapshot.Status.WAITING_FOR_TRACK,
-                targetUuid,
-                Set.of(),
-                gameTime,
-                null,
-                false);
+        this.selectedTarget.putLive(status, targetUuid, confirmingRadars, gameTime, target);
     }
 
     public record DisplaySnapshotCacheEntry(long revision, RadarMonitorDisplayData data) {
@@ -211,7 +118,7 @@ public class RadarNetworkRuntime {
             @Nullable SelectedTargetRuntimeSnapshot.TargetView measuredTarget,
             Set<RadarId> confirmingRadars
     ) {
-        private static final SelectedTargetTrackSelection EMPTY =
+        static final SelectedTargetTrackSelection EMPTY =
                 new SelectedTargetTrackSelection(null, null, Set.of());
 
         public SelectedTargetTrackSelection {

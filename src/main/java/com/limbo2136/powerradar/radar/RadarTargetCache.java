@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.radar;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,6 +20,7 @@ import net.minecraft.world.entity.Entity;
  */
 public final class RadarTargetCache {
     private final LinkedHashMap<TargetKey, RadarTargetTrack> tracks = new LinkedHashMap<>();
+    private final Map<UUID, RadarTargetTrack> tracksByUuid = new HashMap<>();
     private final EnumMap<TargetSourceType, LinkedHashMap<TargetKey, RadarTargetTrack>> tracksBySource =
             new EnumMap<>(TargetSourceType.class);
 
@@ -33,11 +35,14 @@ public final class RadarTargetCache {
     public void put(TargetKey key, RadarTargetTrack track) {
         RadarTargetTrack previous = this.tracks.put(key, track);
         if (previous != null) {
-            removeFromSourceIndex(key, previous);
+            removeFromIndexes(key, previous);
         }
         this.tracksBySource
                 .computeIfAbsent(track.sourceType(), ignored -> new LinkedHashMap<>())
                 .put(key, track);
+        if (track.targetUuid() != null) {
+            this.tracksByUuid.put(track.targetUuid(), track);
+        }
     }
 
     public void forEachTrackBySource(TargetSourceType sourceType, Consumer<RadarTargetTrack> consumer) {
@@ -56,14 +61,14 @@ public final class RadarTargetCache {
         this.tracks.values().forEach(consumer);
     }
 
+    /** Внутренний обход горячего пути сканера без захватывающей lambda и временного счётчика-массива. */
+    Iterable<RadarTargetTrack> tracks() {
+        return this.tracks.values();
+    }
+
     @Nullable
     public RadarTargetTrack findByUuid(UUID targetUuid) {
-        for (RadarTargetTrack track : this.tracks.values()) {
-            if (targetUuid.equals(track.targetUuid())) {
-                return track;
-            }
-        }
-        return null;
+        return this.tracksByUuid.get(targetUuid);
     }
 
     public RadarStaleValidationResult validateStaleTracks(ServerLevel level, long gameTime) {
@@ -79,7 +84,7 @@ public final class RadarTargetCache {
 
             if (gameTime - track.lastSeenGameTime() > RadarConstants.staleTrackExpirationTicks()) {
                 iterator.remove();
-                removeFromSourceIndex(track.key(), track);
+                removeFromIndexes(track.key(), track);
                 removedExpired++;
                 continue;
             }
@@ -93,7 +98,7 @@ public final class RadarTargetCache {
             Entity entity = resolveKnownEntity(level, track);
             if (entity == null || !entity.isAlive()) {
                 iterator.remove();
-                removeFromSourceIndex(track.key(), track);
+                removeFromIndexes(track.key(), track);
                 removedDeadOrMissing++;
                 continue;
             }
@@ -105,6 +110,7 @@ public final class RadarTargetCache {
 
     public void clear() {
         this.tracks.clear();
+        this.tracksByUuid.clear();
         this.tracksBySource.clear();
     }
 
@@ -118,6 +124,7 @@ public final class RadarTargetCache {
 
     public void replaceWith(RadarTargetCache other) {
         this.tracks.clear();
+        this.tracksByUuid.clear();
         this.tracksBySource.clear();
         for (Map.Entry<TargetKey, RadarTargetTrack> entry : other.tracks.entrySet()) {
             put(entry.getKey(), entry.getValue());
@@ -132,6 +139,14 @@ public final class RadarTargetCache {
         typedTracks.remove(key);
         if (typedTracks.isEmpty()) {
             this.tracksBySource.remove(track.sourceType());
+        }
+    }
+
+    private void removeFromIndexes(TargetKey key, RadarTargetTrack track) {
+        removeFromSourceIndex(key, track);
+        UUID targetUuid = track.targetUuid();
+        if (targetUuid != null) {
+            this.tracksByUuid.remove(targetUuid, track);
         }
     }
 

@@ -1,63 +1,31 @@
 package com.limbo2136.powerradar.radar;
 
-import com.limbo2136.powerradar.RadarConstants;
-import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.limbo2136.powerradar.compat.createbigcannons.RadarCbcProjectileCompat;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
-import com.limbo2136.powerradar.registry.ModBlocks;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class RadarScanner {
     private RadarScanner() {
-    }
-
-    public static RadarScanSlicePlan buildSlicePlan(RadarScanProfile profile, RadarScanContext context) {
-        int scanRange = profile.range();
-        AABB searchBox = new AABB(
-                context.radarOriginX() - scanRange,
-                context.radarOriginY() + profile.verticalMinOffset(),
-                context.radarOriginZ() - scanRange,
-                context.radarOriginX() + scanRange,
-                context.radarOriginY() + profile.verticalMaxOffset(),
-                context.radarOriginZ() + scanRange
-        );
-        double sliceSize = RadarConstants.entityQuerySliceSize();
-        List<AABB> slices = new ArrayList<>();
-        for (double minX = searchBox.minX; minX < searchBox.maxX; minX += sliceSize) {
-            double maxX = Math.min(minX + sliceSize, searchBox.maxX);
-            for (double minZ = searchBox.minZ; minZ < searchBox.maxZ; minZ += sliceSize) {
-                double maxZ = Math.min(minZ + sliceSize, searchBox.maxZ);
-                slices.add(new AABB(minX, searchBox.minY, minZ, maxX, searchBox.maxY, maxZ));
-            }
-        }
-        return new RadarScanSlicePlan(searchBox, List.copyOf(slices));
     }
 
     public static void housekeeping(RadarScanContext context, RadarTargetCache targetCache) {
@@ -68,22 +36,25 @@ public final class RadarScanner {
     public static int refreshTrackedEntities(
             RadarScanProfile profile,
             RadarScanContext context,
-            RadarTargetCache targetCache
+            RadarTargetCache targetCache,
+            RadarCoverageFilter.PreparedCoverage coverage,
+            RadarSurfaceHeightCache surfaceHeights
     ) {
-        int[] refreshed = { 0 };
-        targetCache.forEachTrack(track -> {
+        int refreshed = 0;
+        for (RadarTargetTrack track : targetCache.tracks()) {
             Entity entity = resolveTrackedEntity(context, track);
             if (entity == null || !entity.isAlive()) {
-                return;
+                continue;
             }
-            RadarTargetCategory category = RadarTargetClassifier.classify(entity, profile);
-            if (category == null || !RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
-                return;
+            RadarTargetCategory category = RadarTargetClassifier.classify(entity);
+            if (category == null || !profile.detects(category)
+                    || !coverage.isEntityInCoverage(entity, surfaceHeights)) {
+                continue;
             }
             updateTrack(context, targetCache, track.key(), entity, category, track);
-            refreshed[0]++;
-        });
-        return refreshed[0];
+            refreshed++;
+        }
+        return refreshed;
     }
 
     private static Entity resolveTrackedEntity(RadarScanContext context, RadarTargetTrack track) {
@@ -95,19 +66,25 @@ public final class RadarScanner {
                 : context.level().getEntity(track.targetId());
     }
 
-    static List<Entity> queryCandidates(
+    static List<RadarCandidate> queryCandidates(
             ServerLevel level,
             AABB searchBox,
             Collection<RadarScanProfile> profiles
     ) {
-        boolean players = profiles.stream().anyMatch(RadarScanProfile::detectPlayers);
-        boolean projectiles = profiles.stream().anyMatch(RadarScanProfile::detectProjectiles);
-        boolean mobs = profiles.stream().anyMatch(profile -> profile.detectPassiveMobs() || profile.detectHostileMobs());
-        boolean unknown = profiles.stream().anyMatch(RadarScanProfile::detectUnknown);
+        boolean players = false;
+        boolean projectiles = false;
+        boolean mobs = false;
+        boolean unknown = false;
+        for (RadarScanProfile profile : profiles) {
+            players |= profile.detectPlayers();
+            projectiles |= profile.detectProjectiles();
+            mobs |= profile.detectPassiveMobs() || profile.detectHostileMobs();
+            unknown |= profile.detectUnknown();
+        }
         int typedQueries = (players ? 1 : 0) + (projectiles ? 1 : 0) + (mobs ? 1 : 0) + (unknown ? 1 : 0);
         // При трёх и более группах один широкий запрос дешевле нескольких почти одинаковых выборок.
         if (typedQueries >= 3) {
-            return level.getEntities((Entity) null, searchBox, Entity::isAlive);
+            return classifyCandidates(level.getEntities((Entity) null, searchBox, Entity::isAlive));
         }
 
         Map<UUID, Entity> candidates = new LinkedHashMap<>();
@@ -132,22 +109,39 @@ public final class RadarScanner {
             level.getEntities(EntityTypeTest.forClass(RadarStructureEntity.class), searchBox, Entity::isAlive)
                     .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
         }
-        return List.copyOf(candidates.values());
+        return classifyCandidates(candidates.values());
+    }
+
+    private static List<RadarCandidate> classifyCandidates(Collection<Entity> entities) {
+        List<RadarCandidate> candidates = new ArrayList<>(entities.size());
+        for (Entity entity : entities) {
+            RadarTargetCategory category = RadarTargetClassifier.classify(entity);
+            if (category != null) {
+                candidates.add(new RadarCandidate(entity, category));
+            }
+        }
+        return candidates;
     }
 
     static boolean processSharedCandidate(
             RadarScanProfile profile,
             RadarScanContext context,
             RadarTargetCache targetCache,
-            Entity entity,
-            Set<TargetKey> seen
+            RadarCandidate candidate,
+            Set<TargetKey> seen,
+            RadarCoverageFilter.PreparedCoverage coverage,
+            RadarSurfaceHeightCache surfaceHeights
     ) {
-        TargetKey key = TargetKey.entity(context.dimensionId(), entity.getUUID(), entity.getId());
-        if (!seen.add(key) || entity instanceof ItemEntity) {
+        Entity entity = candidate.entity();
+        RadarTargetCategory category = candidate.category();
+        if (!profile.detects(category)) {
             return false;
         }
-        RadarTargetCategory category = RadarTargetClassifier.classify(entity, profile);
-        if (category == null || !RadarCoverageFilter.isEntityInCoverage(profile, context, entity)) {
+        TargetKey key = TargetKey.entity(context.dimensionId(), entity.getUUID(), entity.getId());
+        if (!seen.add(key)) {
+            return false;
+        }
+        if (!coverage.isEntityInCoverage(entity, surfaceHeights)) {
             return false;
         }
         updateTrack(context, targetCache, key, entity, category, targetCache.get(key));
@@ -159,14 +153,16 @@ public final class RadarScanner {
             RadarScanContext context,
             RadarTargetCache targetCache,
             SableStructureObservation structure,
-            Set<TargetKey> seen
+            Set<TargetKey> seen,
+            RadarCoverageFilter.PreparedCoverage coverage,
+            RadarSurfaceHeightCache surfaceHeights
     ) {
         TargetKey key = TargetKey.entity(context.dimensionId(), structure.structureUuid(), -1);
         Vec3 coveragePoint = closestPoint(structure.worldBounds(), context);
         if (!seen.add(key)) {
             return false;
         }
-        if (!RadarCoverageFilter.isPointInCoverage(profile, context, coveragePoint)) {
+        if (!coverage.isPointInCoverage(coveragePoint, surfaceHeights)) {
             return false;
         }
         RadarTargetTrack track = targetCache.get(key);
@@ -229,123 +225,7 @@ public final class RadarScanner {
         return Math.max(minimum, Math.min(maximum, value));
     }
 
-    public static RadarStructure validateStructure(ServerLevel level, BlockPos controllerPos) {
-        // Обзорный радар — вертикальная колонна модулей; направленный — связная плоскость панелей.
-        BlockPos processorPos = controllerPos.above();
-        BlockState processorState = level.getBlockState(processorPos);
-
-        if (processorState.is(ModBlocks.OVERVIEW_MODULE.get())) {
-            int overviewModuleCount = countOverviewModules(level, processorPos);
-            return new RadarStructure(
-                    true,
-                    controllerPos,
-                    controllerPos,
-                    processorPos,
-                    Direction.NORTH,
-                    0,
-                    overviewModuleCount,
-                    RadarStructureType.OVERVIEW,
-                    RadarOrientationState.fixed(
-                            RadarStructureType.OVERVIEW,
-                            RadarGeometry.yawDegrees(Direction.NORTH),
-                            level.getGameTime()));
-        }
-
-        if (!isBasicRadarPanel(processorState)) {
-            return RadarStructure.invalid(controllerPos);
-        }
-
-        Direction facing = processorState.getValue(RadarPanelBlock.FACING);
-        PanelCounts panels = countConnectedBasicPanels(level, processorPos, facing);
-        return new RadarStructure(panels.total() > 0, controllerPos, controllerPos, processorPos, facing,
-                panels.basicPanelCount(), 0);
-    }
-
-    private static PanelCounts countConnectedBasicPanels(ServerLevel level, BlockPos firstPanelPos, Direction facing) {
-        Direction horizontalStep = facing.getClockWise();
-        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-        Set<BlockPos> visited = new HashSet<>();
-        queue.add(firstPanelPos);
-        visited.add(firstPanelPos);
-
-        int maxPanels = PowerRadarCeeConstants.maxRadarPanels();
-        while (!queue.isEmpty() && visited.size() < maxPanels) {
-            BlockPos current = queue.removeFirst();
-            for (BlockPos next : List.of(
-                    current.above(),
-                    current.below(),
-                    current.relative(horizontalStep),
-                    current.relative(horizontalStep.getOpposite())
-            )) {
-                if (visited.size() >= maxPanels) {
-                    break;
-                }
-                if (!visited.contains(next) && isInDirectPanelPlane(firstPanelPos, next, facing)
-                        && isCompatibleBasicPanel(level, next, facing)) {
-                    visited.add(next);
-                    queue.add(next);
-                }
-            }
-        }
-        return new PanelCounts(visited.size());
-    }
-
-    private static int countOverviewModules(ServerLevel level, BlockPos firstModulePos) {
-        int count = 0;
-        int maxModules = RadarModuleConstants.maxOverviewModules();
-        while (count < maxModules
-                && level.getBlockState(firstModulePos.above(count)).is(ModBlocks.OVERVIEW_MODULE.get())) {
-            count++;
-        }
-        return count;
-    }
-
-    private static boolean isInDirectPanelPlane(BlockPos firstPanelPos, BlockPos panelPos, Direction facing) {
-        int depth = (panelPos.getX() - firstPanelPos.getX()) * facing.getStepX()
-                + (panelPos.getY() - firstPanelPos.getY()) * facing.getStepY()
-                + (panelPos.getZ() - firstPanelPos.getZ()) * facing.getStepZ();
-        return depth == 0;
-    }
-
-    private static boolean isCompatibleBasicPanel(ServerLevel level, BlockPos pos, Direction facing) {
-        BlockState state = level.getBlockState(pos);
-        return isBasicRadarPanel(state) && state.getValue(RadarPanelBlock.FACING) == facing;
-    }
-
-    private static boolean isBasicRadarPanel(BlockState state) {
-        return state.is(ModBlocks.RADAR_PANEL.get()) && state.hasProperty(RadarPanelBlock.FACING);
-    }
-
-    public static int calculateRange(RadarScanMode mode, int phasedArrayPanelCount) {
-        int groundRange = Math.min(
-                PowerRadarCeeConstants.radarBaseRangeBlocks(phasedArrayPanelCount),
-                Integer.MAX_VALUE
-        );
-        if (mode == RadarScanMode.GROUND) {
-            return groundRange;
-        }
-        if (mode == RadarScanMode.SKY) {
-            return (int) Math.floor(groundRange * PowerRadarCeeConstants.airRangeMultiplier());
-        }
-        return groundRange;
-    }
-
-    public static int calculateOverviewRange(RadarScanMode mode, int overviewModuleCount) {
-        int groundRange = Math.min(
-                PowerRadarCeeConstants.overviewRadarBaseRangeBlocks(overviewModuleCount),
-                Integer.MAX_VALUE
-        );
-        if (mode == RadarScanMode.SKY) {
-            return (int) Math.floor(groundRange * PowerRadarCeeConstants.airRangeMultiplier());
-        }
-        return groundRange;
-    }
-
-    private record PanelCounts(int basicPanelCount) {
-
-        private int total() {
-            return this.basicPanelCount;
-        }
+    record RadarCandidate(Entity entity, RadarTargetCategory category) {
     }
 
     private static void updateTrack(

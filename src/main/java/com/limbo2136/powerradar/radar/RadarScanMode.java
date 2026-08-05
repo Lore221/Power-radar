@@ -1,6 +1,5 @@
 package com.limbo2136.powerradar.radar;
 
-import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 
 /** Имена значений сохраняются в NBT и передаются монитором; переименование требует миграции. */
@@ -23,8 +22,9 @@ public enum RadarScanMode {
 
     public int sectorAngleDegrees() {
         return switch (this) {
-            case GROUND, SURFACE_SCANNER -> RadarConstants.sectorRadarGroundAngleDegrees();
-            case SKY -> 60;
+            case GROUND -> PowerRadarRadarParameters.groundFovDegrees();
+            case SKY -> PowerRadarRadarParameters.airFovDegrees();
+            case SURFACE_SCANNER -> PowerRadarRadarParameters.surfaceFovDegrees();
         };
     }
 

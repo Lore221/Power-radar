@@ -6,7 +6,6 @@ import java.util.List;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 
 public record AllowlistCardSavePayload(
@@ -16,7 +15,7 @@ public record AllowlistCardSavePayload(
         List<String> storedNames
 ) implements CustomPacketPayload {
     public static final Type<AllowlistCardSavePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "allowlist_card_save"));
+            PowerRadar.id("allowlist_card_save"));
     public static final StreamCodec<RegistryFriendlyByteBuf, AllowlistCardSavePayload> STREAM_CODEC =
             StreamCodec.ofMember(AllowlistCardSavePayload::write, AllowlistCardSavePayload::new);
 

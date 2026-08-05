@@ -75,7 +75,7 @@ public record RadarMonitorSnapshotPayload(
      */
     public static final int WIRE_SCHEMA_VERSION = 5;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_snapshot"));
+            new CustomPacketPayload.Type<>(PowerRadar.id("radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorSnapshotPayload::write, RadarMonitorSnapshotPayload::new);
 

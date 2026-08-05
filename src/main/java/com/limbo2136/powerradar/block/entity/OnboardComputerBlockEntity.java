@@ -169,16 +169,13 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         List<TrackedTargetView> tracks = new ArrayList<>();
         radar.forEachTrackedTargetBySource(TargetSourceType.CBC_BIG_CANNON_PROJECTILE, tracks::add);
         List<ThreatSnapshot> threats = new ArrayList<>();
-        MovingProtectedZone initialZone = zone;
         // Дорогие геометрия и кинематика конструкции нужны только кандидатам,
         // прошедшим дешёвую широкую фазу по последнему снимку.
-        List<TrackedTargetView> candidateTracks = tracks.stream()
-                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
-                        projectileLevel,
-                        initialZone,
-                        track,
-                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
-                .toList();
+        List<TrackedTargetView> candidateTracks = ProtectedZoneThreatEvaluator.initialBroadPhaseCandidates(
+                projectileLevel,
+                zone,
+                tracks,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
         if (!candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.refreshGeometryIfDue(level, zone, 10.0D);
             this.protectedZone = zone;
@@ -195,14 +192,11 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             deactivateShellAlarm(level, state);
             return;
         }
-        MovingProtectedZone sampledZone = zone;
-        candidateTracks = candidateTracks.stream()
-                .filter(track -> ProtectedZoneThreatEvaluator.passesInitialBroadPhase(
-                        projectileLevel,
-                        sampledZone,
-                        track,
-                        PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS))
-                .toList();
+        ProtectedZoneThreatEvaluator.retainInitialBroadPhaseCandidates(
+                projectileLevel,
+                zone,
+                candidateTracks,
+                PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
         if (!candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.completeMotionSample(zone);
             this.protectedZone = zone;

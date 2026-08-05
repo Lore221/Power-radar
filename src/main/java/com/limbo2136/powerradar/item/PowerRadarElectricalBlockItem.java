@@ -1,20 +1,17 @@
 package com.limbo2136.powerradar.item;
 
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
+import com.limbo2136.powerradar.bridge.TooltipInputBridge;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.radar.PowerRadarRadarParameters;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.InventoryField;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
-import com.simibubi.create.content.equipment.goggles.GogglesItem;
 import com.simibubi.create.foundation.item.TooltipHelper;
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -30,11 +27,12 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip,
+            TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        boolean shiftDown = isShiftDown();
-        List<PowerRadarTooltipSettings.Line> shiftText =
-                PowerRadarTooltipSettings.inventoryShiftText(this.tooltipTarget);
+        boolean shiftDown = TooltipInputBridge.isShiftDown();
+        List<PowerRadarTooltipSettings.Line> shiftText = PowerRadarTooltipSettings
+                .inventoryShiftText(this.tooltipTarget);
         if (shiftDown) {
             for (PowerRadarTooltipSettings.Line line : shiftText) {
                 appendWrappedText(tooltip, line);
@@ -47,7 +45,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
     }
 
     static void appendConfiguredParameters(Target target, List<Component> tooltip) {
-        boolean wearingGoggles = isClientPlayerWearingGoggles();
+        boolean wearingGoggles = TooltipInputBridge.isWearingGoggles();
         boolean electricalSectionStarted = false;
         for (PowerRadarTooltipSettings.Line line : PowerRadarTooltipSettings.inventoryParameters(target)) {
             InventoryField field = (InventoryField) line.field();
@@ -59,13 +57,13 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         }
     }
 
-    // Преобразует выбранные в PowerRadarTooltipSettings поля в строки с актуальными параметрами блока.
+    // Преобразует выбранные в PowerRadarTooltipSettings поля в строки с актуальными
+    // параметрами блока.
     private static void appendInventoryField(
             Target target,
             List<Component> tooltip,
             InventoryField field,
-            boolean wearingGoggles
-    ) {
+            boolean wearingGoggles) {
         switch (field) {
             case NOMINAL_POWER -> appendElectricalStat(
                     tooltip,
@@ -92,25 +90,18 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
                     PowerRadarCeeFormatter.resistanceComponent(internalResistanceOhms(target)),
                     scaledLevel(internalResistanceOhms(target), 300.0D),
                     wearingGoggles);
-            case PROTECTION_ZONE -> tooltip.add(property(
-                    "power_radar.tooltip.shell_alarm_zone",
-                    Component.translatable(
-                            "power_radar.tooltip.shell_alarm_dimensions",
-                            PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS,
-                            PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_HEIGHT_BLOCKS,
-                            PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS)));
         }
     }
 
     // Электрические характеристики повторяют трёхсегментную шкалу CEE.
-    // Очки открывают точное значение, без очков остаётся только словесная оценка уровня.
+    // Очки открывают точное значение, без очков остаётся только словесная оценка
+    // уровня.
     private static void appendElectricalStat(
             List<Component> tooltip,
             String labelKey,
             Component exactValue,
             int level,
-            boolean wearingGoggles
-    ) {
+            boolean wearingGoggles) {
         int safeLevel = Math.max(0, Math.min(3, level));
         ChatFormatting color = levelColor(safeLevel);
         Component displayedValue = wearingGoggles
@@ -166,7 +157,8 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
 
     private static double nominalPowerWatts(Target target) {
         return switch (target) {
-            case RADAR_CONTROLLER -> PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts();
+            case RADAR_CONTROLLER, AIR_RADAR_CONTROLLER, SURFACE_RADAR_CONTROLLER ->
+                PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts();
             case PHASED_ARRAY_PANEL -> PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts();
             case OVERVIEW_MODULE -> PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
             case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts();
@@ -176,7 +168,8 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
             case RADAR_LINK -> PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts();
             case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER ->
+                0.0D;
         };
     }
 
@@ -196,19 +189,21 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
 
     private static double nominalVoltageVolts(Target target) {
         return switch (target) {
-            case RADAR_CONTROLLER, PHASED_ARRAY_PANEL, OVERVIEW_MODULE ->
-                    PowerRadarElectricalParameters.Voltages.radar().nominal();
+            case RADAR_CONTROLLER, AIR_RADAR_CONTROLLER, SURFACE_RADAR_CONTROLLER, PHASED_ARRAY_PANEL,
+                    OVERVIEW_MODULE ->
+                PowerRadarElectricalParameters.Voltages.radar().nominal();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Voltages.shellAlarm().nominal();
             case TARGET_CONTROLLER -> PowerRadarElectricalParameters.Voltages.targetController().nominal();
             case INTERCEPTION_CONTROLLER ->
-                    PowerRadarElectricalParameters.Voltages.interceptionController().nominal();
+                PowerRadarElectricalParameters.Voltages.interceptionController().nominal();
             case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Voltages.monitorController().nominal();
             case RADAR_DISPLAY -> PowerRadarElectricalParameters.Voltages.panelRadarDisplay().nominal();
             case RADAR_LINK -> PowerRadarElectricalParameters.Voltages.panelRadarLink().nominal();
             case LOGIC_DOCK -> PowerRadarElectricalParameters.Voltages.logicDock().nominal();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Voltages.onboardComputer().nominal();
             case MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER -> 0.0D;
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER ->
+                0.0D;
         };
     }
 
@@ -223,9 +218,8 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
     }
 
     static void appendConfiguredText(Target target, List<Component> tooltip) {
-        boolean shiftDown = isShiftDown();
-        List<PowerRadarTooltipSettings.Line> shiftText =
-                PowerRadarTooltipSettings.inventoryShiftText(target);
+        boolean shiftDown = TooltipInputBridge.isShiftDown();
+        List<PowerRadarTooltipSettings.Line> shiftText = PowerRadarTooltipSettings.inventoryShiftText(target);
         if (!shiftDown && !shiftText.isEmpty()) {
             appendShiftHint(tooltip);
             return;
@@ -235,37 +229,13 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         }
     }
 
-    // Штатный перенос Create ограничивает описание шириной 200 пикселей и сохраняет выделение через "_".
+    // Штатный перенос Create ограничивает описание шириной 200 пикселей и сохраняет
+    // выделение через "_".
     private static void appendWrappedText(List<Component> tooltip, PowerRadarTooltipSettings.Line line) {
         tooltip.addAll(TooltipHelper.cutTextComponent(
                 Component.translatable(line.translationKey()),
                 TooltipHelper.styleFromColor(line.style()),
                 TooltipHelper.styleFromColor(line.highlightStyle())));
-    }
-
-    // Клиентские классы читаются отражением, чтобы общий BlockItem не создавал прямую клиентскую зависимость.
-    private static boolean isShiftDown() {
-        try {
-            Class<?> screen = Class.forName("net.minecraft.client.gui.screens.Screen");
-            Object result = screen.getMethod("hasShiftDown").invoke(null);
-            return result instanceof Boolean value && value;
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException
-                 | InvocationTargetException exception) {
-            return false;
-        }
-    }
-
-    // Определяет отдельную раскладку Shift-подсказки, когда локальный игрок надел очки Create.
-    private static boolean isClientPlayerWearingGoggles() {
-        try {
-            Class<?> minecraft = Class.forName("net.minecraft.client.Minecraft");
-            Object instance = minecraft.getMethod("getInstance").invoke(null);
-            Object player = minecraft.getField("player").get(instance);
-            return player instanceof Player localPlayer && GogglesItem.isWearingGoggles(localPlayer);
-        } catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException
-                 | IllegalAccessException | InvocationTargetException exception) {
-            return false;
-        }
     }
 
 }

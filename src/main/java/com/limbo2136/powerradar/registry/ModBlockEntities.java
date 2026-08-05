@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -54,9 +55,9 @@ public final class ModBlockEntities {
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<TargetControllerBlockEntity>> TARGET_CONTROLLER =
-            BLOCK_ENTITIES.register("target_controller", () -> BlockEntityType.Builder
+            CreateBigCannonsIntegration.isLoaded() ? BLOCK_ENTITIES.register("target_controller", () -> BlockEntityType.Builder
                     .of(TargetControllerBlockEntity::new, ModBlocks.TARGET_CONTROLLER.get())
-                    .build(null));
+                    .build(null)) : null;
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MechanicalSirenBlockEntity>> MECHANICAL_SIREN =
             BLOCK_ENTITIES.register("mechanical_siren", () -> BlockEntityType.Builder
@@ -64,14 +65,14 @@ public final class ModBlockEntities {
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ShellAlarmBlockEntity>> SHELL_ALARM =
-            BLOCK_ENTITIES.register("shell_alarm", () -> BlockEntityType.Builder
+            CreateBigCannonsIntegration.isLoaded() ? BLOCK_ENTITIES.register("shell_alarm", () -> BlockEntityType.Builder
                     .of(ShellAlarmBlockEntity::new, ModBlocks.SHELL_ALARM.get())
-                    .build(null));
+                    .build(null)) : null;
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<InterceptionControllerBlockEntity>> INTERCEPTION_CONTROLLER =
-            BLOCK_ENTITIES.register("interception_controller", () -> BlockEntityType.Builder
+            CreateBigCannonsIntegration.isLoaded() ? BLOCK_ENTITIES.register("interception_controller", () -> BlockEntityType.Builder
                     .of(InterceptionControllerBlockEntity::new, ModBlocks.INTERCEPTION_CONTROLLER.get())
-                    .build(null));
+                    .build(null)) : null;
 
     private ModBlockEntities() {
     }

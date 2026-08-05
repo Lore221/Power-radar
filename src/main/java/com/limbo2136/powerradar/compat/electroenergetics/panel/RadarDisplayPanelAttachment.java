@@ -29,6 +29,7 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
     private long lastPublishedRevision = Long.MIN_VALUE;
     private long lastPublishCheckGameTime = Long.MIN_VALUE;
     private long lastLinkCacheValidationGameTime = Long.MIN_VALUE;
+    private boolean movingPosePublished;
     private RadarPanelMonitorRuntime.PanelNetworkResolution cachedNetworkResolution;
 
     public RadarDisplayPanelAttachment(PanelAttachmentType type) {
@@ -59,8 +60,8 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
         long gameTime = serverLevel.getGameTime();
         refreshNetworkCacheIfDue(serverLevel, gameTime);
         if (this.cachedNetworkResolution != null && isElectricallyOperational()) {
-            RadarPanelMonitorRuntime.sendMovingPoseToNearby(
-                    serverLevel, this.pos, this.cachedNetworkResolution);
+            this.movingPosePublished = RadarPanelMonitorRuntime.sendMovingPoseToNearby(
+                    serverLevel, this.pos, this.cachedNetworkResolution, this.movingPosePublished);
         }
         if (gameTime == this.lastPublishCheckGameTime || Math.floorMod(gameTime, 5L) != 0L) {
             return;

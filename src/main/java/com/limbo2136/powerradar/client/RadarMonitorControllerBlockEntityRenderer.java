@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.client;
 
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
@@ -40,7 +41,7 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT)
 public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRenderer<RadarMonitorControllerBlockEntity> {
     private static final ResourceLocation SCREEN_BASE =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_screen_back.png");
+            PowerRadar.id("textures/gui/radar_monitor/radar_screen_back.png");
     private static final float GRID_WHITE_PIXEL_U = 221.5F / RadarBlipSprite.ATLAS_SIZE;
     private static final float GRID_WHITE_PIXEL_V = 246.5F / RadarBlipSprite.ATLAS_SIZE;
     private static final float SCREEN_MIN = 0.0F;
@@ -76,9 +77,12 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private static final int SHELL_ALARM_ZONE_ALPHA = 32;
     private static final int SHELL_ALARM_ZONE_OUTLINE_ALPHA = 192;
     private static final int SABLE_SILHOUETTE_FILL_ALPHA = 144;
+    private static final long BLIP_CACHE_PRUNE_INTERVAL_TICKS = 20L * 30L;
+    private static final long BLIP_CACHE_RETENTION_TICKS = 20L * 60L * 5L;
     // Ключи BlockPos действительны только внутри cachedLevel; смена объекта уровня очищает кэш.
     private final Map<BlockPos, InWorldBlipCache> blipCaches = new HashMap<>();
     private Level cachedLevel;
+    private long lastBlipCachePruneGameTime = Long.MIN_VALUE;
     private boolean renderWithoutFrameInset;
 
     public RadarMonitorControllerBlockEntityRenderer(BlockEntityRendererProvider.Context context) {
@@ -328,6 +332,23 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             // Сравнение объекта покрывает переподключение в то же измерение и координаты.
             this.blipCaches.clear();
             this.cachedLevel = level;
+            this.lastBlipCachePruneGameTime = level == null ? Long.MIN_VALUE : level.getGameTime();
+            return;
+        }
+        if (level == null) {
+            return;
+        }
+        long gameTime = level.getGameTime();
+        if (gameTime < this.lastBlipCachePruneGameTime) {
+            // /time set может вернуть время назад: старые отметки доступа после этого нельзя корректно сравнивать.
+            this.blipCaches.clear();
+            this.lastBlipCachePruneGameTime = gameTime;
+            return;
+        }
+        if (gameTime - this.lastBlipCachePruneGameTime >= BLIP_CACHE_PRUNE_INTERVAL_TICKS) {
+            this.blipCaches.entrySet().removeIf(entry ->
+                    gameTime - entry.getValue().lastAccessGameTime() > BLIP_CACHE_RETENTION_TICKS);
+            this.lastBlipCachePruneGameTime = gameTime;
         }
     }
 
@@ -472,13 +493,23 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
             float faceOffset,
             boolean colorOnly
     ) {
+        float contentMin = screenContentMin(size);
+        float contentMax = screenContentMax(size);
+        if (insideScreen(first, contentMin, contentMax)
+                && insideScreen(second, contentMin, contentMax)
+                && insideScreen(third, contentMin, contentMax)
+                && insideScreen(fourth, contentMin, contentMax)) {
+            drawUnclippedSilhouetteQuad(
+                    poseStack, bufferSource, facing, relativeOrigin, size,
+                    first, second, third, fourth,
+                    red, green, blue, alpha, packedLight, faceOffset, colorOnly);
+            return;
+        }
         ArrayList<TexturedScreenVertex> polygon = new ArrayList<>(List.of(
                 new TexturedScreenVertex(first.u(), first.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
                 new TexturedScreenVertex(second.u(), second.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
                 new TexturedScreenVertex(third.u(), third.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V),
                 new TexturedScreenVertex(fourth.u(), fourth.v(), GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V)));
-        float contentMin = screenContentMin(size);
-        float contentMax = screenContentMax(size);
         for (int edge = 0; edge < 4; edge++) {
             polygon = clipPolygon(polygon, edge, contentMin, contentMax);
         }
@@ -488,6 +519,69 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
         drawTexturedMatrixPolygon(
                 poseStack, bufferSource, RadarBlipSprite.ATLAS, facing, relativeOrigin, size, polygon,
                 red, green, blue, alpha, packedLight, faceOffset, colorOnly);
+    }
+
+    private static boolean insideScreen(ScreenPoint point, float minimum, float maximum) {
+        return point.u() >= minimum && point.u() <= maximum
+                && point.v() >= minimum && point.v() <= maximum;
+    }
+
+    private static void drawUnclippedSilhouetteQuad(
+            PoseStack poseStack,
+            MultiBufferSource bufferSource,
+            Direction facing,
+            BlockPos relativeOrigin,
+            int size,
+            ScreenPoint first,
+            ScreenPoint second,
+            ScreenPoint third,
+            ScreenPoint fourth,
+            int red,
+            int green,
+            int blue,
+            int alpha,
+            int packedLight,
+            float faceOffset,
+            boolean colorOnly
+    ) {
+        VertexConsumer consumer = bufferSource.getBuffer(colorOnly
+                ? RadarMonitorRenderTypes.translucentCoverage(RadarBlipSprite.ATLAS)
+                : RadarMonitorRenderTypes.polygonOffset(RadarBlipSprite.ATLAS));
+        Matrix4f matrix = poseStack.last().pose();
+        drawSilhouetteTriangle(consumer, matrix, facing, relativeOrigin, size,
+                first, second, third, red, green, blue, alpha, packedLight, faceOffset, colorOnly);
+        drawSilhouetteTriangle(consumer, matrix, facing, relativeOrigin, size,
+                first, third, fourth, red, green, blue, alpha, packedLight, faceOffset, colorOnly);
+    }
+
+    private static void drawSilhouetteTriangle(
+            VertexConsumer consumer,
+            Matrix4f matrix,
+            Direction facing,
+            BlockPos origin,
+            int size,
+            ScreenPoint first,
+            ScreenPoint second,
+            ScreenPoint third,
+            int red,
+            int green,
+            int blue,
+            int alpha,
+            int packedLight,
+            float faceOffset,
+            boolean duplicate
+    ) {
+        int passes = duplicate ? 2 : 1;
+        for (int pass = 0; pass < passes; pass++) {
+            matrixVertex(consumer, matrix, facing, origin, size, first,
+                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, red, green, blue, alpha, packedLight, faceOffset);
+            matrixVertex(consumer, matrix, facing, origin, size, second,
+                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, red, green, blue, alpha, packedLight, faceOffset);
+            matrixVertex(consumer, matrix, facing, origin, size, third,
+                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, red, green, blue, alpha, packedLight, faceOffset);
+            matrixVertex(consumer, matrix, facing, origin, size, third,
+                    GRID_WHITE_PIXEL_U, GRID_WHITE_PIXEL_V, red, green, blue, alpha, packedLight, faceOffset);
+        }
     }
 
     @Override
@@ -626,12 +720,17 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
                 Double.doubleToLongBits(monitorOffsetZ));
         InWorldBlipCache cache = this.blipCaches.get(monitorPos);
         if (cache != null && cache.key().equals(key)) {
+            cache.markAccessed(currentClientGameTime());
             return cache.blips();
         }
         List<InWorldBlip> blips = buildInWorldBlips(
                 displayData, size, viewYawDegrees, mapRadiusBlocks, monitorOffsetX, monitorOffsetZ);
-        this.blipCaches.put(monitorPos.immutable(), new InWorldBlipCache(key, blips));
+        this.blipCaches.put(monitorPos.immutable(), new InWorldBlipCache(key, blips, currentClientGameTime()));
         return blips;
+    }
+
+    private long currentClientGameTime() {
+        return this.cachedLevel == null ? 0L : this.cachedLevel.getGameTime();
     }
 
     private static BlockPos controllerKey(RadarMonitorDisplayData displayData) {
@@ -1195,7 +1294,32 @@ public class RadarMonitorControllerBlockEntityRenderer implements BlockEntityRen
     private record TexturedScreenVertex(float screenU, float screenV, float textureU, float textureV) {
     }
 
-    private record InWorldBlipCache(InWorldBlipCacheKey key, List<InWorldBlip> blips) {
+    private static final class InWorldBlipCache {
+        private final InWorldBlipCacheKey key;
+        private final List<InWorldBlip> blips;
+        private long lastAccessGameTime;
+
+        private InWorldBlipCache(InWorldBlipCacheKey key, List<InWorldBlip> blips, long lastAccessGameTime) {
+            this.key = key;
+            this.blips = blips;
+            this.lastAccessGameTime = lastAccessGameTime;
+        }
+
+        private InWorldBlipCacheKey key() {
+            return this.key;
+        }
+
+        private List<InWorldBlip> blips() {
+            return this.blips;
+        }
+
+        private long lastAccessGameTime() {
+            return this.lastAccessGameTime;
+        }
+
+        private void markAccessed(long gameTime) {
+            this.lastAccessGameTime = gameTime;
+        }
     }
 
     private record InWorldBlipCacheKey(

@@ -22,11 +22,13 @@ import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarModuleConstants;
 import com.limbo2136.powerradar.radar.RadarOrientationState;
 import com.limbo2136.powerradar.radar.RadarScanContext;
+import com.limbo2136.powerradar.radar.RadarAssemblyValidator;
 import com.limbo2136.powerradar.radar.RadarScanCoordinator;
 import com.limbo2136.powerradar.radar.RadarScanRequest;
 import com.limbo2136.powerradar.radar.RadarScanSlicePlan;
 import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarScanProfile;
+import com.limbo2136.powerradar.radar.RadarScanSlicePlanner;
 import com.limbo2136.powerradar.radar.RadarScanner;
 import com.limbo2136.powerradar.radar.RadarStructure;
 import com.limbo2136.powerradar.radar.RadarStructureType;
@@ -182,7 +184,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 // Для движущегося Sable план перестраивается только при изменении геометрического ключа.
                 ScanSlicePlanKey tickSlicePlanKey = scanSlicePlanKey(this.activeScanProfile, tickContext);
                 if (this.activeScanSlicePlan == null || !tickSlicePlanKey.equals(this.activeScanSlicePlanKey)) {
-                    this.activeScanSlicePlan = RadarScanner.buildSlicePlan(this.activeScanProfile, tickContext);
+                    this.activeScanSlicePlan = RadarScanSlicePlanner.build(this.activeScanProfile, tickContext);
                     this.activeScanSlicePlanKey = tickSlicePlanKey;
                 }
                 discoveryProfile = isRegularDiscoveryWindow(
@@ -190,14 +192,17 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                         ? this.activeScanProfile
                         : this.activeFrequentScanProfile;
                 if (hasDiscoveryTargets(discoveryProfile)) {
-                    ArrayList<AABB> selected = new ArrayList<>();
                     List<AABB> slices = this.activeScanSlicePlan.slices();
-                    for (int index = 0; index < slices.size(); index++) {
-                        if (index % scanSliceTicks == bucket) {
-                            selected.add(slices.get(index));
-                        }
+                    int selectedCount = bucket >= slices.size()
+                            ? 0
+                            : (slices.size() - 1 - bucket) / scanSliceTicks + 1;
+                    ArrayList<AABB> selected = new ArrayList<>(selectedCount);
+                    // Индексы этого bucket образуют арифметическую прогрессию: нет смысла каждый тик
+                    // обходить весь план и вычислять остаток для срезов остальных bucket.
+                    for (int index = bucket; index < slices.size(); index += scanSliceTicks) {
+                        selected.add(slices.get(index));
                     }
-                    discoverySlices = List.copyOf(selected);
+                    discoverySlices = selected;
                 }
             }
             if (!discoverySlices.isEmpty() || publishTick) {
@@ -221,7 +226,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     }
 
     private int scanBucket(long gameTime, int scanWindowTicks) {
-        return Math.floorMod((int) gameTime, scanWindowTicks);
+        return (int) Math.floorMod(gameTime, (long) scanWindowTicks);
     }
 
     private boolean isRegularDiscoveryWindow(long gameTime, int scanWindowTicks) {
@@ -287,7 +292,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         if (this.cachedStructure == null
                 || this.ticksSinceStructureValidation >= structureValidationInterval) {
             // Полная проверка многоблока выполняется редко; между проверками используется снимок структуры.
-            this.cachedStructure = RadarScanner.validateStructure(level, this.worldPosition);
+            this.cachedStructure = RadarAssemblyValidator.validate(level, this.worldPosition);
             this.ticksSinceStructureValidation = 0L;
         }
 
@@ -310,8 +315,8 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
         if (structureValid) {
             nextBaseRange = nextStructureType == RadarStructureType.OVERVIEW
-                    ? RadarScanner.calculateOverviewRange(this.scanMode, nextOverviewModuleCount)
-                    : RadarScanner.calculateRange(this.scanMode, nextBasicPanelCount);
+                    ? RadarAssemblyValidator.calculateOverviewRange(this.scanMode, nextOverviewModuleCount)
+                    : RadarAssemblyValidator.calculateRange(this.scanMode, nextBasicPanelCount);
             Vec3 origin = Vec3.atCenterOf(this.cachedStructure.corePos());
             this.radarOriginX = origin.x;
             this.radarOriginY = origin.y;
@@ -325,7 +330,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 ScanSlicePlanKey nextSlicePlanKey = scanSlicePlanKey(nextScanProfile, context);
                 RadarScanSlicePlan nextSlicePlan = nextSlicePlanKey.equals(this.activeScanSlicePlanKey)
                         ? this.activeScanSlicePlan
-                        : RadarScanner.buildSlicePlan(nextScanProfile, context);
+                        : RadarScanSlicePlanner.build(nextScanProfile, context);
                 this.activeScanProfile = nextScanProfile;
                 this.activeFrequentScanProfile = nextScanProfile.frequentDiscoveryOnly();
                 this.activeScanContext = context;
@@ -586,8 +591,8 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             return 0;
         }
         int baseRange = this.orientationState.structureType() == RadarStructureType.OVERVIEW
-                ? RadarScanner.calculateOverviewRange(this.scanMode, this.overviewModuleCount)
-                : RadarScanner.calculateRange(this.scanMode, this.basicPanelCount);
+                ? RadarAssemblyValidator.calculateOverviewRange(this.scanMode, this.overviewModuleCount)
+                : RadarAssemblyValidator.calculateRange(this.scanMode, this.basicPanelCount);
         return (int) Math.floor(baseRange * PowerRadarCeeConstants.radarRangeMultiplier(this.cachedElectricalVoltageVolts));
     }
 
@@ -597,8 +602,8 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     public int maxRange() {
         return this.orientationState.structureType() == RadarStructureType.OVERVIEW
-                ? RadarScanner.calculateOverviewRange(this.scanMode, RadarModuleConstants.maxOverviewModules())
-                : RadarScanner.calculateRange(this.scanMode, PowerRadarCeeConstants.maxRadarPanels());
+                ? RadarAssemblyValidator.calculateOverviewRange(this.scanMode, RadarModuleConstants.maxOverviewModules())
+                : RadarAssemblyValidator.calculateRange(this.scanMode, PowerRadarCeeConstants.maxRadarPanels());
     }
 
     public Direction radarFacing() {
@@ -919,9 +924,13 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 profile.range(),
                 profile.verticalMinOffset(),
                 profile.verticalMaxOffset(),
+                profile.structureType(),
+                profile.useFovCheck(),
                 context.radarOriginX(),
                 context.radarOriginY(),
                 context.radarOriginZ(),
+                profile.useFovCheck() ? context.radarYawDegrees() : 0.0F,
+                profile.sectorAngle(),
                 RadarConstants.entityQuerySliceSize());
     }
 
@@ -929,9 +938,13 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             int range,
             int verticalMinOffset,
             int verticalMaxOffset,
+            RadarStructureType structureType,
+            boolean useFovCheck,
             double originX,
             double originY,
             double originZ,
+            float yawDegrees,
+            int sectorAngle,
             double sliceSize
     ) {
     }

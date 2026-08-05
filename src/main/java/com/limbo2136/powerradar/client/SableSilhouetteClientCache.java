@@ -20,11 +20,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @OnlyIn(Dist.CLIENT)
 public final class SableSilhouetteClientCache {
     private static final long REQUEST_RETRY_MILLIS = 1_000L;
-    private static final Map<Key, RadarMonitorSilhouettePayload> SNAPSHOTS = new HashMap<>();
+    private static final long PRUNE_INTERVAL_MILLIS = 30_000L;
+    private static final long SNAPSHOT_RETENTION_MILLIS = 300_000L;
+    private static final long PENDING_RETENTION_MILLIS = 60_000L;
+    private static final Map<Key, CachedSnapshot> SNAPSHOTS = new HashMap<>();
     private static final Map<Key, PendingRequest> PENDING_REQUESTS = new HashMap<>();
     @Nullable
     private static ClientLevel levelSession;
     private static long updateVersion;
+    private static long lastPruneMillis;
 
     private SableSilhouetteClientCache() {
     }
@@ -32,6 +36,7 @@ public final class SableSilhouetteClientCache {
     public static void requestMissing(BlockPos monitorPos, List<RadarDisplayTarget> targets) {
         ensureLevelSession();
         long nowMillis = net.minecraft.Util.getMillis();
+        pruneIfDue(nowMillis);
         for (RadarDisplayTarget target : targets) {
             if (target.category() != RadarTargetCategory.SABLE_STRUCTURE
                     || target.targetUuid() == null
@@ -39,8 +44,8 @@ public final class SableSilhouetteClientCache {
                 continue;
             }
             Key key = new Key(target.dimensionId(), target.targetUuid());
-            RadarMonitorSilhouettePayload cached = SNAPSHOTS.get(key);
-            int cachedVersion = cached == null ? 0 : cached.version();
+            CachedSnapshot cached = SNAPSHOTS.get(key);
+            int cachedVersion = cached == null ? 0 : cached.payload.version();
             PendingRequest pending = PENDING_REQUESTS.get(key);
             if (cachedVersion >= target.silhouetteVersion()) {
                 continue;
@@ -58,10 +63,12 @@ public final class SableSilhouetteClientCache {
 
     public static void apply(RadarMonitorSilhouettePayload payload) {
         ensureLevelSession();
+        long nowMillis = net.minecraft.Util.getMillis();
+        pruneIfDue(nowMillis);
         Key key = new Key(payload.dimensionId(), payload.structureUuid());
-        RadarMonitorSilhouettePayload current = SNAPSHOTS.get(key);
-        if (current == null || payload.version() >= current.version()) {
-            SNAPSHOTS.put(key, payload);
+        CachedSnapshot current = SNAPSHOTS.get(key);
+        if (current == null || payload.version() >= current.payload.version()) {
+            SNAPSHOTS.put(key, new CachedSnapshot(payload, nowMillis));
             updateVersion++;
         }
         PendingRequest pending = PENDING_REQUESTS.get(key);
@@ -76,9 +83,13 @@ public final class SableSilhouetteClientCache {
         if (target.targetUuid() == null || target.silhouetteVersion() <= 0) {
             return null;
         }
-        RadarMonitorSilhouettePayload snapshot = SNAPSHOTS.get(
+        CachedSnapshot snapshot = SNAPSHOTS.get(
                 new Key(target.dimensionId(), target.targetUuid()));
-        return snapshot != null && snapshot.version() >= target.silhouetteVersion() ? snapshot : null;
+        if (snapshot == null || snapshot.payload.version() < target.silhouetteVersion()) {
+            return null;
+        }
+        snapshot.lastAccessMillis = net.minecraft.Util.getMillis();
+        return snapshot.payload;
     }
 
     public static long updateVersion() {
@@ -93,13 +104,35 @@ public final class SableSilhouetteClientCache {
             SNAPSHOTS.clear();
             PENDING_REQUESTS.clear();
             updateVersion = 0L;
+            lastPruneMillis = net.minecraft.Util.getMillis();
             levelSession = currentLevel;
         }
+    }
+
+    private static void pruneIfDue(long nowMillis) {
+        if (nowMillis - lastPruneMillis < PRUNE_INTERVAL_MILLIS) {
+            return;
+        }
+        SNAPSHOTS.entrySet().removeIf(entry ->
+                nowMillis - entry.getValue().lastAccessMillis > SNAPSHOT_RETENTION_MILLIS);
+        PENDING_REQUESTS.entrySet().removeIf(entry ->
+                nowMillis - entry.getValue().sentAtMillis() > PENDING_RETENTION_MILLIS);
+        lastPruneMillis = nowMillis;
     }
 
     private record Key(ResourceLocation dimensionId, UUID structureUuid) {
     }
 
     private record PendingRequest(int version, long sentAtMillis) {
+    }
+
+    private static final class CachedSnapshot {
+        private final RadarMonitorSilhouettePayload payload;
+        private long lastAccessMillis;
+
+        private CachedSnapshot(RadarMonitorSilhouettePayload payload, long lastAccessMillis) {
+            this.payload = payload;
+            this.lastAccessMillis = lastAccessMillis;
+        }
     }
 }

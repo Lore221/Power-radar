@@ -2,7 +2,6 @@ package com.limbo2136.powerradar.compat.createbigcannons;
 
 import java.util.Optional;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.fml.ModList;
 
 /** Лениво разрешает CBC-классы, сохраняя безопасный пустой результат при несовместимой версии. */
 public final class RadarCbcProjectileCompat {
@@ -46,7 +45,7 @@ public final class RadarCbcProjectileCompat {
             return;
         }
         initialized = true;
-        if (!ModList.get().isLoaded("createbigcannons")) {
+        if (!CreateBigCannonsIntegration.isLoaded()) {
             return;
         }
         try {

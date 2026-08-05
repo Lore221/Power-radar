@@ -28,21 +28,21 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 /** Клиентская отрисовка корпусов и карты модулей электрического щитка. */
 public final class PowerRadarPanelAttachmentRenderer {
     private static final ResourceLocation RADAR_LINK_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/radar_link");
+            PowerRadar.id("block/electrical_panel/radar_link");
     private static final ResourceLocation RADAR_DISPLAY_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/radar_display");
+            PowerRadar.id("block/electrical_panel/radar_display");
     private static final ResourceLocation ATTITUDE_INDICATOR_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/attitude_indicator");
+            PowerRadar.id("block/electrical_panel/attitude_indicator");
     private static final ResourceLocation ATTITUDE_SPHERE_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/attitude_sphere");
+            PowerRadar.id("block/electrical_panel/attitude_sphere");
     private static final ResourceLocation LOGIC_DOCK_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/logic_dock");
+            PowerRadar.id("block/electrical_panel/logic_dock");
     private static final ResourceLocation LOGIC_DOCK_TARGETING_CARD_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/targeting_card");
+            PowerRadar.id("block/electrical_panel/targeting_card");
     private static final ResourceLocation LOGIC_DOCK_DISPLAY_CARD_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/display_card");
+            PowerRadar.id("block/electrical_panel/display_card");
     private static final ResourceLocation LOGIC_DOCK_ALLOWLIST_CARD_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/electrical_panel/allowlist_card");
+            PowerRadar.id("block/electrical_panel/allowlist_card");
     private static final PartialModel RADAR_LINK = PartialModel.of(RADAR_LINK_LOCATION);
     private static final PartialModel RADAR_DISPLAY = PartialModel.of(RADAR_DISPLAY_LOCATION);
     private static final PartialModel ATTITUDE_INDICATOR = PartialModel.of(ATTITUDE_INDICATOR_LOCATION);

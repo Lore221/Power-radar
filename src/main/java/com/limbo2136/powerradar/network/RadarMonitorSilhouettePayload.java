@@ -17,7 +17,7 @@ public record RadarMonitorSilhouettePayload(
         List<Fill> fills
 ) implements CustomPacketPayload {
     public static final Type<RadarMonitorSilhouettePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_silhouette"));
+            PowerRadar.id("radar_monitor_silhouette"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSilhouettePayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorSilhouettePayload::write, RadarMonitorSilhouettePayload::new);
 

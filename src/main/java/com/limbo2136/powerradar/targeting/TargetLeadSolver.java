@@ -45,9 +45,11 @@ public final class TargetLeadSolver {
                 .add(acceleration.scale(0.5 * trackAgeTicks * trackAgeTicks));
         Vec3 currentVelocity = velocity.add(acceleration.scale(trackAgeTicks));
         double pitchHint = Double.NaN;
+        Vec3 baseDelta = base.subtract(origin);
+        double baseDistance = baseDelta.length();
         BallisticAim aim = aim(
-                base.subtract(origin),
-                TargetingMath.horizontalDistance(base.subtract(origin)),
+                baseDelta,
+                TargetingMath.horizontalDistance(baseDelta),
                 ballistics,
                 autocannon,
                 preferHighArc,
@@ -56,12 +58,12 @@ public final class TargetLeadSolver {
             pitchHint = aim.pitchDegrees();
         }
         if (!usesFullVelocityLead(track.classification())
-                || base.distanceTo(origin) < PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_LEAD_DISTANCE_BLOCKS) {
+                || baseDistance < PowerRadarCeeConstants.TARGET_CONTROLLER_MIN_LEAD_DISTANCE_BLOCKS) {
             return new LeadSolution(base, aim, 0.0, false);
         }
         // Затем несколько раз согласуем будущую точку цели с рассчитанным временем полёта.
         Vec3 predicted = base;
-        double flightTicks = fallbackFlightTicks(base.distanceTo(origin), ballistics);
+        double flightTicks = fallbackFlightTicks(baseDistance, ballistics);
         for (int i = 0; i < TARGET_LEAD_ITERATIONS; i++) {
             predicted = base
                     .add(currentVelocity.scale(flightTicks))

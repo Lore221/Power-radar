@@ -1,30 +1,20 @@
 package com.limbo2136.powerradar.bridge;
 
 import com.simibubi.create.foundation.gui.AllIcons;
-import java.lang.reflect.Method;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.fml.loading.FMLEnvironment;
+import java.util.function.Supplier;
 
+/** Передаёт common-настройкам клиентские иконки, не загружая клиентские классы на сервере. */
 public final class ShellAlarmIconBridge {
-    // Строка класса и публичная сигнатура dimensions() образуют отражательный клиентский контракт.
-    private static final String CLIENT_ICONS = "com.limbo2136.powerradar.client.ShellAlarmIcons";
-    private static Method dimensionsMethod;
+    private static Supplier<AllIcons> dimensionsProvider = () -> AllIcons.I_NONE;
 
     private ShellAlarmIconBridge() {
     }
 
+    public static void configure(Supplier<AllIcons> dimensionsProvider) {
+        ShellAlarmIconBridge.dimensionsProvider = dimensionsProvider;
+    }
+
     public static AllIcons dimensions() {
-        if (FMLEnvironment.dist != Dist.CLIENT) {
-            return AllIcons.I_NONE;
-        }
-        try {
-            if (dimensionsMethod == null) {
-                Class<?> icons = Class.forName(CLIENT_ICONS);
-                dimensionsMethod = icons.getMethod("dimensions");
-            }
-            return (AllIcons) dimensionsMethod.invoke(null);
-        } catch (ReflectiveOperationException exception) {
-            return AllIcons.I_NONE;
-        }
+        return dimensionsProvider.get();
     }
 }

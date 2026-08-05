@@ -11,7 +11,7 @@ class RadarScanCoordinatorTest {
     void identicalSlicesAreWorthSharing() {
         AABB slice = new AABB(0.0D, 0.0D, 0.0D, 256.0D, 128.0D, 256.0D);
 
-        assertTrue(RadarScanCoordinator.isBeneficialMerge(slice, volume(slice), slice));
+        assertTrue(RadarScanCoordinator.isBeneficialMerge(slice, slice));
     }
 
     @Test
@@ -19,7 +19,7 @@ class RadarScanCoordinatorTest {
         AABB first = new AABB(0.0D, 0.0D, 0.0D, 256.0D, 128.0D, 256.0D);
         AABB second = new AABB(240.0D, 0.0D, 0.0D, 496.0D, 128.0D, 256.0D);
 
-        assertFalse(RadarScanCoordinator.isBeneficialMerge(first, volume(first), second));
+        assertFalse(RadarScanCoordinator.isBeneficialMerge(first, second));
     }
 
     @Test
@@ -27,10 +27,6 @@ class RadarScanCoordinatorTest {
         AABB first = new AABB(0.0D, 0.0D, 0.0D, 256.0D, 128.0D, 256.0D);
         AABB second = new AABB(64.0D, 0.0D, 0.0D, 320.0D, 128.0D, 256.0D);
 
-        assertTrue(RadarScanCoordinator.isBeneficialMerge(first, volume(first), second));
-    }
-
-    private static double volume(AABB box) {
-        return box.getXsize() * box.getYsize() * box.getZsize();
+        assertTrue(RadarScanCoordinator.isBeneficialMerge(first, second));
     }
 }

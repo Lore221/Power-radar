@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceType
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -35,7 +36,7 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
 public class InterceptionControllerBlock extends BaseEntityBlock
-        implements ElectricalDeviceBlock<InterceptionControllerCeeDevice> {
+        implements IWrenchable, ElectricalDeviceBlock<InterceptionControllerCeeDevice> {
     public static final MapCodec<InterceptionControllerBlock> CODEC =
             simpleCodec(InterceptionControllerBlock::new);
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
@@ -52,7 +53,11 @@ public class InterceptionControllerBlock extends BaseEntityBlock
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(FACING, context.getClickedFace().getOpposite());
+        Direction clickedFace = context.getClickedFace();
+        Direction facing = clickedFace.getAxis().isHorizontal()
+                ? clickedFace.getOpposite()
+                : context.getHorizontalDirection().getOpposite();
+        return defaultBlockState().setValue(FACING, facing);
     }
 
     @Override
@@ -127,6 +132,14 @@ public class InterceptionControllerBlock extends BaseEntityBlock
     @Override
     public MutableComponent getNodeLabel(Level level, BlockPos pos, BlockState state, int node) {
         return terminals(state).label(node);
+    }
+
+    @Override
+    public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
+        Direction facing = originalState.getValue(FACING);
+        return originalState.setValue(FACING, facing.getAxis().isHorizontal()
+                ? facing.getClockWise(Direction.Axis.Y)
+                : Direction.NORTH);
     }
 
     @Nullable

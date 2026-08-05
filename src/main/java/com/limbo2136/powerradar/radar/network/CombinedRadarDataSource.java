@@ -25,10 +25,6 @@ public final class CombinedRadarDataSource implements RadarTargetingDataSource {
         this.sources = List.copyOf(sources);
     }
 
-    public boolean isEmpty() {
-        return this.sources.isEmpty();
-    }
-
     @Override
     public RadarId radarId() {
         return primary().radarId();

@@ -25,6 +25,17 @@ public record RadarScanProfile(
         boolean detectSableStructures,
         boolean detectUnknown
 ) {
+    public boolean detects(RadarTargetCategory category) {
+        return switch (category) {
+            case PLAYER -> this.detectPlayers;
+            case HOSTILE_MOB -> this.detectHostileMobs;
+            case PASSIVE_MOB -> this.detectPassiveMobs;
+            case PROJECTILE -> this.detectProjectiles;
+            case SABLE_STRUCTURE -> this.detectSableStructures;
+            case UNKNOWN -> this.detectUnknown;
+        };
+    }
+
     public static RadarScanProfile sectorController(RadarScanMode mode, int range) {
         return controller(mode, range, RadarStructureType.PHASED_ARRAY);
     }
@@ -38,12 +49,12 @@ public record RadarScanProfile(
         int minOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMinYOffset();
             case GROUND -> -PowerRadarCeeConstants.groundDownBlocks();
-            case SURFACE_SCANNER -> -PowerRadarCeeConstants.surfaceDownBlocks();
+            case SURFACE_SCANNER -> PowerRadarCeeConstants.surfaceMinYOffset();
         };
         int maxOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMaxYOffset();
             case GROUND -> PowerRadarCeeConstants.groundUpBlocks();
-            case SURFACE_SCANNER -> 0;
+            case SURFACE_SCANNER -> PowerRadarCeeConstants.surfaceMaxYOffset();
         };
         return new RadarScanProfile(
                 overview ? RadarProfileType.OVERVIEW_CONTROLLER : RadarProfileType.SECTOR_CONTROLLER,
@@ -57,10 +68,10 @@ public record RadarScanProfile(
                 !overview,
                 mode.sectorAngleDegrees(),
                 true,
-                mode == RadarScanMode.GROUND || mode == RadarScanMode.SURFACE_SCANNER,
-                mode == RadarScanMode.GROUND,
-                mode == RadarScanMode.GROUND,
-                mode == RadarScanMode.SKY || mode == RadarScanMode.GROUND,
+                true,
+                true,
+                true,
+                true,
                 true,
                 true
         );

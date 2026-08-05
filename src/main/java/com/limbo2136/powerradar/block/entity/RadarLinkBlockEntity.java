@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -147,6 +148,16 @@ public class RadarLinkBlockEntity extends BlockEntity {
 
         if (frontState.is(ModBlocks.RADAR_MONITOR_CONTROLLER.get())
                 && serverLevel.getBlockEntity(frontPos) instanceof RadarMonitorControllerBlockEntity) {
+            if (isCurrentEndpoint(RadarLinkEndpointRole.RADAR_MONITOR, newEndpointPos)
+                    && manager.isMonitorAttachedAt(this.networkId, linkGlobalPos, newEndpointPos)) {
+                if (manager.resolveControllersForConsumer(this.networkId, linkGlobalPos).status()
+                        == RadarNetworkConnectionStatus.OUT_OF_RANGE) {
+                    pulseClientOnly(LampPulse.RED);
+                    return RadarLinkReconcileResult.OUT_OF_RANGE;
+                }
+                pulseClientOnly(LampPulse.GREEN);
+                return RadarLinkReconcileResult.MONITOR_ATTACHED;
+            }
             detachCurrentEndpoint(manager, linkGlobalPos);
             manager.attachMonitorFromLink(this.networkId, linkGlobalPos, newEndpointPos);
             this.endpointRole = RadarLinkEndpointRole.RADAR_MONITOR;
@@ -162,6 +173,10 @@ public class RadarLinkBlockEntity extends BlockEntity {
 
         if (frontState.is(ModBlocks.LOGIC_DOCK.get())
                 && serverLevel.getBlockEntity(frontPos) instanceof LogicDockBlockEntity) {
+            if (isCurrentEndpoint(RadarLinkEndpointRole.LOGIC_DOCK, newEndpointPos)) {
+                pulseClientOnly(LampPulse.GREEN);
+                return RadarLinkReconcileResult.NONE;
+            }
             detachCurrentEndpoint(manager, linkGlobalPos);
             this.endpointRole = RadarLinkEndpointRole.LOGIC_DOCK;
             this.endpointPos = newEndpointPos;
@@ -169,7 +184,11 @@ public class RadarLinkBlockEntity extends BlockEntity {
             return RadarLinkReconcileResult.NONE;
         }
 
-        if (frontState.is(ModBlocks.TARGET_CONTROLLER.get())) {
+        if (CreateBigCannonsIntegration.isLoaded() && frontState.is(ModBlocks.TARGET_CONTROLLER.get())) {
+            if (isCurrentEndpoint(RadarLinkEndpointRole.FUTURE_CONSUMER, newEndpointPos)) {
+                pulseClientOnly(LampPulse.GREEN);
+                return RadarLinkReconcileResult.NONE;
+            }
             detachCurrentEndpoint(manager, linkGlobalPos);
             this.endpointRole = RadarLinkEndpointRole.FUTURE_CONSUMER;
             this.endpointPos = newEndpointPos;
@@ -186,6 +205,10 @@ public class RadarLinkBlockEntity extends BlockEntity {
         }
         pulseClientOnly(LampPulse.RED);
         return RadarLinkReconcileResult.NONE;
+    }
+
+    private boolean isCurrentEndpoint(RadarLinkEndpointRole role, GlobalPos endpointPos) {
+        return this.endpointRole == role && endpointPos.equals(this.endpointPos);
     }
 
     // Сервер передаёт только начало импульса; клиент самостоятельно рассчитывает

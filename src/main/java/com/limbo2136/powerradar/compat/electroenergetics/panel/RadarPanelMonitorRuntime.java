@@ -13,12 +13,12 @@ import com.limbo2136.powerradar.network.RadarMonitorPosePayloadFactory;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayBuilder;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
+import com.limbo2136.powerradar.radar.OnlinePlayersSnapshotCache;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -65,14 +65,9 @@ public final class RadarPanelMonitorRuntime {
             return noLinkSnapshot(level, monitorPos, facing, display, resolution.status());
         }
 
-        List<String> onlineNames = level.getServer().getPlayerList().getPlayers().stream()
-                .map(player -> player.getGameProfile().getName())
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .toList();
-        int onlineHash = 1;
-        for (String name : onlineNames) {
-            onlineHash = 31 * onlineHash + name.toLowerCase(Locale.ROOT).hashCode();
-        }
+        OnlinePlayersSnapshotCache.Snapshot onlinePlayers = OnlinePlayersSnapshotCache.snapshot(level);
+        List<String> onlineNames = onlinePlayers.names();
+        int onlineHash = onlinePlayers.hash();
 
         RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
         RadarMonitorDisplayData data = manager.displayDataForConsumer(
@@ -111,27 +106,34 @@ public final class RadarPanelMonitorRuntime {
         }
     }
 
-    public static void sendMovingPoseToNearby(
+    public static boolean sendMovingPoseToNearby(
             ServerLevel level,
             BlockPos monitorPos,
-            PanelNetworkResolution resolution
+            PanelNetworkResolution resolution,
+            boolean movingPosePublished
     ) {
-        if (resolution.controllers().isEmpty()) {
-            return;
-        }
         RadarMonitorBlockPosePayload payload = RadarMonitorPosePayloadFactory.create(
                 level, monitorPos, panelFacing(level, monitorPos), resolution.controllers());
         if (payload == null) {
-            return;
+            if (!movingPosePublished) {
+                return false;
+            }
+            payload = new RadarMonitorBlockPosePayload(
+                    monitorPos, level.getGameTime(), null, List.of());
         }
         Vec3 worldCenter = RadarWorldPoseResolver.worldPosition(level, monitorPos);
         double range = RadarConstants.RADAR_MONITOR_BLOCK_SYNC_RANGE_BLOCKS;
         double rangeSqr = range * range;
+        boolean sent = false;
         for (ServerPlayer player : level.players()) {
             if (player.distanceToSqr(worldCenter.x, worldCenter.y, worldCenter.z) <= rangeSqr) {
                 PacketDistributor.sendToPlayer(player, payload);
+                sent = true;
             }
         }
+        return sent
+                ? payload.monitorPose() != null || !payload.poses().isEmpty()
+                : movingPosePublished;
     }
 
     @Nullable

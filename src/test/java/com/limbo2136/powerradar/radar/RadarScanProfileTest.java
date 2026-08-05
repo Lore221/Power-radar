@@ -12,10 +12,10 @@ class RadarScanProfileTest {
         RadarScanProfile shortRange = RadarScanProfile.sectorController(RadarScanMode.SURFACE_SCANNER, 80);
         RadarScanProfile longRange = RadarScanProfile.sectorController(RadarScanMode.SURFACE_SCANNER, 400);
 
-        assertEquals(-PowerRadarRadarParameters.surfaceDownBlocks(), shortRange.verticalMinOffset());
-        assertEquals(-PowerRadarRadarParameters.surfaceDownBlocks(), longRange.verticalMinOffset());
-        assertEquals(0, shortRange.verticalMaxOffset());
-        assertEquals(0, longRange.verticalMaxOffset());
+        assertEquals(PowerRadarRadarParameters.surfaceMinYOffset(), shortRange.verticalMinOffset());
+        assertEquals(PowerRadarRadarParameters.surfaceMinYOffset(), longRange.verticalMinOffset());
+        assertEquals(PowerRadarRadarParameters.surfaceMaxYOffset(), shortRange.verticalMaxOffset());
+        assertEquals(PowerRadarRadarParameters.surfaceMaxYOffset(), longRange.verticalMaxOffset());
     }
 
     @Test

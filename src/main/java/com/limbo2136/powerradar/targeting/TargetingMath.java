@@ -19,4 +19,24 @@ public final class TargetingMath {
         float wrapped = Mth.wrapDegrees(degrees);
         return wrapped < 0.0F ? wrapped + 360.0F : wrapped;
     }
+
+    public static Vec3 directionFromAngles(float yawDegrees, float pitchDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        double pitch = Math.toRadians(pitchDegrees);
+        double horizontal = Math.cos(pitch);
+        return new Vec3(
+                -Math.sin(yaw) * horizontal,
+                Math.sin(pitch),
+                Math.cos(yaw) * horizontal);
+    }
+
+    public static double approach(double current, double target, double maxDelta) {
+        if (current < target) {
+            return Math.min(target, current + maxDelta);
+        }
+        if (current > target) {
+            return Math.max(target, current - maxDelta);
+        }
+        return current;
+    }
 }

@@ -6,9 +6,7 @@ import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.resources.ResourceLocation;
 
 public final class IncompleteOverviewModuleItemProperties {
-    private static final ResourceLocation ASSEMBLY_STAGE = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID,
-            "overview_assembly_stage");
+    private static final ResourceLocation ASSEMBLY_STAGE = PowerRadar.id("overview_assembly_stage");
 
     private IncompleteOverviewModuleItemProperties() {
     }

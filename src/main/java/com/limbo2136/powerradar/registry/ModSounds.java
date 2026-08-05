@@ -2,7 +2,6 @@ package com.limbo2136.powerradar.registry;
 
 import com.limbo2136.powerradar.PowerRadar;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -14,7 +13,7 @@ public final class ModSounds {
 
     public static final DeferredHolder<SoundEvent, SoundEvent> MECHANICAL_SIREN =
             SOUNDS.register("mechanical_siren", () -> SoundEvent.createVariableRangeEvent(
-                    ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "mechanical_siren")));
+                    PowerRadar.id("mechanical_siren")));
 
     private ModSounds() {
     }

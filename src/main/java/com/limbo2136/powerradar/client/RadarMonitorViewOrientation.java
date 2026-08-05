@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.client;
 
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.limbo2136.powerradar.block.RadarMonitorControllerBlock;
 import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 import com.limbo2136.powerradar.radar.RadarGeometry;

@@ -4,12 +4,11 @@ import com.limbo2136.powerradar.PowerRadar;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 
 public record TargetingCardSavePayload(InteractionHand hand, int cardKind, int filterMask, int option) implements CustomPacketPayload {
     public static final Type<TargetingCardSavePayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "targeting_card_save"));
+            PowerRadar.id("targeting_card_save"));
     public static final StreamCodec<RegistryFriendlyByteBuf, TargetingCardSavePayload> STREAM_CODEC =
             StreamCodec.ofMember(TargetingCardSavePayload::write, TargetingCardSavePayload::new);
 

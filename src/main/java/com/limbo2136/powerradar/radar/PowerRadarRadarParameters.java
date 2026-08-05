@@ -17,12 +17,15 @@ public final class PowerRadarRadarParameters {
 
     // Горизонтальная геометрия направленного радара.
     private static final double DEFAULT_AIR_RANGE_MULTIPLIER = 1.5D;
-    private static final double DEFAULT_AIR_FOV_DEGREES = 90.0D;
+    private static final RadarFieldOfView DEFAULT_GROUND_FOV = RadarFieldOfView.DEGREES_90;
+    private static final RadarFieldOfView DEFAULT_AIR_FOV = RadarFieldOfView.DEGREES_60;
+    private static final RadarFieldOfView DEFAULT_SURFACE_FOV = RadarFieldOfView.DEGREES_120;
 
     // Вертикальные границы поиска задаются относительно контроллера в блоках.
     private static final int DEFAULT_GROUND_UP_BLOCKS = 128;
     private static final int DEFAULT_GROUND_DOWN_BLOCKS = 20;
     private static final int DEFAULT_SURFACE_DOWN_BLOCKS = 1_500;
+    private static final int DEFAULT_SURFACE_MAX_Y_OFFSET = -20;
     private static final int DEFAULT_AIR_MIN_Y_OFFSET = 40;
     private static final int DEFAULT_AIR_MAX_Y_OFFSET = 1_500;
 
@@ -32,45 +35,63 @@ public final class PowerRadarRadarParameters {
     private static ModConfigSpec.IntValue phasedArrayPanelRangeBlocks;
     private static ModConfigSpec.IntValue overviewModuleRangeBlocks;
     private static ModConfigSpec.DoubleValue airRangeMultiplier;
-    private static ModConfigSpec.DoubleValue airFovDegrees;
+    private static ModConfigSpec.EnumValue<RadarFieldOfView> groundFov;
+    private static ModConfigSpec.EnumValue<RadarFieldOfView> airFov;
+    private static ModConfigSpec.EnumValue<RadarFieldOfView> surfaceFov;
     private static ModConfigSpec.IntValue groundUpBlocks;
     private static ModConfigSpec.IntValue groundDownBlocks;
     private static ModConfigSpec.IntValue surfaceDownBlocks;
+    private static ModConfigSpec.IntValue surfaceMaxYOffset;
     private static ModConfigSpec.IntValue airMinYOffset;
     private static ModConfigSpec.IntValue airMaxYOffset;
 
     private PowerRadarRadarParameters() {
     }
 
-    /** Подключает каталог к прежней секции radar_range общего серверного конфига. */
+    /** Подключает отдельные секции геометрии радаров и параметров модулей к серверному конфигу. */
     public static void defineConfig(ModConfigSpec.Builder builder) {
-        builder.comment("Power Radar range, module limits, and field of view.").push("radar_range");
+        builder.comment("Radar panel and overview-module limits and range bonuses.").push("panels");
         maxPhasedArrayPanels = builder.comment("Maximum phased-array panels on one radar.")
                 .defineInRange("max_radar_panels", DEFAULT_MAX_PHASED_ARRAY_PANELS, 1, 512);
         maxOverviewModules = builder.comment("Maximum overview modules on one overview radar.")
                 .defineInRange("max_overview_modules", DEFAULT_MAX_OVERVIEW_MODULES, 1, 512);
-        baseRangeBlocks = builder.comment("Base range of an assembled radar before module bonuses, in blocks.")
-                .defineInRange("base_range_blocks", DEFAULT_BASE_RANGE_BLOCKS, 0, 100_000);
         phasedArrayPanelRangeBlocks = builder.comment("Range bonus from one phased-array panel, in blocks.")
                 .defineInRange("basic_panel_range_bonus_blocks", DEFAULT_PHASED_ARRAY_PANEL_RANGE_BLOCKS,
                         0, 100_000);
         overviewModuleRangeBlocks = builder.comment("Range bonus from one overview module, in blocks.")
                 .defineInRange("overview_module_range_bonus_blocks", DEFAULT_OVERVIEW_MODULE_RANGE_BLOCKS,
                         0, 100_000);
+        builder.pop();
+
+        builder.comment("Base radar range and scan geometry.").push("base_radar");
+        baseRangeBlocks = builder.comment("Base range of an assembled radar before module bonuses, in blocks.")
+                .defineInRange("base_range_blocks", DEFAULT_BASE_RANGE_BLOCKS, 0, 100_000);
+        groundFov = builder.comment("Base radar field of view: DEGREES_60, DEGREES_90, or DEGREES_120.")
+                .defineEnum("fov", DEFAULT_GROUND_FOV);
+        groundUpBlocks = builder.comment("Base radar scan height above the controller, in blocks.")
+                .defineInRange("up_blocks", DEFAULT_GROUND_UP_BLOCKS, 0, 4_096);
+        groundDownBlocks = builder.comment("Base radar scan depth below the controller, in blocks.")
+                .defineInRange("down_blocks", DEFAULT_GROUND_DOWN_BLOCKS, 0, 4_096);
+        builder.pop();
+
+        builder.comment("Air radar range and scan geometry.").push("air_radar");
         airRangeMultiplier = builder.comment("Air radar range multiplier.")
-                .defineInRange("air_range_multiplier", DEFAULT_AIR_RANGE_MULTIPLIER, 0.0D, 100.0D);
-        airFovDegrees = builder.comment("Full horizontal air radar field of view, in degrees.")
-                .defineInRange("air_fov_degrees", DEFAULT_AIR_FOV_DEGREES, 1.0D, 360.0D);
-        groundUpBlocks = builder.comment("Ground radar scan height above the controller, in blocks.")
-                .defineInRange("ground_up_blocks", DEFAULT_GROUND_UP_BLOCKS, 0, 4_096);
-        groundDownBlocks = builder.comment("Ground radar scan depth below the controller, in blocks.")
-                .defineInRange("ground_down_blocks", DEFAULT_GROUND_DOWN_BLOCKS, 0, 4_096);
-        surfaceDownBlocks = builder.comment("Surface radar scan depth below the controller, in blocks.")
-                .defineInRange("surface_down_blocks", DEFAULT_SURFACE_DOWN_BLOCKS, 0, 32_000);
+                .defineInRange("range_multiplier", DEFAULT_AIR_RANGE_MULTIPLIER, 0.0D, 100.0D);
+        airFov = builder.comment("Air radar field of view: DEGREES_60, DEGREES_90, or DEGREES_120.")
+                .defineEnum("fov", DEFAULT_AIR_FOV);
         airMinYOffset = builder.comment("Lower vertical offset of the air radar scan, in blocks.")
-                .defineInRange("air_min_y_offset", DEFAULT_AIR_MIN_Y_OFFSET, -4_096, 4_096);
+                .defineInRange("min_y_offset", DEFAULT_AIR_MIN_Y_OFFSET, -4_096, 4_096);
         airMaxYOffset = builder.comment("Upper vertical offset of the air radar scan, in blocks.")
-                .defineInRange("air_max_y_offset", DEFAULT_AIR_MAX_Y_OFFSET, 0, 32_000);
+                .defineInRange("max_y_offset", DEFAULT_AIR_MAX_Y_OFFSET, 0, 32_000);
+        builder.pop();
+
+        builder.comment("Onboard surface radar range and scan geometry.").push("surface_radar");
+        surfaceFov = builder.comment("Onboard radar field of view: DEGREES_60, DEGREES_90, or DEGREES_120.")
+                .defineEnum("fov", DEFAULT_SURFACE_FOV);
+        surfaceDownBlocks = builder.comment("Surface radar scan depth below the controller, in blocks.")
+                .defineInRange("down_blocks", DEFAULT_SURFACE_DOWN_BLOCKS, 0, 32_000);
+        surfaceMaxYOffset = builder.comment("Upper vertical offset of the onboard radar scan, in blocks.")
+                .defineInRange("max_y_offset", DEFAULT_SURFACE_MAX_Y_OFFSET, -4_096, 0);
         builder.pop();
     }
 
@@ -104,9 +125,19 @@ public final class PowerRadarRadarParameters {
         return value(airRangeMultiplier);
     }
 
-    public static double airFovDegrees() {
+    public static int groundFovDegrees() {
         ensureConfigDefined();
-        return value(airFovDegrees);
+        return value(groundFov).degrees();
+    }
+
+    public static int airFovDegrees() {
+        ensureConfigDefined();
+        return value(airFov).degrees();
+    }
+
+    public static int surfaceFovDegrees() {
+        ensureConfigDefined();
+        return value(surfaceFov).degrees();
     }
 
     public static int groundUpBlocks() {
@@ -122,6 +153,15 @@ public final class PowerRadarRadarParameters {
     public static int surfaceDownBlocks() {
         ensureConfigDefined();
         return value(surfaceDownBlocks);
+    }
+
+    public static int surfaceMinYOffset() {
+        return -surfaceDownBlocks();
+    }
+
+    public static int surfaceMaxYOffset() {
+        ensureConfigDefined();
+        return Math.max(surfaceMinYOffset(), value(surfaceMaxYOffset));
     }
 
     public static int airMinYOffset() {
@@ -147,5 +187,25 @@ public final class PowerRadarRadarParameters {
 
     private static double value(ModConfigSpec.DoubleValue configValue) {
         return PowerRadarServerConfig.SPEC.isLoaded() ? configValue.get() : configValue.getDefault();
+    }
+
+    private static <T> T value(ModConfigSpec.ConfigValue<T> configValue) {
+        return PowerRadarServerConfig.SPEC.isLoaded() ? configValue.get() : configValue.getDefault();
+    }
+
+    public enum RadarFieldOfView {
+        DEGREES_60(60),
+        DEGREES_90(90),
+        DEGREES_120(120);
+
+        private final int degrees;
+
+        RadarFieldOfView(int degrees) {
+            this.degrees = degrees;
+        }
+
+        public int degrees() {
+            return this.degrees;
+        }
     }
 }

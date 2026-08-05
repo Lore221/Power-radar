@@ -4,11 +4,10 @@ import com.limbo2136.powerradar.PowerRadar;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 
 public record RadarMonitorBlockSnapshotPayload(RadarMonitorSnapshotPayload snapshot) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<RadarMonitorBlockSnapshotPayload> TYPE =
-            new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_block_snapshot"));
+            new CustomPacketPayload.Type<>(PowerRadar.id("radar_monitor_block_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorBlockSnapshotPayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorBlockSnapshotPayload::write, RadarMonitorBlockSnapshotPayload::new);
 

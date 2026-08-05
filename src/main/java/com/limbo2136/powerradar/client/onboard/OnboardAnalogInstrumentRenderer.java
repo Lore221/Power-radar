@@ -207,7 +207,6 @@ final class OnboardAnalogInstrumentRenderer {
     }
 
     private static ResourceLocation modelLocation(String name) {
-        return ResourceLocation.fromNamespaceAndPath(
-                PowerRadar.MOD_ID, "block/on_board_modules/" + name);
+        return PowerRadar.id("block/on_board_modules/" + name);
     }
 }

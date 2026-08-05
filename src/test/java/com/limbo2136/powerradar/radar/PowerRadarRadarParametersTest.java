@@ -10,29 +10,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PowerRadarRadarParametersTest {
     @Test
     void unloadedConfigUsesRegisteredSpecDefaults() {
-        assertEquals(defaultInt("radar_range.max_radar_panels"),
+        assertEquals(defaultInt("panels.max_radar_panels"),
                 PowerRadarRadarParameters.maxPhasedArrayPanels());
-        assertEquals(defaultInt("radar_range.max_overview_modules"),
+        assertEquals(defaultInt("panels.max_overview_modules"),
                 PowerRadarRadarParameters.maxOverviewModules());
-        assertEquals(defaultInt("radar_range.base_range_blocks"),
+        assertEquals(defaultInt("base_radar.base_range_blocks"),
                 PowerRadarRadarParameters.baseRangeBlocks());
-        assertEquals(defaultInt("radar_range.basic_panel_range_bonus_blocks"),
+        assertEquals(defaultInt("panels.basic_panel_range_bonus_blocks"),
                 PowerRadarRadarParameters.phasedArrayPanelRangeBlocks());
-        assertEquals(defaultInt("radar_range.overview_module_range_bonus_blocks"),
+        assertEquals(defaultInt("panels.overview_module_range_bonus_blocks"),
                 PowerRadarRadarParameters.overviewModuleRangeBlocks());
-        assertEquals(defaultDouble("radar_range.air_range_multiplier"),
+        assertEquals(defaultDouble("air_radar.range_multiplier"),
                 PowerRadarRadarParameters.airRangeMultiplier());
-        assertEquals(defaultDouble("radar_range.air_fov_degrees"),
+        assertEquals(defaultFovDegrees("base_radar.fov"),
+                PowerRadarRadarParameters.groundFovDegrees());
+        assertEquals(defaultFovDegrees("air_radar.fov"),
                 PowerRadarRadarParameters.airFovDegrees());
-        assertEquals(defaultInt("radar_range.ground_up_blocks"),
+        assertEquals(defaultFovDegrees("surface_radar.fov"),
+                PowerRadarRadarParameters.surfaceFovDegrees());
+        assertEquals(defaultInt("base_radar.up_blocks"),
                 PowerRadarRadarParameters.groundUpBlocks());
-        assertEquals(defaultInt("radar_range.ground_down_blocks"),
+        assertEquals(defaultInt("base_radar.down_blocks"),
                 PowerRadarRadarParameters.groundDownBlocks());
-        assertEquals(defaultInt("radar_range.surface_down_blocks"),
+        assertEquals(defaultInt("surface_radar.down_blocks"),
                 PowerRadarRadarParameters.surfaceDownBlocks());
-        assertEquals(defaultInt("radar_range.air_min_y_offset"),
+        assertEquals(defaultInt("surface_radar.max_y_offset"),
+                PowerRadarRadarParameters.surfaceMaxYOffset());
+        assertEquals(defaultInt("air_radar.min_y_offset"),
                 PowerRadarRadarParameters.airMinYOffset());
-        assertEquals(defaultInt("radar_range.air_max_y_offset"),
+        assertEquals(defaultInt("air_radar.max_y_offset"),
                 PowerRadarRadarParameters.airMaxYOffset());
     }
 
@@ -44,13 +50,20 @@ class PowerRadarRadarParametersTest {
         assertTrue(PowerRadarRadarParameters.phasedArrayPanelRangeBlocks() >= 0);
         assertTrue(PowerRadarRadarParameters.overviewModuleRangeBlocks() >= 0);
         assertTrue(PowerRadarRadarParameters.airRangeMultiplier() >= 0.0D);
-        assertTrue(PowerRadarRadarParameters.airFovDegrees() >= 1.0D);
-        assertTrue(PowerRadarRadarParameters.airFovDegrees() <= 360.0D);
+        assertAllowedAngle(PowerRadarRadarParameters.groundFovDegrees());
+        assertAllowedAngle(PowerRadarRadarParameters.airFovDegrees());
+        assertAllowedAngle(PowerRadarRadarParameters.surfaceFovDegrees());
         assertTrue(PowerRadarRadarParameters.groundUpBlocks() >= 0);
         assertTrue(PowerRadarRadarParameters.groundDownBlocks() >= 0);
         assertTrue(PowerRadarRadarParameters.surfaceDownBlocks() >= 0);
+        assertTrue(PowerRadarRadarParameters.surfaceMaxYOffset()
+                >= PowerRadarRadarParameters.surfaceMinYOffset());
         assertTrue(PowerRadarRadarParameters.airMaxYOffset()
                 >= PowerRadarRadarParameters.airMinYOffset());
+    }
+
+    private static void assertAllowedAngle(int angle) {
+        assertTrue(angle == 60 || angle == 90 || angle == 120);
     }
 
     private static int defaultInt(String path) {
@@ -59,6 +72,10 @@ class PowerRadarRadarParametersTest {
 
     private static double defaultDouble(String path) {
         return ((Number) configDefault(path)).doubleValue();
+    }
+
+    private static int defaultFovDegrees(String path) {
+        return ((PowerRadarRadarParameters.RadarFieldOfView) configDefault(path)).degrees();
     }
 
     private static Object configDefault(String path) {

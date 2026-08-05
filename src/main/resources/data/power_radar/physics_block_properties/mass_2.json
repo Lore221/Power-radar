@@ -1,0 +1,6 @@
+{
+  "selector": "#power_radar:mass_2",
+  "properties": {
+    "sable:mass": 2.0
+  }
+}

@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPa
 import com.limbo2136.powerradar.compat.electroenergetics.ShellAlarmCeeDevice;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -34,7 +35,8 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
-public class ShellAlarmBlock extends BaseEntityBlock implements ElectricalDeviceBlock<ShellAlarmCeeDevice> {
+public class ShellAlarmBlock extends BaseEntityBlock
+        implements IWrenchable, ElectricalDeviceBlock<ShellAlarmCeeDevice> {
     public static final MapCodec<ShellAlarmBlock> CODEC = simpleCodec(ShellAlarmBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
@@ -134,6 +136,11 @@ public class ShellAlarmBlock extends BaseEntityBlock implements ElectricalDevice
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
         return PowerRadarCeeContactGeometry.shellAlarm(state.getValue(FACING));
+    }
+
+    @Override
+    public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
+        return originalState.setValue(FACING, originalState.getValue(FACING).getClockWise());
     }
 
     @Nullable

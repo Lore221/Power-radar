@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.block;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -21,7 +22,7 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class RadarLinkBlock extends BaseEntityBlock {
+public class RadarLinkBlock extends BaseEntityBlock implements IWrenchable {
     public static final MapCodec<RadarLinkBlock> CODEC = simpleCodec(RadarLinkBlock::new);
     public static final DirectionProperty FACING = BlockStateProperties.FACING;
     public static final DirectionProperty MODEL_FACING =
@@ -113,6 +114,17 @@ public class RadarLinkBlock extends BaseEntityBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING, MODEL_FACING);
+    }
+
+    @Override
+    public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
+        Direction facing = originalState.getValue(FACING);
+        if (facing.getAxis() == Direction.Axis.Y) {
+            return originalState.setValue(
+                    MODEL_FACING,
+                    originalState.getValue(MODEL_FACING).getClockWise());
+        }
+        return originalState.setValue(FACING, facing.getClockWise(Direction.Axis.Y));
     }
 
     private static VoxelShape shapeFor(Direction facing) {

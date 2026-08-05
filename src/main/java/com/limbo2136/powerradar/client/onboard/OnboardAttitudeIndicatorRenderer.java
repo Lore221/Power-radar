@@ -36,10 +36,10 @@ final class OnboardAttitudeIndicatorRenderer {
     private static final float STRIP_LEVEL_V_CENTER_PIXELS = 19.5F;
     private static final float STRIP_PIXELS_PER_QUARTER_TURN = 13.0F;
 
-    private static final ResourceLocation HOUSING_MODEL_LOCATION = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "block/on_board_modules/attitude_indicator");
-    private static final ResourceLocation STRIP_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/block/on_board_modules/attitude_strip.png");
+    private static final ResourceLocation HOUSING_MODEL_LOCATION =
+            PowerRadar.id("block/on_board_modules/attitude_indicator");
+    private static final ResourceLocation STRIP_TEXTURE =
+            PowerRadar.id("textures/block/on_board_modules/attitude_strip.png");
     private static final PartialModel HOUSING_MODEL = PartialModel.of(HOUSING_MODEL_LOCATION);
 
     private final OnboardPartialModelRenderer partialRenderer;

@@ -8,9 +8,9 @@ import net.minecraft.resources.ResourceLocation;
 final class RadarCoverageSprite {
     private static final int LOGICAL_SIZE = 128;
     private static final ResourceLocation UI_ATLAS =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
+            PowerRadar.id("textures/gui/radar_ui/icons.png");
     private static final ResourceLocation OVERVIEW_TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_overview_octagon.png");
+            PowerRadar.id("textures/gui/radar_monitor/radar_overview_octagon.png");
 
     // Координаты конусов привязаны к авторским областям icons.png; логический центр — (64, 64).
     private static final RadarCoverageSprite CONE_60 = centeredCone(1, 193, 63, 62);

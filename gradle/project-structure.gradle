@@ -19,14 +19,11 @@ tasks.register('verifyProjectStructure') {
     doLast {
         def violations = []
         def allowedCommonClientReferences = [
-                'com/limbo2136/powerradar/PowerRadar.java',
-                'com/limbo2136/powerradar/block/entity/RadarLinkBlockEntity.java',
                 // CEE требует клиентскую сигнатуру render(...) прямо в общем базовом PanelAttachment.
                 'com/limbo2136/powerradar/compat/electroenergetics/panel/AttitudeIndicatorPanelAttachment.java',
                 'com/limbo2136/powerradar/compat/electroenergetics/panel/LogicDockPanelAttachment.java',
                 'com/limbo2136/powerradar/compat/electroenergetics/panel/RadarDisplayPanelAttachment.java',
-                'com/limbo2136/powerradar/compat/electroenergetics/panel/RadarLinkPanelAttachment.java',
-                'com/limbo2136/powerradar/item/PowerRadarElectricalBlockItem.java'
+                'com/limbo2136/powerradar/compat/electroenergetics/panel/RadarLinkPanelAttachment.java'
         ] as Set
 
         javaSources.files.sort { left, right -> left.path <=> right.path }.each { sourceFile ->

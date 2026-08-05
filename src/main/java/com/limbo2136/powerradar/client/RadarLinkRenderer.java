@@ -24,21 +24,21 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 /** Рисует full-bright колбу и внешний additive-свет ламп Radar Link. */
 public final class RadarLinkRenderer implements BlockEntityRenderer<RadarLinkBlockEntity> {
     private static final ResourceLocation HORIZONTAL_RED_TUBE_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/tube_horizontal_red");
+            PowerRadar.id("block/radar_link/tube_horizontal_red");
     private static final ResourceLocation HORIZONTAL_GREEN_TUBE_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/tube_horizontal_green");
+            PowerRadar.id("block/radar_link/tube_horizontal_green");
     private static final ResourceLocation VERTICAL_RED_TUBE_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/tube_vertical_red");
+            PowerRadar.id("block/radar_link/tube_vertical_red");
     private static final ResourceLocation VERTICAL_GREEN_TUBE_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/tube_vertical_green");
+            PowerRadar.id("block/radar_link/tube_vertical_green");
     private static final ResourceLocation HORIZONTAL_RED_GLOW_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_horizontal_red");
+            PowerRadar.id("block/radar_link/glow_horizontal_red");
     private static final ResourceLocation HORIZONTAL_GREEN_GLOW_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_horizontal_green");
+            PowerRadar.id("block/radar_link/glow_horizontal_green");
     private static final ResourceLocation VERTICAL_RED_GLOW_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_vertical_red");
+            PowerRadar.id("block/radar_link/glow_vertical_red");
     private static final ResourceLocation VERTICAL_GREEN_GLOW_LOCATION =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "block/radar_link/glow_vertical_green");
+            PowerRadar.id("block/radar_link/glow_vertical_green");
 
     private static final PartialModel HORIZONTAL_RED_TUBE = PartialModel.of(HORIZONTAL_RED_TUBE_LOCATION);
     private static final PartialModel HORIZONTAL_GREEN_TUBE = PartialModel.of(HORIZONTAL_GREEN_TUBE_LOCATION);

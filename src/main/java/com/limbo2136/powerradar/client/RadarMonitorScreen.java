@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.client;
 
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
@@ -44,11 +45,11 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT)
 public class RadarMonitorScreen extends Screen {
     private static final ResourceLocation GUI_BACKGROUND =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/monitor_gui_background.png");
+            PowerRadar.id("textures/gui/radar_monitor/monitor_gui_background.png");
     private static final ResourceLocation RADAR_SCREEN_BACK =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_screen_back.png");
+            PowerRadar.id("textures/gui/radar_monitor/radar_screen_back.png");
     private static final ResourceLocation RADAR_ICONS =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
+            PowerRadar.id("textures/gui/radar_ui/icons.png");
     private static final int BACKGROUND_TEXTURE_SIZE = 32;
     private static final int ICON_TEXTURE_SIZE = 256;
     private static final int GRID_SCALE_ICON_X = 234;
@@ -1158,9 +1159,12 @@ public class RadarMonitorScreen extends Screen {
         if (this.selectedTargetKey == null || this.displayData == null) {
             return Optional.empty();
         }
-        return this.displayData.targets().stream()
-                .filter(target -> this.selectedTargetKey.equals(target.stableSelectionKey()))
-                .findFirst();
+        for (RadarDisplayTarget target : this.displayData.targets()) {
+            if (this.selectedTargetKey.equals(target.stableSelectionKey())) {
+                return Optional.of(target);
+            }
+        }
+        return Optional.empty();
     }
 
     private boolean isSelectedBlip(RadarBlipRenderData blip) {

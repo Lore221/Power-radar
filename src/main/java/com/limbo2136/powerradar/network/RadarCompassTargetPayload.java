@@ -21,7 +21,7 @@ public record RadarCompassTargetPayload(
         long serverGameTime
 ) implements CustomPacketPayload {
     public static final Type<RadarCompassTargetPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_compass_target"));
+            PowerRadar.id("radar_compass_target"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarCompassTargetPayload> STREAM_CODEC =
             StreamCodec.of(
                     (buffer, payload) -> payload.write(buffer),

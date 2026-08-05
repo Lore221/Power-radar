@@ -13,25 +13,25 @@ public final class RadarTargetClassifier {
     private RadarTargetClassifier() {
     }
 
-    public static RadarTargetCategory classify(Entity entity, RadarScanProfile profile) {
-        if (profile.ignoreItems() && entity instanceof ItemEntity) {
+    public static RadarTargetCategory classify(Entity entity) {
+        if (entity instanceof ItemEntity) {
             return null;
         }
         if (entity.getType() == EntityType.PLAYER) {
-            return profile.detectPlayers() ? RadarTargetCategory.PLAYER : null;
+            return RadarTargetCategory.PLAYER;
         }
         if (entity instanceof Projectile || RadarCbcProjectileCompat.isCbcProjectile(entity)) {
-            return profile.detectProjectiles() ? RadarTargetCategory.PROJECTILE : null;
+            return RadarTargetCategory.PROJECTILE;
         }
         if (entity instanceof AbstractContraptionEntity || entity instanceof RadarStructureEntity) {
-            return profile.detectUnknown() ? RadarTargetCategory.UNKNOWN : null;
+            return RadarTargetCategory.UNKNOWN;
         }
         MobCategory mobCategory = entity.getType().getCategory();
         if (mobCategory == MobCategory.MONSTER) {
-            return profile.detectHostileMobs() ? RadarTargetCategory.HOSTILE_MOB : null;
+            return RadarTargetCategory.HOSTILE_MOB;
         }
         if (isPassiveMobCategory(mobCategory) || isVanillaPassiveNpc(entity)) {
-            return profile.detectPassiveMobs() ? RadarTargetCategory.PASSIVE_MOB : null;
+            return RadarTargetCategory.PASSIVE_MOB;
         }
         return null;
     }
@@ -46,7 +46,6 @@ public final class RadarTargetClassifier {
     }
 
     private static boolean isVanillaPassiveNpc(Entity entity) {
-        String path = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath();
-        return path.equals("villager") || path.equals("wandering_trader");
+        return entity.getType() == EntityType.VILLAGER || entity.getType() == EntityType.WANDERING_TRADER;
     }
 }

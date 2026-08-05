@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayTargetCache;
 import com.limbo2136.powerradar.radar.RadarOrientationState;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -22,10 +23,13 @@ import net.neoforged.api.distmarker.OnlyIn;
 
 @OnlyIn(Dist.CLIENT)
 public final class RadarMonitorClientState {
+    private static final long CACHE_PRUNE_INTERVAL_TICKS = 200L;
+    private static final long CACHE_RETENTION_TICKS = 6_000L;
     // BlockPos достаточно только внутри одной ClientLevel-сессии; смена объекта уровня очищает всю карту.
     private static final Map<BlockPos, Entry> STATES = new HashMap<>();
     @Nullable
     private static ClientLevel levelSession;
+    private static long lastPruneGameTime = Long.MIN_VALUE;
 
     private RadarMonitorClientState() {
     }
@@ -61,7 +65,13 @@ public final class RadarMonitorClientState {
     @Nullable
     public static Entry get(BlockPos monitorPos) {
         ensureLevelSession();
-        return STATES.get(monitorPos);
+        long gameTime = clientGameTime(0L);
+        pruneIfDue(gameTime);
+        Entry entry = STATES.get(monitorPos);
+        if (entry != null) {
+            entry.lastAccessGameTime = gameTime;
+        }
+        return entry;
     }
 
     @Nullable
@@ -71,7 +81,11 @@ public final class RadarMonitorClientState {
     }
 
     private static Entry entry(BlockPos monitorPos) {
-        return STATES.computeIfAbsent(monitorPos.immutable(), ignored -> new Entry());
+        long gameTime = clientGameTime(0L);
+        pruneIfDue(gameTime);
+        Entry entry = STATES.computeIfAbsent(monitorPos.immutable(), ignored -> new Entry(gameTime));
+        entry.lastAccessGameTime = gameTime;
+        return entry;
     }
 
     private static void ensureLevelSession() {
@@ -80,7 +94,17 @@ public final class RadarMonitorClientState {
             // Сравнение объекта по ссылке защищает переподключение в то же измерение и координаты.
             STATES.clear();
             levelSession = currentLevel;
+            lastPruneGameTime = Long.MIN_VALUE;
         }
+    }
+
+    private static void pruneIfDue(long gameTime) {
+        if (lastPruneGameTime != Long.MIN_VALUE
+                && gameTime - lastPruneGameTime < CACHE_PRUNE_INTERVAL_TICKS) {
+            return;
+        }
+        lastPruneGameTime = gameTime;
+        STATES.values().removeIf(entry -> gameTime - entry.lastAccessGameTime >= CACHE_RETENTION_TICKS);
     }
 
     private static long clientGameTime(long fallbackGameTime) {
@@ -116,12 +140,17 @@ public final class RadarMonitorClientState {
         private Vec3 lastMonitorVelocitySample;
         @Nullable
         private VectorTransition monitorAccelerationTransition;
+        private long lastAccessGameTime;
 
-        private Entry() {
+        private Entry(long gameTime) {
+            this.lastAccessGameTime = gameTime;
         }
 
         private void apply(RadarMonitorDisplayData nextDisplayData, long nextRevision) {
             long gameTime = clientGameTime(nextDisplayData.serverGameTime());
+            if (!nextDisplayData.linked() || nextDisplayData.coverages().isEmpty()) {
+                clearPoseState();
+            }
             this.sourceDisplayData = nextDisplayData;
             this.displayData = this.targetCache.update(
                     withCurrentPoses(nextDisplayData), gameTime, this.poseTransitions.keySet());
@@ -199,14 +228,19 @@ public final class RadarMonitorClientState {
                         : sample(this.monitorPoseTransition, receiveTime);
                 this.monitorPoseTransition = new MonitorPoseTransition(
                         previous, payload.monitorPose(), receiveTime);
+            } else {
+                clearMonitorPoseState();
             }
+            HashSet<RadarId> receivedRadarIds = new HashSet<>(payload.poses().size());
             for (RadarMonitorBlockPosePayload.RadarPose next : payload.poses()) {
+                receivedRadarIds.add(next.radarId());
                 PoseTransition old = this.poseTransitions.get(next.radarId());
                 RadarMonitorBlockPosePayload.RadarPose previous = old == null
                         ? next
                         : sample(old, receiveTime);
                 this.poseTransitions.put(next.radarId(), new PoseTransition(previous, next, receiveTime));
             }
+            this.poseTransitions.keySet().retainAll(receivedRadarIds);
             if (this.sourceDisplayData != null) {
                 long gameTime = clientGameTime(payload.serverGameTime());
                 this.displayData = this.targetCache.refilter(
@@ -214,6 +248,20 @@ public final class RadarMonitorClientState {
                 this.lastClientUpdateGameTime = gameTime;
                 this.updateVersion++;
             }
+        }
+
+        private void clearPoseState() {
+            this.poseTransitions.clear();
+            clearMonitorPoseState();
+        }
+
+        private void clearMonitorPoseState() {
+            this.monitorPoseTransition = null;
+            this.lastMonitorPoseSample = null;
+            this.lastMonitorPoseServerGameTime = Long.MIN_VALUE;
+            this.monitorVelocityTransition = null;
+            this.lastMonitorVelocitySample = null;
+            this.monitorAccelerationTransition = null;
         }
 
         private RadarMonitorDisplayData withCurrentPoses(RadarMonitorDisplayData data) {

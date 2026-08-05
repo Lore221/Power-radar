@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.client.ponder;
 
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.RadarDisplayStructureResolver;
-import com.limbo2136.powerradar.client.PowerRadarClientConfig;
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -22,10 +22,9 @@ import org.joml.Quaternionf;
 import java.util.Random;
 
 public class RadarMonitorElement extends AnimatedSceneElementBase {
-    private static final ResourceLocation OVERVIEW_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_monitor/radar_overview_octagon.png");
-    private static final ResourceLocation ICONS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
-            PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
+    private static final ResourceLocation OVERVIEW_TEXTURE =
+            PowerRadar.id("textures/gui/radar_monitor/radar_overview_octagon.png");
+    private static final ResourceLocation ICONS_TEXTURE = PowerRadar.id("textures/gui/radar_ui/icons.png");
     private static final float PANEL_MIN_U = 1.0F / 256.0F;
     private static final float PANEL_MAX_U = 111.0F / 256.0F;
     private static final float PANEL_MIN_V = 113.0F / 256.0F;

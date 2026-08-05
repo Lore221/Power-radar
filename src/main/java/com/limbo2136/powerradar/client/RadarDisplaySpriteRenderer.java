@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.client;
 
+import com.limbo2136.powerradar.config.PowerRadarClientConfig;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.neoforged.api.distmarker.Dist;

@@ -8,7 +8,7 @@ final class RadarBlipSprite {
     static final int ATLAS_SIZE = 256;
     static final int CELL_SIZE = 11;
     static final ResourceLocation ATLAS =
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "textures/gui/radar_ui/icons.png");
+            PowerRadar.id("textures/gui/radar_ui/icons.png");
 
     static final RadarBlipSprite ENTITY = new RadarBlipSprite(248, 252, 4, 4);
     static final RadarBlipSprite PROJECTILE = new RadarBlipSprite(253, 253, 3, 3);

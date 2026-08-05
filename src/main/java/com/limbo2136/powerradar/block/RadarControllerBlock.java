@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPa
 import com.limbo2136.powerradar.compat.electroenergetics.RadarControllerCeeDevice;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -34,7 +35,8 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.Vec3;
 
-public class RadarControllerBlock extends BaseEntityBlock implements ElectricalDeviceBlock<RadarControllerCeeDevice> {
+public class RadarControllerBlock extends BaseEntityBlock
+        implements IWrenchable, ElectricalDeviceBlock<RadarControllerCeeDevice> {
     public static final MapCodec<RadarControllerBlock> CODEC = simpleCodec(RadarControllerBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public RadarControllerBlock(Properties properties) {
@@ -121,8 +123,9 @@ public class RadarControllerBlock extends BaseEntityBlock implements ElectricalD
         return terminals(state).label(node);
     }
 
+    @Override
     public BlockState getRotatedBlockState(BlockState originalState, Direction targetedFace) {
-        return originalState;
+        return originalState.setValue(FACING, originalState.getValue(FACING).getClockWise());
     }
 
     private void scheduleNodeRefresh(Level level, BlockPos pos) {

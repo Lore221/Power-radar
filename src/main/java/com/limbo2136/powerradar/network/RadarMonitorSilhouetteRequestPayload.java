@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 
 public record RadarMonitorSilhouetteRequestPayload(
         BlockPos monitorPos,
@@ -14,7 +13,7 @@ public record RadarMonitorSilhouetteRequestPayload(
         int knownVersion
 ) implements CustomPacketPayload {
     public static final Type<RadarMonitorSilhouetteRequestPayload> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(PowerRadar.MOD_ID, "radar_monitor_silhouette_request"));
+            PowerRadar.id("radar_monitor_silhouette_request"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSilhouetteRequestPayload> STREAM_CODEC =
             StreamCodec.ofMember(RadarMonitorSilhouetteRequestPayload::write, RadarMonitorSilhouetteRequestPayload::new);
 

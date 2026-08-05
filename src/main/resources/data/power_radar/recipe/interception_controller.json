@@ -1,4 +1,10 @@
 {
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "createbigcannons"
+    }
+  ],
   "type": "create:mechanical_crafting",
   "accept_mirrored": true,
   "pattern": [
