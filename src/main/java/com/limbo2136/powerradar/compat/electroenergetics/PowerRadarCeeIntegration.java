@@ -38,6 +38,13 @@ public final class PowerRadarCeeIntegration {
         }
     }
 
+    public static void configureEwSystemLoad(ServerLevel level, BlockPos pos) {
+        SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
+        if (device instanceof EwSystemCeeDevice ewSystemDevice) {
+            ewSystemDevice.configureLoad();
+        }
+    }
+
     public static void configureOnboardComputerLoad(ServerLevel level, BlockPos pos) {
         SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
         if (device instanceof MonitorControllerCeeDevice monitorDevice) {

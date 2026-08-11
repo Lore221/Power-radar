@@ -2,6 +2,8 @@ package com.limbo2136.powerradar.radar;
 
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
+import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -78,6 +80,17 @@ public final class RadarTargetCache {
         Iterator<RadarTargetTrack> iterator = this.tracks.values().iterator();
         while (iterator.hasNext()) {
             RadarTargetTrack track = iterator.next();
+            if (track.sourceKind() != RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE) {
+                Entity attachedEntity = resolveKnownEntity(level, track);
+                if (attachedEntity != null
+                        && !(attachedEntity instanceof RadarStructureEntity)
+                        && SableRadarIntegration.isEntityOnStructure(attachedEntity)) {
+                    iterator.remove();
+                    removeFromIndexes(track.key(), track);
+                    removedDeadOrMissing++;
+                    continue;
+                }
+            }
             if (track.lastSeenGameTime() >= gameTime) {
                 continue;
             }

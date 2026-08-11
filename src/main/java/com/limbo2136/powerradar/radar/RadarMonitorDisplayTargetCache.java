@@ -50,7 +50,7 @@ public final class RadarMonitorDisplayTargetCache {
                 visibleTargets.add(anchoredMarker.withDisplayAgeTicks(0));
                 continue;
             }
-            boolean freshFromRadar = sourceTarget.displayAgeTicks() <= 0;
+            boolean freshFromRadar = isFreshFromRadar(displayData, sourceTarget);
             boolean insideCoverage = isTargetInsideDisplayCoverage(displayData, sourceTarget);
             if (freshFromRadar && insideCoverage) {
                 Entry refreshed = new Entry(sourceTarget, serverGameTime);
@@ -207,6 +207,20 @@ public final class RadarMonitorDisplayTargetCache {
     private static int expirationTicks() {
         return Math.max(1, RadarConstants.RADAR_MONITOR_BLIP_FADE_DELAY_TICKS
                 + RadarConstants.RADAR_MONITOR_BLIP_FADE_TICKS);
+    }
+
+    private static boolean isFreshFromRadar(
+            RadarMonitorDisplayData displayData,
+            RadarDisplayTarget target
+    ) {
+        if (target.displayAgeTicks() <= 0) {
+            return true;
+        }
+        // UNKNOWN обнаруживается редким проходом, но большой AABB радара разбит на срезы.
+        // Цель из раннего среза к тику публикации уже имеет ненулевой возраст и всё равно
+        // является новым результатом текущего окна сканирования.
+        return target.category() == RadarTargetCategory.UNKNOWN
+                && target.displayAgeTicks() <= Math.max(1, displayData.trackUpdateIntervalTicks());
     }
 
     private static boolean isTargetInsideDisplayCoverage(RadarMonitorDisplayData displayData, RadarDisplayTarget target) {

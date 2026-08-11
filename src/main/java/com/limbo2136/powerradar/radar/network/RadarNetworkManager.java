@@ -352,7 +352,7 @@ public class RadarNetworkManager {
                 TrackedTargetView track = controller.findTrackedTarget(selectedTarget);
                 if (track == null
                         || controller.lastScanGameTime() <= 0L
-                        || track.lastSeenGameTime() < controller.lastScanGameTime()) {
+                        || track.lastConfirmedAliveGameTime() < controller.lastScanGameTime()) {
                     continue;
                 }
                 confirmingRadars.add(controller.radarId());
@@ -405,7 +405,7 @@ public class RadarNetworkManager {
                 return;
             }
             double height = Math.max(0.1D, observation.worldBounds().getYsize());
-            Vec3 targetingBase = observation.worldOrigin().subtract(0.0D, height * 0.5D, 0.0D);
+            Vec3 targetingBase = observation.geometricCenter().subtract(0.0D, height * 0.5D, 0.0D);
             runtime.putLiveSelectedTarget(
                     SelectedTargetRuntimeSnapshot.Status.LIVE,
                     selection.targetUuid(),

@@ -1,0 +1,29 @@
+{
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": true,
+  "pattern": [
+    "AAAAA",
+    "ABBBA",
+    "AAAAA",
+    " FCF "
+  ],
+  "key": {
+    "A": {
+        "tag": "c:ingots/steel"
+    },
+    "B": {
+        "tag": "c:plates/brass"
+    },
+    "C": {
+        "item": "electroenergetics:transformer"
+    },
+    "F": {
+        "item": "electroenergetics:connector"
+    }
+  },
+  "result": {
+    "id": "power_radar:ew_system",
+    "count": 1
+  },
+  "show_notification": false
+}

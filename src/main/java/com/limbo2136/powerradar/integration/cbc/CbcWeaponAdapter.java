@@ -63,6 +63,10 @@ public final class CbcWeaponAdapter {
                 level, mount.mountPos(), yawDegrees, logicalPitchDegrees, mapCachedKind(mount.kind()));
     }
 
+    public static boolean sableProjectilesInheritPhysicsObjectVelocity() {
+        return TargetControllerCbcCompat.sableProjectilesInheritPhysicsObjectVelocity();
+    }
+
     private static WeaponKind mapKind(TargetControllerCbcCompat.CannonKind kind) {
         return switch (kind) {
             case NONE -> WeaponKind.NONE;

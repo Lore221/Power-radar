@@ -73,7 +73,7 @@ public record RadarMonitorSnapshotPayload(
      * Увеличивается при намеренном изменении закодированных байтов снимка. Значение также задаёт
      * версию регистратора NeoForge, а codec-тест фиксирует точные байты каждой схемы.
      */
-    public static final int WIRE_SCHEMA_VERSION = 5;
+    public static final int WIRE_SCHEMA_VERSION = 9;
     public static final CustomPacketPayload.Type<RadarMonitorSnapshotPayload> TYPE =
             new CustomPacketPayload.Type<>(PowerRadar.id("radar_monitor_snapshot"));
     public static final StreamCodec<RegistryFriendlyByteBuf, RadarMonitorSnapshotPayload> STREAM_CODEC =
@@ -399,6 +399,8 @@ public record RadarMonitorSnapshotPayload(
                 buffer.readDouble(),
                 buffer.readBoolean(),
                 buffer.readFloat(),
+                buffer.readFloat(),
+                buffer.readFloat(),
                 buffer.readVarInt(),
                 buffer.readVarInt()
         );
@@ -420,6 +422,8 @@ public record RadarMonitorSnapshotPayload(
         buffer.writeDouble(target.velocityZ());
         buffer.writeBoolean(target.hasVelocity());
         buffer.writeFloat(target.structureHeadingDegrees());
+        buffer.writeFloat(target.structureRotationPointOffsetX());
+        buffer.writeFloat(target.structureRotationPointOffsetZ());
         buffer.writeVarInt(target.silhouetteVersion());
         buffer.writeVarInt(target.displayAgeTicks());
     }

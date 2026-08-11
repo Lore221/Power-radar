@@ -7,5 +7,6 @@ public enum RadarTargetCategory {
     HOSTILE_MOB,
     PROJECTILE,
     SABLE_STRUCTURE,
+    RADAR,
     UNKNOWN
 }

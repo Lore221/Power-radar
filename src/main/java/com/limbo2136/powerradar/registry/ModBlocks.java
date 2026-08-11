@@ -15,6 +15,7 @@ import com.limbo2136.powerradar.block.AirRadarControllerBlock;
 import com.limbo2136.powerradar.block.SurfaceRadarControllerBlock;
 import com.limbo2136.powerradar.block.LogicDockBlock;
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
+import com.limbo2136.powerradar.block.EwSystemBlock;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
@@ -42,6 +43,9 @@ public final class ModBlocks {
     public static final DeferredBlock<OnboardComputerBlock> ONBOARD_COMPUTER = BLOCKS.registerBlock(
             "onboard_computer", OnboardComputerBlock::new,
             standardProperties().noOcclusion());
+
+    public static final DeferredBlock<EwSystemBlock> EW_SYSTEM = BLOCKS.registerBlock(
+            "ew_system", EwSystemBlock::new, standardProperties().noOcclusion());
 
     public static final DeferredBlock<RadarPanelBlock> RADAR_PANEL = BLOCKS.registerBlock(
             "radar_panel", RadarPanelBlock::new, lightProperties());

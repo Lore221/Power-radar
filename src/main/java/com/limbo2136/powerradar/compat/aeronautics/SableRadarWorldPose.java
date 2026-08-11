@@ -68,4 +68,13 @@ final class SableRadarWorldPose {
         SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
         return subLevel == null ? localDirection : subLevel.logicalPose().transformNormal(localDirection);
     }
+
+    static Vec3 worldPointVelocity(ServerLevel level, BlockPos containingPos, Vec3 localPosition) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, containingPos);
+        if (subLevel == null || subLevel.isRemoved()) {
+            return Vec3.ZERO;
+        }
+        // Sable сообщает скорость в блоках/секунду; targeting работает в блоках/тик.
+        return Sable.HELPER.getVelocity(subLevel.getLevel(), subLevel, localPosition).scale(0.05D);
+    }
 }

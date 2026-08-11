@@ -38,6 +38,7 @@ public final class TargetControllerCbcCompat {
     private static final String PROJECTILE_BLOCK = "rbasamoyai.createbigcannons.munitions.big_cannon.ProjectileBlock";
     private static final String INTEGRATED_PROPELLANT_PROJECTILE = "rbasamoyai.createbigcannons.munitions.big_cannon.propellant.IntegratedPropellantProjectile";
     private static final String PROPELLANT_CONTEXT = "rbasamoyai.createbigcannons.cannon_control.contraption.MountedBigCannonContraption$PropellantContext";
+    private static final String CBC_CONFIGS = "rbasamoyai.createbigcannons.config.CBCConfigs";
     private static final Map<String, Optional<Class<?>>> CLASS_CACHE = new ConcurrentHashMap<>();
     private static final Map<MethodKey, Optional<Method>> PUBLIC_METHOD_CACHE = new ConcurrentHashMap<>();
     private static final Map<MethodKey, Optional<Method>> DECLARED_METHOD_CACHE = new ConcurrentHashMap<>();
@@ -47,6 +48,24 @@ public final class TargetControllerCbcCompat {
             Collections.synchronizedMap(new WeakHashMap<>());
 
     private TargetControllerCbcCompat() {
+    }
+
+    /** Читает активную серверную настройку CBC, определяющую наследование скорости Sable. */
+    public static boolean sableProjectilesInheritPhysicsObjectVelocity() {
+        Class<?> configs = classForName(CBC_CONFIGS);
+        if (configs == null) {
+            return false;
+        }
+        try {
+            Method server = declaredMethod(configs, "server", new Class<?>[0]).orElse(null);
+            Object serverConfig = server == null ? null : server.invoke(null);
+            Object compat = readFieldRecursive(serverConfig, "compat");
+            Object configBool = readFieldRecursive(compat, "sableProjectilesInheritPhysicsObjectVelocity");
+            Object value = invokeObject(configBool, "get");
+            return value instanceof Boolean enabled && enabled;
+        } catch (IllegalAccessException | InvocationTargetException ignored) {
+            return false;
+        }
     }
 
     public static Optional<CannonState> inspect(ServerLevel level, BlockPos mountPos) {

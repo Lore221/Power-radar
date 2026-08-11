@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteStatus;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.RadarDisplayCoverage;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
@@ -31,8 +32,8 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 class RadarMonitorPayloadCodecTest {
-    private static final String V5_FIXTURE_SHA_256 =
-            "a509099f2ae4d4094723b165c447c5bd423d1bd4366c908e90b6b80bf3f96969";
+    private static final String V8_FIXTURE_SHA_256 =
+            "42a3c0f2c9395d9200bd7729c03e25c65c8b21c185807e9365df0adbedbeaedc";
 
     @Test
     void fullSnapshotRoundTripsWithoutUnreadBytes() {
@@ -149,6 +150,7 @@ class RadarMonitorPayloadCodecTest {
                 ResourceLocation.fromNamespaceAndPath("minecraft", "overworld"),
                 structureUuid,
                 5,
+                SableSilhouetteStatus.DETAILED,
                 List.of(new RadarMonitorSilhouettePayload.Line(-2.5F, -1.0F, 3.5F, -1.0F)),
                 List.of(new RadarMonitorSilhouettePayload.Fill(-2.5F, -1.0F, 3.5F, 2.0F)));
         assertEquals(silhouette, roundTrip(RadarMonitorSilhouettePayload.STREAM_CODEC, silhouette));
@@ -165,6 +167,8 @@ class RadarMonitorPayloadCodecTest {
                 0.25D, 0.0D, -0.5D,
                 true,
                 -73.5F,
+                11.25F,
+                -6.5F,
                 5,
                 0);
         RadarMonitorBlockTargetsPayload targets = new RadarMonitorBlockTargetsPayload(
@@ -206,9 +210,9 @@ class RadarMonitorPayloadCodecTest {
     }
 
     @Test
-    void v5WireBytesRemainStable() throws NoSuchAlgorithmException {
-        assertEquals("5", ModNetwork.PROTOCOL_VERSION);
-        assertEquals(5, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
+    void v8WireBytesRemainStable() throws NoSuchAlgorithmException {
+        assertEquals("9", ModNetwork.PROTOCOL_VERSION);
+        assertEquals(9, RadarMonitorSnapshotPayload.WIRE_SCHEMA_VERSION);
 
         RegistryFriendlyByteBuf buffer = newBuffer();
         try {
@@ -217,7 +221,7 @@ class RadarMonitorPayloadCodecTest {
             buffer.getBytes(buffer.readerIndex(), encoded);
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encoded));
 
-            assertEquals(V5_FIXTURE_SHA_256, digest);
+            assertEquals(V8_FIXTURE_SHA_256, digest);
         } finally {
             buffer.release();
         }

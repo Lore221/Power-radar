@@ -7,6 +7,7 @@
     "power_radar:radar_panel",
     "power_radar:overview_module",
     "power_radar:logic_dock",
+    "power_radar:ew_system",
     "power_radar:onboard_computer",
     "power_radar:radar_monitor_controller",
     "power_radar:radar_display",

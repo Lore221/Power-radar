@@ -8,13 +8,14 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 
 /** Фасад необязательной интеграции; прямые Sable-вызовы допустимы только за этой границей. */
 public final class SableRadarIntegration {
-    static final int GEOMETRY_REFRESH_INTERVAL_TICKS = 200;
+    static final int GEOMETRY_REFRESH_INTERVAL_TICKS = 600;
     private static final boolean SABLE_LOADED = ModList.get().isLoaded("sable");
     private static final boolean AERONAUTICS_LOADED = ModList.get().isLoaded("aeronautics");
 
@@ -110,9 +111,20 @@ public final class SableRadarIntegration {
         return SABLE_LOADED ? SableStructureScanner.containingStructureUuid(level, pos) : Optional.empty();
     }
 
+    /** Возвращает true только для сущности, которую Sable действительно прикрепил к sublevel. */
+    public static boolean isEntityOnStructure(Entity entity) {
+        return SABLE_LOADED && SableStructureScanner.isEntityOnStructure(entity);
+    }
+
     public static void markDetected(ServerLevel level, SableStructureObservation observation, long gameTime) {
         if (SABLE_LOADED) {
             SableStructureScanner.markDetected(level, observation.structureUuid(), gameTime);
+        }
+    }
+
+    public static void markSilhouetteDirty(ServerLevel level, BlockPos changedPos, long gameTime) {
+        if (SABLE_LOADED) {
+            SableStructureScanner.markSilhouetteDirty(level, changedPos, gameTime);
         }
     }
 

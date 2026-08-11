@@ -358,10 +358,14 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
 
     private static float[] blipUv(RadarTargetCategory category) {
         return switch (category) {
-            case PROJECTILE -> new float[] {253.0F / 256.0F, 253.0F / 256.0F, 1.0F, 1.0F};
-            case SABLE_STRUCTURE, UNKNOWN -> new float[] {242.0F / 256.0F, 251.0F / 256.0F,
-                    247.0F / 256.0F, 1.0F};
-            default -> new float[] {248.0F / 256.0F, 252.0F / 256.0F, 1.0F, 1.0F};
+            case PROJECTILE -> new float[] {249.0F / 256.0F, 252.0F / 256.0F,
+                    252.0F / 256.0F, 1.0F};
+            case RADAR -> new float[] {239.0F / 256.0F, 252.0F / 256.0F,
+                    243.0F / 256.0F, 1.0F};
+            case SABLE_STRUCTURE, UNKNOWN -> new float[] {253.0F / 256.0F, 253.0F / 256.0F,
+                    1.0F, 1.0F};
+            default -> new float[] {244.0F / 256.0F, 252.0F / 256.0F,
+                    248.0F / 256.0F, 1.0F};
         };
     }
 

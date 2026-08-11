@@ -6,20 +6,26 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Единое место настройки положения электрических контактов отдельных блоков.
  *
- * <p>Все размеры ниже задаются в пикселях Blockbench относительно центра блока.
- * Плюс всегда становится узлом 0, минус — узлом 1.</p>
+ * <p>
+ * Все размеры ниже задаются в пикселях Blockbench относительно центра блока.
+ * Плюс всегда становится узлом 0, минус — узлом 1.
+ * </p>
  */
 public final class PowerRadarCeeContactGeometry {
-    // Горизонтальные блоки: Y, смещение к задней стороне, смещения плюса и минуса вправо.
+    // Горизонтальные блоки: Y, смещение к задней стороне, смещения плюса и минуса
+    // вправо.
     private static final HorizontalPair RADAR_CONTROLLER = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
     private static final HorizontalPair RADAR_MONITOR = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
     private static final HorizontalPair LOGIC_DOCK = new HorizontalPair(3.0, 3.0, 9.0, -9.0);
     private static final HorizontalPair SHELL_ALARM = new HorizontalPair(4.0, 7.0, 4.0, -4.0);
     private static final HorizontalPair ONBOARD_COMPUTER = new HorizontalPair(9.0, 4.0, 9.0, -9.0);
+    // Модельные центры: плюс (-1, 4, 8), минус (17, 4, 8).
+    private static final HorizontalPair EW_SYSTEM = new HorizontalPair(4.0, 0.0, 9.0, -9.0);
 
-    // Блоки, устанавливаемые на любую грань: наружу, плюс вправо, минус вправо, вверх.
+    // Блоки, устанавливаемые на любую грань: наружу, плюс вправо, минус вправо,
+    // вверх.
     private static final FacePair TARGET_CONTROLLER = new FacePair(8.96, 3.84, -3.84, -3.52);
-    private static final FacePair INTERCEPTION_CONTROLLER = new FacePair(8.96, 3.84, -3.84, 3.52);
+    private static final FacePair INTERCEPTION_CONTROLLER = new FacePair(8.96, 3.84, -3.84, -3.52);
 
     private PowerRadarCeeContactGeometry() {
     }
@@ -44,6 +50,10 @@ public final class PowerRadarCeeContactGeometry {
         return ONBOARD_COMPUTER.resolve(facing);
     }
 
+    public static PowerRadarCeeTerminalPair ewSystem(Direction facing) {
+        return EW_SYSTEM.resolve(facing);
+    }
+
     public static PowerRadarCeeTerminalPair targetController(Direction facing) {
         return TARGET_CONTROLLER.resolve(facing);
     }
@@ -53,15 +63,16 @@ public final class PowerRadarCeeContactGeometry {
     }
 
     /**
-     * Преобразует модельные пиксели горизонтального блока в локальные координаты CEE.
-     * FACING указывает лицевую сторону, поэтому контакты смещаются к противоположной стороне.
+     * Преобразует модельные пиксели горизонтального блока в локальные координаты
+     * CEE.
+     * FACING указывает лицевую сторону, поэтому контакты смещаются к
+     * противоположной стороне.
      */
     private record HorizontalPair(
             double yPixels,
             double rearPixels,
             double positiveRightPixels,
-            double negativeRightPixels
-    ) {
+            double negativeRightPixels) {
         private PowerRadarCeeTerminalPair resolve(Direction facing) {
             Direction rear = facing.getOpposite();
             Direction right = modelRightOf(facing);
@@ -75,14 +86,14 @@ public final class PowerRadarCeeContactGeometry {
 
     /**
      * Преобразует модельные пиксели блока с шестью вариантами установки.
-     * Локальные направления вправо и вверх выбираются устойчиво и для пола, и для потолка.
+     * Локальные направления вправо и вверх выбираются устойчиво и для пола, и для
+     * потолка.
      */
     private record FacePair(
             double outwardPixels,
             double positiveRightPixels,
             double negativeRightPixels,
-            double upPixels
-    ) {
+            double upPixels) {
         private PowerRadarCeeTerminalPair resolve(Direction facing) {
             Direction face = facing.getOpposite();
             Direction right = rightOf(facing);

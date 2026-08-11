@@ -44,6 +44,8 @@ public class RadarTargetTrack implements TrackedTargetView {
     private double boundingHeight;
     private double approximateSize;
     private float structureHeadingDegrees;
+    private float structureRotationPointOffsetX;
+    private float structureRotationPointOffsetZ;
     private int silhouetteVersion;
 
     public RadarTargetTrack(
@@ -104,6 +106,8 @@ public class RadarTargetTrack implements TrackedTargetView {
         copy.lastSeenGameTime = this.lastSeenGameTime;
         copy.lastConfirmedAliveGameTime = this.lastConfirmedAliveGameTime;
         copy.structureHeadingDegrees = this.structureHeadingDegrees;
+        copy.structureRotationPointOffsetX = this.structureRotationPointOffsetX;
+        copy.structureRotationPointOffsetZ = this.structureRotationPointOffsetZ;
         copy.silhouetteVersion = this.silhouetteVersion;
         return copy;
     }
@@ -275,8 +279,23 @@ public class RadarTargetTrack implements TrackedTargetView {
         return this.silhouetteVersion;
     }
 
-    public void updateSablePresentation(float headingDegrees, int silhouetteVersion) {
+    public float structureRotationPointOffsetX() {
+        return this.structureRotationPointOffsetX;
+    }
+
+    public float structureRotationPointOffsetZ() {
+        return this.structureRotationPointOffsetZ;
+    }
+
+    public void updateSablePresentation(
+            float headingDegrees,
+            float rotationPointOffsetX,
+            float rotationPointOffsetZ,
+            int silhouetteVersion
+    ) {
         this.structureHeadingDegrees = headingDegrees;
+        this.structureRotationPointOffsetX = rotationPointOffsetX;
+        this.structureRotationPointOffsetZ = rotationPointOffsetZ;
         this.silhouetteVersion = Math.max(0, silhouetteVersion);
     }
 
@@ -301,7 +320,7 @@ public class RadarTargetTrack implements TrackedTargetView {
             this.accelerationY = rawY;
             this.accelerationZ = rawZ;
         } else {
-            double smoothing = category == RadarTargetCategory.SABLE_STRUCTURE
+            double smoothing = this.sourceKind == RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE
                     ? SABLE_ACCELERATION_SMOOTHING
                     : ACCELERATION_SMOOTHING;
             this.accelerationX = lerp(this.accelerationX, rawX, smoothing);

@@ -12,6 +12,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.panel.LogicDockPanelAtt
 import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarDisplayPanelAttachment;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarLinkPanelAttachment;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.createmod.catnip.render.CachedBuffers;
@@ -47,6 +48,24 @@ public final class PowerRadarPanelAttachmentRenderer {
     private static final PartialModel RADAR_DISPLAY = PartialModel.of(RADAR_DISPLAY_LOCATION);
     private static final PartialModel ATTITUDE_INDICATOR = PartialModel.of(ATTITUDE_INDICATOR_LOCATION);
     private static final PartialModel ATTITUDE_SPHERE = PartialModel.of(ATTITUDE_SPHERE_LOCATION);
+    private static final ResourceLocation ATTITUDE_TEXTURE =
+            PowerRadar.id("textures/block/on_board_modules/modules_4.png");
+    private static final float TEXTURE_SIZE = 64.0F;
+    private static final float WINDOW_MIN_U = 0.0F / TEXTURE_SIZE;
+    private static final float WINDOW_MAX_U = 23.0F / TEXTURE_SIZE;
+    private static final float ATTITUDE_WINDOW_MIN_V = 0.0F / TEXTURE_SIZE;
+    private static final float ATTITUDE_WINDOW_MAX_V = 23.0F / TEXTURE_SIZE;
+    private static final float KAG_WINDOW_MIN_V = 41.0F / TEXTURE_SIZE;
+    private static final float KAG_WINDOW_MAX_V = 64.0F / TEXTURE_SIZE;
+    private static final float KAG_POINTER_MIN_U = 28.0F / TEXTURE_SIZE;
+    private static final float KAG_POINTER_MAX_U = 39.0F / TEXTURE_SIZE;
+    private static final float KAG_POINTER_MIN_V = 61.0F / TEXTURE_SIZE;
+    private static final float KAG_POINTER_MAX_V = 64.0F / TEXTURE_SIZE;
+    private static final float PANEL_WINDOW_MIN = 4.0F / 16.0F;
+    private static final float PANEL_WINDOW_MAX = 12.0F / 16.0F;
+    private static final float PANEL_WINDOW_Z = 6.99F / 16.0F;
+    private static final float PANEL_POINTER_WIDTH = (PANEL_WINDOW_MAX - PANEL_WINDOW_MIN) * 11.0F / 23.0F;
+    private static final float PANEL_POINTER_HEIGHT = (PANEL_WINDOW_MAX - PANEL_WINDOW_MIN) * 3.0F / 23.0F;
     private static final PartialModel LOGIC_DOCK = PartialModel.of(LOGIC_DOCK_LOCATION);
     private static final PartialModel LOGIC_DOCK_TARGETING_CARD =
             PartialModel.of(LOGIC_DOCK_TARGETING_CARD_LOCATION);
@@ -201,11 +220,14 @@ public final class PowerRadarPanelAttachmentRenderer {
                         partialTicks));
 
         attachment.transformPose(poseStack, panel);
-        renderAttitudeSphere(panel, poseStack, buffers, packedLight, packedOverlay, transform);
+        renderAttitudeSphere(
+                panel, poseStack, buffers, packedLight, packedOverlay, transform, attachment.kagMode());
         CachedBuffers.partial(ATTITUDE_INDICATOR, panel.getBlockState())
                 .light(packedLight)
                 .overlay(packedOverlay)
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
+        renderPanelWindow(
+                poseStack, buffers, packedLight, packedOverlay, transform, attachment.kagMode());
     }
 
     private static void renderAttitudeSphere(
@@ -214,13 +236,16 @@ public final class PowerRadarPanelAttachmentRenderer {
             MultiBufferSource buffers,
             int packedLight,
             int packedOverlay,
-            AttitudeIndicatorAngleCache.Transform transform
+            AttitudeIndicatorAngleCache.Transform transform,
+            boolean kagMode
     ) {
         poseStack.pushPose();
         // Переносим исходный центр OBJ точно в найденный центр окна корпуса.
         poseStack.translate(0.5D, SPHERE_SOURCE_PIVOT_Y, SPHERE_RENDER_CENTER_Z);
         // У лицевой панели крен идёт вокруг нормали Z, тангаж — вокруг горизонтали X.
-        poseStack.mulPose(Axis.ZP.rotationDegrees(transform.bankDegrees() * SPHERE_BANK_SIGN));
+        if (!kagMode) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(transform.bankDegrees() * SPHERE_BANK_SIGN));
+        }
         poseStack.mulPose(Axis.XP.rotationDegrees(transform.pitchDegrees() * SPHERE_PITCH_SIGN));
         poseStack.translate(0.0D, -SPHERE_SOURCE_PIVOT_Y, -SPHERE_SOURCE_PIVOT_Z);
         CachedBuffers.partial(ATTITUDE_SPHERE, panel.getBlockState())
@@ -228,5 +253,80 @@ public final class PowerRadarPanelAttachmentRenderer {
                 .overlay(packedOverlay)
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
         poseStack.popPose();
+    }
+
+    private static void renderPanelWindow(
+            PoseStack poseStack,
+            MultiBufferSource buffers,
+            int packedLight,
+            int packedOverlay,
+            AttitudeIndicatorAngleCache.Transform transform,
+            boolean kagMode
+    ) {
+        VertexConsumer consumer = buffers.getBuffer(RenderType.entityCutoutNoCull(ATTITUDE_TEXTURE));
+        emitPanelQuad(
+                poseStack.last(), consumer,
+                PANEL_WINDOW_MIN, PANEL_WINDOW_MIN, PANEL_WINDOW_MAX, PANEL_WINDOW_MAX,
+                WINDOW_MIN_U,
+                kagMode ? KAG_WINDOW_MIN_V : ATTITUDE_WINDOW_MIN_V,
+                WINDOW_MAX_U,
+                kagMode ? KAG_WINDOW_MAX_V : ATTITUDE_WINDOW_MAX_V,
+                packedLight, packedOverlay);
+
+        if (!kagMode) {
+            return;
+        }
+
+        poseStack.pushPose();
+        poseStack.translate(0.5D, 0.5D, -0.001D);
+        poseStack.mulPose(Axis.ZP.rotationDegrees(transform.bankDegrees() * -SPHERE_BANK_SIGN));
+        poseStack.translate(-0.5D, -0.5D, 0.0D);
+        emitPanelQuad(
+                poseStack.last(), consumer,
+                0.5F - PANEL_POINTER_WIDTH * 0.5F,
+                0.5F - PANEL_POINTER_HEIGHT * 0.5F,
+                0.5F + PANEL_POINTER_WIDTH * 0.5F,
+                0.5F + PANEL_POINTER_HEIGHT * 0.5F,
+                KAG_POINTER_MIN_U, KAG_POINTER_MIN_V, KAG_POINTER_MAX_U, KAG_POINTER_MAX_V,
+                packedLight, packedOverlay);
+        poseStack.popPose();
+    }
+
+    private static void emitPanelQuad(
+            PoseStack.Pose pose,
+            VertexConsumer consumer,
+            float minX,
+            float minY,
+            float maxX,
+            float maxY,
+            float minU,
+            float minV,
+            float maxU,
+            float maxV,
+            int packedLight,
+            int packedOverlay
+    ) {
+        emitPanelVertex(pose, consumer, minX, minY, minU, maxV, packedLight, packedOverlay);
+        emitPanelVertex(pose, consumer, minX, maxY, minU, minV, packedLight, packedOverlay);
+        emitPanelVertex(pose, consumer, maxX, maxY, maxU, minV, packedLight, packedOverlay);
+        emitPanelVertex(pose, consumer, maxX, minY, maxU, maxV, packedLight, packedOverlay);
+    }
+
+    private static void emitPanelVertex(
+            PoseStack.Pose pose,
+            VertexConsumer consumer,
+            float x,
+            float y,
+            float u,
+            float v,
+            int packedLight,
+            int packedOverlay
+    ) {
+        consumer.addVertex(pose.pose(), x, y, PANEL_WINDOW_Z)
+                .setColor(255, 255, 255, 255)
+                .setUv(u, v)
+                .setOverlay(packedOverlay)
+                .setLight(packedLight)
+                .setNormal(pose, 0.0F, 0.0F, -1.0F);
     }
 }

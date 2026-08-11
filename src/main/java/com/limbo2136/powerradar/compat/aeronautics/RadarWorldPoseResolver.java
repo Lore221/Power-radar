@@ -46,6 +46,14 @@ public final class RadarWorldPoseResolver {
         return SableRadarWorldPose.worldDirection(level, containingPos, localDirection);
     }
 
+    /** Возвращает скорость указанной точки конструкции в мировых блоках за серверный тик. */
+    public static Vec3 worldPointVelocity(ServerLevel level, BlockPos containingPos, Vec3 localPosition) {
+        if (!SableRadarIntegration.isSableLoaded()) {
+            return Vec3.ZERO;
+        }
+        return SableRadarWorldPose.worldPointVelocity(level, containingPos, localPosition);
+    }
+
     public static boolean isOnSableStructure(ServerLevel level, BlockPos localPos) {
         return resolve(level, localPos, Vec3.atCenterOf(localPos), 0.0F).onSableStructure();
     }

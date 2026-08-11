@@ -1,0 +1,15 @@
+{
+  "parent": "power_radar:root",
+  "display": {
+    "icon": { "id": "power_radar:radar_link" },
+    "title": { "translate": "advancements.power_radar.radar_network_online.title" },
+    "description": { "translate": "advancements.power_radar.radar_network_online.description" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "network_online": { "trigger": "power_radar:radar_network_online" }
+  }
+}

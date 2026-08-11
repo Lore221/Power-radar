@@ -23,6 +23,7 @@ public record RadarScanProfile(
         boolean detectPassiveMobs,
         boolean detectProjectiles,
         boolean detectSableStructures,
+        boolean detectRadars,
         boolean detectUnknown
 ) {
     public boolean detects(RadarTargetCategory category) {
@@ -32,6 +33,7 @@ public record RadarScanProfile(
             case PASSIVE_MOB -> this.detectPassiveMobs;
             case PROJECTILE -> this.detectProjectiles;
             case SABLE_STRUCTURE -> this.detectSableStructures;
+            case RADAR -> this.detectRadars;
             case UNKNOWN -> this.detectUnknown;
         };
     }
@@ -73,6 +75,7 @@ public record RadarScanProfile(
                 true,
                 true,
                 true,
+                true,
                 true
         );
     }
@@ -95,11 +98,28 @@ public record RadarScanProfile(
                 this.detectPassiveMobs && RadarDetectionFilters.enabled(detectionFilterMask, RadarTargetCategory.PASSIVE_MOB),
                 this.detectProjectiles && RadarDetectionFilters.enabled(detectionFilterMask, RadarTargetCategory.PROJECTILE),
                 this.detectSableStructures && RadarDetectionFilters.enabled(detectionFilterMask, RadarTargetCategory.SABLE_STRUCTURE),
+                this.detectRadars,
                 this.detectUnknown
         );
     }
 
     public RadarScanProfile frequentDiscoveryOnly() {
+        return discoveryOnly(false, false);
+    }
+
+    public RadarScanProfile regularDiscoveryOnly() {
+        return discoveryOnly(true, false);
+    }
+
+    public RadarScanProfile frequentAndUnknownDiscoveryOnly() {
+        return discoveryOnly(false, true);
+    }
+
+    public boolean queriesSableStructures() {
+        return this.detectSableStructures || this.detectUnknown;
+    }
+
+    private RadarScanProfile discoveryOnly(boolean includeRegularTargets, boolean includeUnknownTargets) {
         return new RadarScanProfile(
                 this.radarType,
                 this.structureType,
@@ -112,12 +132,13 @@ public record RadarScanProfile(
                 this.useFovCheck,
                 this.sectorAngle,
                 this.ignoreItems,
-                false,
-                false,
-                false,
+                this.detectPlayers,
+                includeRegularTargets && this.detectHostileMobs,
+                includeRegularTargets && this.detectPassiveMobs,
                 this.detectProjectiles,
                 this.detectSableStructures,
-                false
+                includeRegularTargets && this.detectRadars,
+                includeUnknownTargets && this.detectUnknown
         );
     }
 
@@ -139,6 +160,7 @@ public record RadarScanProfile(
                 this.detectPassiveMobs,
                 this.detectProjectiles,
                 this.detectSableStructures,
+                this.detectRadars,
                 this.detectUnknown
         );
     }

@@ -7,9 +7,13 @@ import net.minecraft.world.phys.Vec3;
 public record SableStructureObservation(
         UUID structureUuid,
         String displayName,
-        Vec3 worldOrigin,
+        Vec3 geometricCenter,
         Vec3 velocity,
         float headingDegrees,
+        double localRotationPointX,
+        double localRotationPointZ,
+        double worldRotationPointX,
+        double worldRotationPointZ,
         AABB worldBounds
 ) {
 }

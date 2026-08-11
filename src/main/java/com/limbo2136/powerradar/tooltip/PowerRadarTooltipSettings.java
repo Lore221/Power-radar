@@ -32,7 +32,8 @@ public final class PowerRadarTooltipSettings {
                 ALLOWLIST_CARD,
                 DISPLAY_CARD,
                 INTERCEPTION_FUZE,
-                LINKER
+                LINKER,
+                EW_SYSTEM
         }
 
         public sealed interface Field permits InventoryField, GoggleField {
@@ -121,6 +122,9 @@ public final class PowerRadarTooltipSettings {
                                         field(InventoryField.NOMINAL_VOLTAGE))),
                         Map.entry(Target.RADAR_LINK, List.of(
                                         field(InventoryField.NOMINAL_POWER),
+                                        field(InventoryField.NOMINAL_VOLTAGE))),
+                        Map.entry(Target.EW_SYSTEM, List.of(
+                                        field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.NOMINAL_VOLTAGE))));
 
         // Описания общие для режима с очками и без них и раскрываются только по Shift.
@@ -133,7 +137,9 @@ public final class PowerRadarTooltipSettings {
                         Map.entry(Target.LINKER, List.of(text("linker_text"))),
                         Map.entry(Target.RADAR_CONTROLLER, List.of(text("radar_controller_text"))),
                         Map.entry(Target.AIR_RADAR_CONTROLLER, List.of(text("air_radar_controller_text"))),
-                        Map.entry(Target.SURFACE_RADAR_CONTROLLER, List.of(text("surface_radar_controller_text"))));
+                        Map.entry(Target.SURFACE_RADAR_CONTROLLER, List.of(text("surface_radar_controller_text"))),
+                        Map.entry(Target.EW_SYSTEM, List.of(text("ew_system_text"))));
+
         // Подсказка в мире при взгляде на установленный блок через инженерные очки
         // Create.
         private static final Map<Target, List<Line>> GOGGLES = Map.ofEntries(
@@ -164,7 +170,12 @@ public final class PowerRadarTooltipSettings {
                                         field(GoggleField.TITLE),
                                         field(GoggleField.POWER),
                                         field(GoggleField.PROTECTION_ZONE),
-                                        field(GoggleField.ALARM_STATE))));
+                                        field(GoggleField.ALARM_STATE))),
+                        Map.entry(Target.EW_SYSTEM, List.of(
+                                        field(GoggleField.TITLE),
+                                        field(GoggleField.ELECTRICAL_STATE),
+                                        field(GoggleField.VOLTAGE),
+                                        field(GoggleField.POWER))));
 
         private PowerRadarTooltipSettings() {
         }

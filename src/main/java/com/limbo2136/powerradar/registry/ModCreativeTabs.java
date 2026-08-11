@@ -45,8 +45,10 @@ public final class ModCreativeTabs {
                         }
                         if (SableRadarIntegration.isAeronauticsLoaded()) {
                             output.accept(ModItems.ONBOARD_COMPUTER.get());
+                            output.accept(ModItems.EW_SYSTEM.get());
                         }
                         output.accept(ModItems.MECHANICAL_SIREN.get());
+                        output.accept(ModItems.MICROWAVE_EMITTER.get());
 
                     })
                     .build());

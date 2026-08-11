@@ -2,15 +2,15 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "AAA",
-    "CBC",
-    "AAA"
+    "CCC",
+    "BBB"
   ],
   "key": {
     "A": {
-      "tag": "c:ingots/steel"
+      "item": "power_radar:microwave_emitter"
     },
     "B": {
-      "item": "minecraft:copper_grate"
+      "tag": "c:ingots/steel"
     },
     "C": {
       "item": "electroenergetics:inductor"

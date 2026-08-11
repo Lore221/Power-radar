@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
+import com.limbo2136.powerradar.compat.aeronautics.SableWarningManager;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -72,7 +73,7 @@ public final class RadarScanCoordinator {
         List<SharedBatch> batches = groupWork(work);
         boolean sableFilterEnabled = false;
         for (SharedBatch batch : batches) {
-            if (batch.detectsSableStructures()) {
+            if (batch.queriesSableStructures()) {
                 sableFilterEnabled = true;
                 break;
             }
@@ -81,6 +82,7 @@ public final class RadarScanCoordinator {
                 ? SableRadarIntegration.loadedStructures(level)
                 : List.of();
         Map<RadarScanRequest, Set<TargetKey>> seenByRequest = new IdentityHashMap<>();
+        Map<RadarScanRequest, Set<java.util.UUID>> sableDetectedByRequest = new IdentityHashMap<>();
         Map<RadarScanRequest, RadarCoverageFilter.PreparedCoverage> coverageByRequest = new IdentityHashMap<>();
         RadarSurfaceHeightCache surfaceHeights = new RadarSurfaceHeightCache(level);
         int entityCandidates = 0;
@@ -106,7 +108,7 @@ public final class RadarScanCoordinator {
                 }
             }
 
-            if (batch.detectsSableStructures()) {
+            if (batch.queriesSableStructures()) {
                 List<SableStructureObservation> structures = new ArrayList<>();
                 for (SableStructureObservation structure : loadedSableStructures) {
                     if (intersectsHorizontally(structure.worldBounds(), batch.queryBox())) {
@@ -115,7 +117,7 @@ public final class RadarScanCoordinator {
                 }
                 sableCandidates += structures.size();
                 for (SliceWork member : batch.members) {
-                    if (!member.request.discoveryProfile().detectSableStructures()) {
+                    if (!member.request.discoveryProfile().queriesSableStructures()) {
                         continue;
                     }
                     Set<TargetKey> seen = seenByRequest.computeIfAbsent(member.request, ignored -> new HashSet<>());
@@ -125,9 +127,13 @@ public final class RadarScanCoordinator {
                         if (!intersectsHorizontally(structure.worldBounds(), member.slice)) {
                             continue;
                         }
-                        RadarScanner.processSableCandidate(
+                        if (RadarScanner.processSableCandidate(
                                 member.request.discoveryProfile(), member.request.context(),
-                                member.request.targetCache(), structure, seen, coverage, surfaceHeights);
+                                member.request.targetCache(), structure, seen, coverage, surfaceHeights)) {
+                            sableDetectedByRequest
+                                    .computeIfAbsent(member.request, ignored -> new HashSet<>())
+                                    .add(structure.structureUuid());
+                        }
                     }
                 }
             }
@@ -138,6 +144,11 @@ public final class RadarScanCoordinator {
             if (!request.publish()) {
                 continue;
             }
+            SableWarningManager.replaceRadarCoverage(
+                    level,
+                    request.radarId(),
+                    sableDetectedByRequest.getOrDefault(request, Set.of()),
+                    request.context().gameTime());
             if (request.refreshProfile() != null) {
                 RadarScanner.refreshTrackedEntities(
                         request.refreshProfile(), request.context(), request.targetCache(),
@@ -252,7 +263,7 @@ public final class RadarScanCoordinator {
         private final Set<RadarId> radarIds = new HashSet<>();
         private final Set<RadarScanProfile> profiles = new LinkedHashSet<>();
         private AABB queryBox;
-        private boolean detectsSableStructures;
+        private boolean queriesSableStructures;
 
         private SharedBatch(SliceWork first) {
             add(first);
@@ -263,7 +274,7 @@ public final class RadarScanCoordinator {
             this.radarIds.add(item.request.radarId());
             RadarScanProfile profile = item.request.discoveryProfile();
             this.profiles.add(profile);
-            this.detectsSableStructures |= profile.detectSableStructures();
+            this.queriesSableStructures |= profile.queriesSableStructures();
             this.queryBox = this.queryBox == null ? item.slice : union(this.queryBox, item.slice);
         }
 
@@ -279,8 +290,8 @@ public final class RadarScanCoordinator {
             return this.profiles;
         }
 
-        private boolean detectsSableStructures() {
-            return this.detectsSableStructures;
+        private boolean queriesSableStructures() {
+            return this.queriesSableStructures;
         }
     }
 }

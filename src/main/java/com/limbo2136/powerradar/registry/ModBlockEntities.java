@@ -11,6 +11,7 @@ import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
+import com.limbo2136.powerradar.block.entity.EwSystemBlockEntity;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -43,6 +44,10 @@ public final class ModBlockEntities {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OnboardComputerBlockEntity>> ONBOARD_COMPUTER =
             BLOCK_ENTITIES.register("onboard_computer", () -> BlockEntityType.Builder
                     .of(OnboardComputerBlockEntity::new, ModBlocks.ONBOARD_COMPUTER.get()).build(null));
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EwSystemBlockEntity>> EW_SYSTEM =
+            BLOCK_ENTITIES.register("ew_system", () -> BlockEntityType.Builder
+                    .of(EwSystemBlockEntity::new, ModBlocks.EW_SYSTEM.get()).build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OverviewModuleBlockEntity>> OVERVIEW_MODULE =
             BLOCK_ENTITIES.register("overview_module", () -> BlockEntityType.Builder

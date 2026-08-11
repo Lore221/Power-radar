@@ -95,7 +95,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     // Окно делит поиск сущностей на бюджетные срезы, а публикацию выполняет строго в последний тик.
     private RadarScanProfile activeScanProfile;
+    private RadarScanProfile activeRegularScanProfile;
     private RadarScanProfile activeFrequentScanProfile;
+    private RadarScanProfile activeFrequentUnknownScanProfile;
     private RadarScanContext activeScanContext;
     private RadarScanSlicePlan activeScanSlicePlan;
     private ScanSlicePlanKey activeScanSlicePlanKey;
@@ -187,10 +189,11 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                     this.activeScanSlicePlan = RadarScanSlicePlanner.build(this.activeScanProfile, tickContext);
                     this.activeScanSlicePlanKey = tickSlicePlanKey;
                 }
-                discoveryProfile = isRegularDiscoveryWindow(
-                        level.getGameTime(), updateIntervalTicks)
-                        ? this.activeScanProfile
-                        : this.activeFrequentScanProfile;
+                boolean regularDiscovery = isRegularDiscoveryWindow(level.getGameTime(), updateIntervalTicks);
+                boolean unknownDiscovery = isUnknownDiscoveryWindow(level.getGameTime(), updateIntervalTicks);
+                discoveryProfile = regularDiscovery
+                        ? (unknownDiscovery ? this.activeScanProfile : this.activeRegularScanProfile)
+                        : (unknownDiscovery ? this.activeFrequentUnknownScanProfile : this.activeFrequentScanProfile);
                 if (hasDiscoveryTargets(discoveryProfile)) {
                     List<AABB> slices = this.activeScanSlicePlan.slices();
                     int selectedCount = bucket >= slices.size()
@@ -234,12 +237,21 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         return Math.floorMod(window, REGULAR_DISCOVERY_WINDOW_MULTIPLIER) == 0;
     }
 
+    private boolean isUnknownDiscoveryWindow(long gameTime, int scanWindowTicks) {
+        long window = Math.floorDiv(gameTime, scanWindowTicks);
+        long periodWindows = Math.max(1L,
+                Math.ceilDiv(RadarConstants.RADAR_UNKNOWN_DISCOVERY_INTERVAL_TICKS, scanWindowTicks));
+        long phase = Math.floorMod((long) this.radarId().hashCode(), periodWindows);
+        return Math.floorMod(window, periodWindows) == phase;
+    }
+
     private static boolean hasDiscoveryTargets(RadarScanProfile profile) {
         return profile.detectPlayers()
                 || profile.detectHostileMobs()
                 || profile.detectPassiveMobs()
                 || profile.detectProjectiles()
                 || profile.detectSableStructures()
+                || profile.detectRadars()
                 || profile.detectUnknown();
     }
 
@@ -280,7 +292,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             this.detectionFilterMask = networkDisplayMask;
             this.targetCache.clear();
             this.activeScanProfile = null;
+            this.activeRegularScanProfile = null;
             this.activeFrequentScanProfile = null;
+            this.activeFrequentUnknownScanProfile = null;
             this.activeScanContext = null;
             this.activeScanSlicePlan = null;
             this.activeScanSlicePlanKey = null;
@@ -332,7 +346,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                         ? this.activeScanSlicePlan
                         : RadarScanSlicePlanner.build(nextScanProfile, context);
                 this.activeScanProfile = nextScanProfile;
+                this.activeRegularScanProfile = nextScanProfile.regularDiscoveryOnly();
                 this.activeFrequentScanProfile = nextScanProfile.frequentDiscoveryOnly();
+                this.activeFrequentUnknownScanProfile = nextScanProfile.frequentAndUnknownDiscoveryOnly();
                 this.activeScanContext = context;
                 this.activeScanSlicePlan = nextSlicePlan;
                 this.activeScanSlicePlanKey = nextSlicePlanKey;
@@ -341,7 +357,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                 logOptimizationScanDecision(level, structureValid, nextStructureType, nextBasicPanelCount, nextOverviewModuleCount,
                         nextBaseRange, 0, nextElectricalState, "housekeeping-power");
                 this.activeScanProfile = null;
+                this.activeRegularScanProfile = null;
                 this.activeFrequentScanProfile = null;
+                this.activeFrequentUnknownScanProfile = null;
                 this.activeScanContext = context;
                 this.activeScanSlicePlan = null;
                 this.activeScanSlicePlanKey = null;
@@ -356,7 +374,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             logOptimizationScanDecision(level, structureValid, nextStructureType, nextBasicPanelCount, nextOverviewModuleCount,
                     0, 0, nextElectricalState, "housekeeping-structure");
             this.activeScanProfile = null;
+            this.activeRegularScanProfile = null;
             this.activeFrequentScanProfile = null;
+            this.activeFrequentUnknownScanProfile = null;
             this.activeScanContext = context;
             this.activeScanSlicePlan = null;
             this.activeScanSlicePlanKey = null;

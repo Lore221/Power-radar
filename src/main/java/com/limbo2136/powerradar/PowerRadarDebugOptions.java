@@ -25,10 +25,28 @@ public final class PowerRadarDebugOptions {
     }
 
     public static boolean targetSystemBugReportLogging() {
-        return enabled(
+        return PowerRadarServerConfig.targetSystemBugReportLogging() || enabled(
                 TARGET_SYSTEM_BUG_REPORT_LOGGING,
                 "power_radar.targetSystemBugReportDebug",
                 "POWER_RADAR_TARGET_SYSTEM_BUG_REPORT_DEBUG");
+    }
+
+    public static boolean targetControllerBallisticsLogging() {
+        return PowerRadarServerConfig.targetControllerBallisticsLogging()
+                || Boolean.getBoolean("power_radar.targetControllerBallisticsDebug")
+                || "true".equalsIgnoreCase(System.getenv("POWER_RADAR_TARGET_CONTROLLER_BALLISTICS_DEBUG"));
+    }
+
+    public static boolean sableSilhouetteBuildLogging() {
+        return PowerRadarServerConfig.sableSilhouetteBuildLogging()
+                || Boolean.getBoolean("power_radar.sableSilhouetteBuildDebug")
+                || "true".equalsIgnoreCase(System.getenv("POWER_RADAR_SABLE_SILHOUETTE_BUILD_DEBUG"));
+    }
+
+    public static boolean sablePoseLogging() {
+        return PowerRadarServerConfig.sablePoseLogging()
+                || Boolean.getBoolean("power_radar.sablePoseDebug")
+                || "true".equalsIgnoreCase(System.getenv("POWER_RADAR_SABLE_POSE_DEBUG"));
     }
 
     public static boolean interceptionSystemBugReportLogging() {

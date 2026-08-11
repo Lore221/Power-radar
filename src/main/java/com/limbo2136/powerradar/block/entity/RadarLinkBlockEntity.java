@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.block.entity;
 
+import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
@@ -19,6 +20,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -143,6 +145,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
                     || result == RadarLinkReconcileResult.AMBIGUOUS
                     ? LampPulse.RED
                     : LampPulse.GREEN);
+            if (result == RadarLinkReconcileResult.CONTROLLER_ATTACHED && player instanceof ServerPlayer serverPlayer) {
+                PowerRadarAdvancementTriggers.RADAR_NETWORK_ONLINE.get().trigger(serverPlayer);
+            }
             return result;
         }
 

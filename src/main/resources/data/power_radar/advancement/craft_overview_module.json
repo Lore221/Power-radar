@@ -1,0 +1,18 @@
+{
+  "parent": "power_radar:craft_radar_panel",
+  "display": {
+    "icon": { "id": "power_radar:overview_module" },
+    "title": { "translate": "advancements.power_radar.craft_overview_module.title" },
+    "description": { "translate": "advancements.power_radar.craft_overview_module.description" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "has_item": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": "power_radar:overview_module" }] }
+    }
+  }
+}

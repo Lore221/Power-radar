@@ -29,6 +29,7 @@ public final class PowerRadarElectricalParameters {
                         26.0D);
         private static final LoadVoltageRange DEFAULT_ONBOARD_COMPUTER_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
                         250.0D);
+        private static final LoadVoltageRange DEFAULT_EW_SYSTEM_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D, 26.0D);
 
         // Контроллеры наведения являются резистивной нагрузкой; скорость растёт до
         // номинального напряжения.
@@ -51,6 +52,7 @@ public final class PowerRadarElectricalParameters {
         private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
         private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
         private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 750.0D;
+        private static final double DEFAULT_EW_SYSTEM_POWER_WATTS = 600.0D;
 
         private static LoadVoltageConfig radarVoltageConfig;
         private static LoadVoltageConfig monitorControllerVoltageConfig;
@@ -59,6 +61,7 @@ public final class PowerRadarElectricalParameters {
         private static LoadVoltageConfig panelRadarDisplayVoltageConfig;
         private static LoadVoltageConfig panelRadarLinkVoltageConfig;
         private static LoadVoltageConfig onboardComputerVoltageConfig;
+        private static LoadVoltageConfig ewSystemVoltageConfig;
         private static ModConfigSpec.DoubleValue targetControllerMinimumVoltage;
         private static ModConfigSpec.DoubleValue targetControllerNominalVoltage;
         private static ModConfigSpec.DoubleValue targetControllerMaximumVoltage;
@@ -77,6 +80,7 @@ public final class PowerRadarElectricalParameters {
         private static ModConfigSpec.DoubleValue logicDockPowerWatts;
         private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
         private static ModConfigSpec.DoubleValue shellAlarmPowerWatts;
+        private static ModConfigSpec.DoubleValue ewSystemPowerWatts;
 
         private PowerRadarElectricalParameters() {
         }
@@ -112,6 +116,8 @@ public final class PowerRadarElectricalParameters {
                                 "Radar Link power supply (in electrical panel), in volts.");
                 onboardComputerVoltageConfig = defineLoadVoltages(builder, "onboard_computer",
                                 DEFAULT_ONBOARD_COMPUTER_VOLTAGE, "OnBoard Computer power supply, in volts.");
+                ewSystemVoltageConfig = defineLoadVoltages(builder, "ew_system", DEFAULT_EW_SYSTEM_VOLTAGE,
+                                "Electronic Warfare System power supply, in volts.");
 
                 defineDriveVoltages(builder, "target_controller", DEFAULT_TARGET_CONTROLLER_VOLTAGE, true);
                 defineDriveVoltages(builder, "interception_controller", DEFAULT_INTERCEPTION_CONTROLLER_VOLTAGE, false);
@@ -205,6 +211,8 @@ public final class PowerRadarElectricalParameters {
                                 DEFAULT_ONBOARD_COMPUTER_POWER_WATTS, "OnBoard Computer nominal power.");
                 shellAlarmPowerWatts = power(builder, "shell_alarm_power_watts",
                                 DEFAULT_SHELL_ALARM_POWER_WATTS, "Shell Alarm nominal power.");
+                ewSystemPowerWatts = power(builder, "ew_system_power_watts",
+                                DEFAULT_EW_SYSTEM_POWER_WATTS, "Electronic Warfare System nominal power.");
                 builder.pop();
         }
 
@@ -262,6 +270,11 @@ public final class PowerRadarElectricalParameters {
                 public static LoadVoltageRange onboardComputer() {
                         ensureConfigDefined();
                         return value(onboardComputerVoltageConfig);
+                }
+
+                public static LoadVoltageRange ewSystem() {
+                        ensureConfigDefined();
+                        return value(ewSystemVoltageConfig);
                 }
 
                 public static DriveVoltageRange targetController() {
@@ -345,6 +358,11 @@ public final class PowerRadarElectricalParameters {
                 public static double shellAlarmPowerWatts() {
                         ensureConfigDefined();
                         return value(shellAlarmPowerWatts);
+                }
+
+                public static double ewSystemPowerWatts() {
+                        ensureConfigDefined();
+                        return value(ewSystemPowerWatts);
                 }
         }
 

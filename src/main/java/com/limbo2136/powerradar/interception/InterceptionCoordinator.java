@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.interception;
 
+import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,7 +16,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -80,10 +83,23 @@ public final class InterceptionCoordinator {
             List<ThreatSnapshot> threatSnapshots,
             long threatTtlTicks
     ) {
+        publishThreats(level, networkId, alarmPos, threatSnapshots, threatTtlTicks, null);
+    }
+
+    public static synchronized void publishThreats(
+            ServerLevel level,
+            UUID networkId,
+            BlockPos alarmPos,
+            List<ThreatSnapshot> threatSnapshots,
+            long threatTtlTicks,
+            @Nullable AABB shellAlarmZone
+    ) {
         // Публикация корня авторитетна: отсутствующие UUID снимаются немедленно, TTL лишь страхует пропуски.
         long gameTime = level.getGameTime();
         long expiresAt = gameTime + sanitizeThreatTtl(threatTtlTicks);
         NetworkState network = network(level.getServer(), networkId);
+        network.shellAlarmDimension = shellAlarmZone == null ? null : level.dimension();
+        network.shellAlarmZone = shellAlarmZone;
         boolean changed = false;
         Set<UUID> publishedThreats = new HashSet<>();
         for (ThreatSnapshot snapshot : threatSnapshots) {
@@ -383,6 +399,32 @@ public final class InterceptionCoordinator {
         state.destructionChances.remove(threatUuid);
     }
 
+    public static synchronized void awardDangerousProjectileIntercepted(
+            ServerLevel level,
+            UUID threatUuid
+    ) {
+        ServerState state = SERVERS.get(level.getServer());
+        if (state == null) {
+            return;
+        }
+        Set<ServerPlayer> recipients = new HashSet<>();
+        for (NetworkState network : state.networks.values()) {
+            if (!network.threats.containsKey(threatUuid)
+                    || network.shellAlarmZone == null
+                    || !level.dimension().equals(network.shellAlarmDimension)) {
+                continue;
+            }
+            for (ServerPlayer player : level.players()) {
+                if (network.shellAlarmZone.contains(player.position())) {
+                    recipients.add(player);
+                }
+            }
+        }
+        for (ServerPlayer player : recipients) {
+            PowerRadarAdvancementTriggers.DANGEROUS_PROJECTILE_INTERCEPTED.get().trigger(player);
+        }
+    }
+
     private static ThreatSnapshot snapshot(UUID threatUuid, Threat threat) {
         return new ThreatSnapshot(
                 threatUuid,
@@ -578,6 +620,10 @@ public final class InterceptionCoordinator {
         private final Map<InterceptionControllerKey, ControllerState> controllers = new HashMap<>();
         private final Map<InterceptionControllerKey, UUID> assignments = new HashMap<>();
         private final Map<ControllerThreat, Long> rejections = new HashMap<>();
+        @Nullable
+        private ResourceKey<Level> shellAlarmDimension;
+        @Nullable
+        private AABB shellAlarmZone;
         private long threatRevision;
     }
 

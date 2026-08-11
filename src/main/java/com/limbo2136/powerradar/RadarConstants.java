@@ -7,6 +7,7 @@ public final class RadarConstants {
     public static final int SECTOR_RADAR_ENTITY_QUERY_SLICE_SIZE = 256;
 
     public static final int RADAR_SCAN_UPDATE_INTERVAL_TICKS = 5;
+    public static final int RADAR_UNKNOWN_DISCOVERY_INTERVAL_TICKS = 70;
     public static final int SECTOR_RADAR_STRUCTURE_VALIDATION_INTERVAL_TICKS = 20;
     public static final boolean SECTOR_RADAR_DETECT_PASSIVE_MOBS = true;
 

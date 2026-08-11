@@ -1,10 +1,11 @@
 package com.limbo2136.powerradar.radar;
 
 import com.limbo2136.powerradar.compat.createbigcannons.RadarCbcProjectileCompat;
-import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -17,14 +18,17 @@ public final class RadarTargetClassifier {
         if (entity instanceof ItemEntity) {
             return null;
         }
+        if (entity instanceof RadarStructureEntity) {
+            return RadarTargetCategory.RADAR;
+        }
+        if (entity instanceof LivingEntity living && living.hasEffect(MobEffects.INVISIBILITY)) {
+            return RadarTargetCategory.UNKNOWN;
+        }
         if (entity.getType() == EntityType.PLAYER) {
             return RadarTargetCategory.PLAYER;
         }
         if (entity instanceof Projectile || RadarCbcProjectileCompat.isCbcProjectile(entity)) {
             return RadarTargetCategory.PROJECTILE;
-        }
-        if (entity instanceof AbstractContraptionEntity || entity instanceof RadarStructureEntity) {
-            return RadarTargetCategory.UNKNOWN;
         }
         MobCategory mobCategory = entity.getType().getCategory();
         if (mobCategory == MobCategory.MONSTER) {

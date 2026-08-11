@@ -1,0 +1,18 @@
+{
+  "display": {
+    "icon": { "id": "power_radar:radar_controller" },
+    "title": { "translate": "advancements.power_radar.root.title" },
+    "description": { "translate": "advancements.power_radar.root.description" },
+    "background": "minecraft:textures/gui/advancements/backgrounds/stone.png",
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "has_item": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": "power_radar:radar_controller" }] }
+    }
+  }
+}

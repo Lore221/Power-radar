@@ -1,5 +1,7 @@
 package com.limbo2136.powerradar.compat.aeronautics;
 
+import com.limbo2136.powerradar.PowerRadar;
+import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.radar.SableStructureName;
 import dev.ryanhcode.sable.Sable;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
@@ -30,11 +32,14 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.Entity;
 import org.joml.Vector3d;
 
 final class SableStructureScanner {
     private static final int CACHE_TTL_TICKS = 6_000;
     private static final int MIN_REBUILD_WORK_PER_TICK = 4_096;
+    private static final int DIRTY_REBUILD_DEBOUNCE_TICKS = 40;
+    private static final int FALLBACK_RETRY_TICKS = 200;
     // Кэш принадлежит экземпляру сервера; слабый ключ не удерживает завершённую локальную сессию.
     private static final Map<MinecraftServer, SilhouetteCache> CACHES = new WeakHashMap<>();
 
@@ -131,6 +136,10 @@ final class SableStructureScanner {
         return subLevel == null || subLevel.isRemoved() ? Optional.empty() : Optional.of(subLevel.getUniqueId());
     }
 
+    static boolean isEntityOnStructure(Entity entity) {
+        return Sable.HELPER.getTrackingSubLevel(entity) != null;
+    }
+
     static boolean isInsideStructure(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
         SubLevel subLevel = Sable.HELPER.getContaining(level, pos);
         return subLevel != null && !subLevel.isRemoved();
@@ -142,23 +151,35 @@ final class SableStructureScanner {
             return null;
         }
         Vec3 localCenter = localCenter(localBounds);
-        Vec3 worldOrigin = serverSubLevel.logicalPose().transformPosition(localCenter);
+        Vec3 geometricCenter = serverSubLevel.logicalPose().transformPosition(localCenter);
         Vector3d worldForward = serverSubLevel.logicalPose().transformNormal(new Vector3d(0.0D, 0.0D, 1.0D));
         float heading = (float) Math.toDegrees(Math.atan2(-worldForward.x(), worldForward.z()));
         Vec3 velocity = Sable.HELPER
                 .getVelocity(serverSubLevel.getLevel(), serverSubLevel, localCenter)
                 .scale(0.05D);
+        var logicalPose = serverSubLevel.logicalPose();
         return new SableStructureObservation(
                 serverSubLevel.getUniqueId(),
                 SableStructureName.normalize(serverSubLevel.getName()),
-                worldOrigin,
+                geometricCenter,
                 velocity,
                 heading,
+                logicalPose.rotationPoint().x(),
+                logicalPose.rotationPoint().z(),
+                logicalPose.position().x(),
+                logicalPose.position().z(),
                 serverSubLevel.boundingBox().toMojang());
     }
 
     static void markDetected(ServerLevel level, UUID structureUuid, long gameTime) {
         cache(level.getServer()).markDetected(level, structureUuid, gameTime);
+    }
+
+    static void markSilhouetteDirty(ServerLevel level, net.minecraft.core.BlockPos changedPos, long gameTime) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, changedPos);
+        if (subLevel != null && !subLevel.isRemoved()) {
+            cache(level.getServer()).markDirty(level, subLevel.getUniqueId(), gameTime);
+        }
     }
 
     static void tickSilhouetteCache(MinecraftServer server) {
@@ -217,9 +238,10 @@ final class SableStructureScanner {
         private final Map<StructureKey, CacheEntry> entries = new HashMap<>();
         private Set<StructureKey> currentUpdateSet = Set.of();
         private Set<StructureKey> nextUpdateSet = new LinkedHashSet<>();
+        private final Map<StructureKey, Long> dirtySince = new HashMap<>();
         private final Deque<BuildTask> rebuildQueue = new ArrayDeque<>();
         private long cycleStart = Long.MIN_VALUE;
-        private int rebuildWorkPerTick = MIN_REBUILD_WORK_PER_TICK;
+        private final int rebuildWorkPerTick = MIN_REBUILD_WORK_PER_TICK;
 
         private void markDetected(ServerLevel level, UUID structureUuid, long gameTime) {
             StructureKey key = new StructureKey(level.dimension().location(), structureUuid);
@@ -232,16 +254,42 @@ final class SableStructureScanner {
                 // Первый запрос строится сразу, чтобы монитор не ждал начала следующего фонового цикла.
                 BuildTask immediate = createTask(level, key);
                 if (immediate != null) {
-                    immediate.finishImmediately();
-                    applyFinished(immediate, gameTime);
+                    entry.snapshot = snapshotOf(
+                            immediate.fallbackResult(), immediate, 1, gameTime, SableSilhouetteStatus.BUILDING);
+                    this.rebuildQueue.addLast(immediate);
                 }
             }
             entry.lastSeenGameTime = gameTime;
             this.nextUpdateSet.add(key);
         }
 
+        private void markDirty(ServerLevel level, UUID structureUuid, long gameTime) {
+            StructureKey key = new StructureKey(level.dimension().location(), structureUuid);
+            CacheEntry entry = this.entries.computeIfAbsent(key, ignored -> new CacheEntry(gameTime));
+            entry.lastSeenGameTime = gameTime;
+            this.dirtySince.put(key, gameTime);
+            this.nextUpdateSet.add(key);
+        }
+
         private void tick(MinecraftServer server) {
             long gameTime = server.overworld().getGameTime();
+            List<StructureKey> dirtyReady = this.dirtySince.entrySet().stream()
+                    .filter(entry -> gameTime - entry.getValue() >= DIRTY_REBUILD_DEBOUNCE_TICKS)
+                    .map(Map.Entry::getKey)
+                    .toList();
+            for (StructureKey key : dirtyReady) {
+                ServerLevel level = level(server, key.dimensionId());
+                CacheEntry entry = this.entries.get(key);
+                if (level != null && entry != null && gameTime >= entry.nextBuildAllowedGameTime
+                        && this.rebuildQueue.stream().noneMatch(task -> task.key.equals(key))) {
+                    BuildTask task = createTask(level, key);
+                    if (task != null) {
+                        this.rebuildQueue.addLast(task);
+                        this.dirtySince.remove(key);
+                    }
+                }
+            }
+            enqueueFallbackRetries(server, gameTime);
             if (this.cycleStart == Long.MIN_VALUE) {
                 this.cycleStart = gameTime - Math.floorMod(
                         gameTime, SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS);
@@ -264,7 +312,29 @@ final class SableStructureScanner {
             this.entries.entrySet().removeIf(entry ->
                     gameTime - entry.getValue().lastSeenGameTime > CACHE_TTL_TICKS
                             && !this.currentUpdateSet.contains(entry.getKey())
-                            && !this.nextUpdateSet.contains(entry.getKey()));
+                            && !this.nextUpdateSet.contains(entry.getKey())
+                            && !this.dirtySince.containsKey(entry.getKey()));
+        }
+
+        private void enqueueFallbackRetries(MinecraftServer server, long gameTime) {
+            for (Map.Entry<StructureKey, CacheEntry> cached : this.entries.entrySet()) {
+                StructureKey key = cached.getKey();
+                CacheEntry entry = cached.getValue();
+                boolean stillDetected = this.currentUpdateSet.contains(key) || this.nextUpdateSet.contains(key);
+                if (!stillDetected
+                        || entry.snapshot == null
+                        || entry.snapshot.status() != SableSilhouetteStatus.FALLBACK_BOUNDS
+                        || gameTime < entry.nextBuildAllowedGameTime
+                        || this.rebuildQueue.stream().anyMatch(task -> task.key.equals(key))) {
+                    continue;
+                }
+                ServerLevel level = level(server, key.dimensionId());
+                BuildTask task = level == null ? null : createTask(level, key);
+                if (task != null) {
+                    this.rebuildQueue.addLast(task);
+                    entry.nextBuildAllowedGameTime = gameTime + FALLBACK_RETRY_TICKS;
+                }
+            }
         }
 
         private void beginNextCycle(MinecraftServer server, long gameTime) {
@@ -272,20 +342,15 @@ final class SableStructureScanner {
             this.cycleStart = gameTime;
             this.currentUpdateSet = Set.copyOf(this.nextUpdateSet);
             this.nextUpdateSet = new LinkedHashSet<>();
-            this.rebuildQueue.clear();
-            long totalWork = 0L;
             for (StructureKey key : this.currentUpdateSet) {
                 ServerLevel level = level(server, key.dimensionId());
                 BuildTask task = level == null ? null : createTask(level, key);
-                if (task != null) {
+                CacheEntry entry = this.entries.get(key);
+                if (task != null && entry != null && gameTime >= entry.nextBuildAllowedGameTime
+                        && this.rebuildQueue.stream().noneMatch(queued -> queued.key.equals(key))) {
                     this.rebuildQueue.addLast(task);
-                    totalWork += task.estimatedWork();
                 }
             }
-            this.rebuildWorkPerTick = (int) Math.min(Integer.MAX_VALUE, Math.max(
-                    MIN_REBUILD_WORK_PER_TICK,
-                    (totalWork + SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS - 1L)
-                            / SableRadarIntegration.GEOMETRY_REFRESH_INTERVAL_TICKS));
         }
 
         private Optional<SableSilhouetteSnapshot> snapshot(StructureKey key) {
@@ -296,17 +361,46 @@ final class SableStructureScanner {
         private void applyFinished(BuildTask task, long gameTime) {
             SableSilhouetteBuilder.Result result = task.result();
             CacheEntry entry = this.entries.computeIfAbsent(task.key, ignored -> new CacheEntry(gameTime));
-            if (entry.snapshot != null && entry.geometryHash == result.geometryHash()) {
-                entry.snapshot = new SableSilhouetteSnapshot(
-                        task.key.dimensionId(), task.key.structureUuid(), entry.snapshot.version(), gameTime,
-                        result.lines(), result.fills());
+            if (entry.snapshot != null
+                    && entry.geometryHash == result.geometryHash()
+                    && entry.snapshot.status() == task.status()) {
+                entry.snapshot = snapshotOf(result, task, entry.snapshot.version(), gameTime, task.status());
+                entry.nextBuildAllowedGameTime = task.status() == SableSilhouetteStatus.DETAILED
+                        ? gameTime : gameTime + FALLBACK_RETRY_TICKS;
+                logBuild(task, result);
                 return;
             }
             int version = entry.snapshot == null ? 1 : entry.snapshot.version() + 1;
             entry.geometryHash = result.geometryHash();
-            entry.snapshot = new SableSilhouetteSnapshot(
-                    task.key.dimensionId(), task.key.structureUuid(), version, gameTime,
+            entry.snapshot = snapshotOf(result, task, version, gameTime, task.status());
+            entry.nextBuildAllowedGameTime = task.status() == SableSilhouetteStatus.DETAILED
+                    ? gameTime : gameTime + FALLBACK_RETRY_TICKS;
+            logBuild(task, result);
+        }
+
+        private static SableSilhouetteSnapshot snapshotOf(
+                SableSilhouetteBuilder.Result result,
+                BuildTask task,
+                int version,
+                long gameTime,
+                SableSilhouetteStatus status
+        ) {
+            return new SableSilhouetteSnapshot(
+                    task.key.dimensionId(), task.key.structureUuid(), version, gameTime, status,
+                    task.anchorX, task.anchorZ,
                     result.lines(), result.fills());
+        }
+
+        private static void logBuild(BuildTask task, SableSilhouetteBuilder.Result result) {
+            if (!PowerRadarDebugOptions.sableSilhouetteBuildLogging()) {
+                return;
+            }
+            PowerRadar.LOGGER.info(
+                    "Sable silhouette structure={} dimension={} status={} duration_ms={} scanned_blocks={} columns={} lines={} fills={} geometry_bytes={} reason={}",
+                    task.key.structureUuid(), task.key.dimensionId(), task.status(), task.durationMillis(),
+                    task.scannedBlocks(), task.occupiedColumns(), result.lines().size(), result.fills().size(),
+                    SableSilhouetteLimits.estimatedGeometryBytes(result.lines().size(), result.fills().size()),
+                    task.fallbackReason() == null ? "none" : task.fallbackReason());
         }
 
         private static BuildTask createTask(ServerLevel level, StructureKey key) {
@@ -326,6 +420,7 @@ final class SableStructureScanner {
         private long lastSeenGameTime;
         private int geometryHash;
         private SableSilhouetteSnapshot snapshot;
+        private long nextBuildAllowedGameTime;
 
         private CacheEntry(long lastSeenGameTime) {
             this.lastSeenGameTime = lastSeenGameTime;
@@ -338,15 +433,27 @@ final class SableStructureScanner {
         private final double anchorZ;
         private final List<SectionCursor> sections;
         private final Set<Long> occupiedColumns = new HashSet<>();
+        private final SableSilhouetteBuilder.Result fallbackResult;
+        private final long startedNanos = System.nanoTime();
         private int sectionIndex;
+        private int scannedBlocks;
         private boolean complete;
         private SableSilhouetteBuilder.Result result;
+        private SableSilhouetteStatus status = SableSilhouetteStatus.DETAILED;
+        private String fallbackReason;
 
-        private BuildTask(StructureKey key, double anchorX, double anchorZ, List<SectionCursor> sections) {
+        private BuildTask(
+                StructureKey key,
+                double anchorX,
+                double anchorZ,
+                List<SectionCursor> sections,
+                SableSilhouetteBuilder.Result fallbackResult
+        ) {
             this.key = key;
             this.anchorX = anchorX;
             this.anchorZ = anchorZ;
             this.sections = sections;
+            this.fallbackResult = fallbackResult;
             this.complete = sections.isEmpty();
             if (this.complete) {
                 finish();
@@ -356,7 +463,8 @@ final class SableStructureScanner {
         private static BuildTask create(StructureKey key, ServerSubLevel subLevel) {
             BoundingBox3ic bounds = subLevel.getPlot().getBoundingBox();
             if (!valid(bounds)) {
-                return new BuildTask(key, 0.0D, 0.0D, List.of());
+                SableSilhouetteBuilder.Result empty = SableSilhouetteBuilder.build(Set.of(), 0.0D, 0.0D);
+                return new BuildTask(key, 0.0D, 0.0D, List.of(), empty);
             }
             List<SectionCursor> sections = new ArrayList<>();
             // Секции сортируются по локальным координатам plot для воспроизводимого результата.
@@ -382,15 +490,24 @@ final class SableStructureScanner {
             sections.sort(Comparator.comparingInt((SectionCursor section) -> section.minX)
                     .thenComparingInt(section -> section.minZ)
                     .thenComparingInt(section -> section.minY));
-            return new BuildTask(
+            double anchorX = (bounds.minX() + bounds.maxX() + 1.0D) * 0.5D;
+            double anchorZ = (bounds.minZ() + bounds.maxZ() + 1.0D) * 0.5D;
+            SableSilhouetteBuilder.Result fallback = rectangle(
+                    bounds.minX(), bounds.minZ(), bounds.maxX() + 1, bounds.maxZ() + 1, anchorX, anchorZ);
+            BuildTask task = new BuildTask(
                     key,
-                    (bounds.minX() + bounds.maxX() + 1.0D) * 0.5D,
-                    (bounds.minZ() + bounds.maxZ() + 1.0D) * 0.5D,
-                    List.copyOf(sections));
+                    anchorX,
+                    anchorZ,
+                    List.copyOf(sections),
+                    fallback);
+            if (task.estimatedWork() > SableSilhouetteLimits.MAX_SCANNED_BLOCKS) {
+                task.useFallback("scan_limit");
+            }
+            return task;
         }
 
-        private int estimatedWork() {
-            return this.sections.size() * 4_096;
+        private long estimatedWork() {
+            return (long) this.sections.size() * 4_096L;
         }
 
         private int process(int budget) {
@@ -400,7 +517,9 @@ final class SableStructureScanner {
             int used = 0;
             while (used < budget && this.sectionIndex < this.sections.size()) {
                 SectionCursor section = this.sections.get(this.sectionIndex);
-                used += section.process(budget - used, this.occupiedColumns);
+                int processed = section.process(budget - used, this.occupiedColumns);
+                used += processed;
+                this.scannedBlocks += processed;
                 if (section.complete()) {
                     this.sectionIndex++;
                 }
@@ -411,14 +530,19 @@ final class SableStructureScanner {
             return used;
         }
 
-        private void finishImmediately() {
-            while (!this.complete) {
-                process(Integer.MAX_VALUE);
-            }
-        }
-
         private void finish() {
             this.result = SableSilhouetteBuilder.build(this.occupiedColumns, this.anchorX, this.anchorZ);
+            if (!SableSilhouetteLimits.accepts(this.result.lines().size(), this.result.fills().size())) {
+                useFallback("output_limit");
+                return;
+            }
+            this.complete = true;
+        }
+
+        private void useFallback(String reason) {
+            this.result = this.fallbackResult;
+            this.status = SableSilhouetteStatus.FALLBACK_BOUNDS;
+            this.fallbackReason = reason;
             this.complete = true;
         }
 
@@ -428,6 +552,51 @@ final class SableStructureScanner {
 
         private SableSilhouetteBuilder.Result result() {
             return this.result;
+        }
+
+        private SableSilhouetteBuilder.Result fallbackResult() {
+            return this.fallbackResult;
+        }
+
+        private SableSilhouetteStatus status() {
+            return this.status;
+        }
+
+        private String fallbackReason() {
+            return this.fallbackReason;
+        }
+
+        private int scannedBlocks() {
+            return this.scannedBlocks;
+        }
+
+        private int occupiedColumns() {
+            return this.occupiedColumns.size();
+        }
+
+        private long durationMillis() {
+            return (System.nanoTime() - this.startedNanos) / 1_000_000L;
+        }
+
+        private static SableSilhouetteBuilder.Result rectangle(
+                int minX,
+                int minZ,
+                int maxX,
+                int maxZ,
+                double anchorX,
+                double anchorZ
+        ) {
+            float left = (float) (minX - anchorX);
+            float top = (float) (minZ - anchorZ);
+            float right = (float) (maxX - anchorX);
+            float bottom = (float) (maxZ - anchorZ);
+            List<SableSilhouetteLine> lines = List.of(
+                    new SableSilhouetteLine(left, top, right, top),
+                    new SableSilhouetteLine(right, top, right, bottom),
+                    new SableSilhouetteLine(right, bottom, left, bottom),
+                    new SableSilhouetteLine(left, bottom, left, top));
+            List<SableSilhouetteFill> fills = List.of(new SableSilhouetteFill(left, top, right, bottom));
+            return new SableSilhouetteBuilder.Result(lines, fills, 31 * lines.hashCode() + fills.hashCode());
         }
     }
 

@@ -9,6 +9,7 @@ import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /** Обновляет устойчивый радарный снимок текущей позицией загруженной цели. */
@@ -37,7 +38,9 @@ public final class LiveTrackedTargetResolver {
             long gameTime
     ) {
         double height = Math.max(0.1D, observation.worldBounds().getYsize());
-        Vec3 targetingBase = observation.worldOrigin().subtract(0.0D, height * 0.5D, 0.0D);
+        double width = Math.max(0.1D, Math.max(
+                observation.worldBounds().getXsize(), observation.worldBounds().getZsize()));
+        Vec3 targetingBase = observation.geometricCenter().subtract(0.0D, height * 0.5D, 0.0D);
         return new AdjustedTargetView(
                 track,
                 targetingBase,
@@ -47,7 +50,9 @@ public final class LiveTrackedTargetResolver {
                 track.hasAcceleration(),
                 gameTime,
                 gameTime,
-                height);
+                height,
+                width,
+                observation.worldBounds());
     }
 
     private record AdjustedTargetView(
@@ -59,7 +64,9 @@ public final class LiveTrackedTargetResolver {
             boolean hasAcceleration,
             long lastSeenGameTime,
             long lastConfirmedAliveGameTime,
-            double boundingHeight
+            double boundingHeight,
+            double approximateSize,
+            AABB targetBounds
     ) implements TrackedTargetView {
         @Override
         public UUID targetUuid() {
@@ -101,10 +108,6 @@ public final class LiveTrackedTargetResolver {
             return this.fallback.firstSeenGameTime();
         }
 
-        @Override
-        public double approximateSize() {
-            return this.fallback.approximateSize();
-        }
     }
 
     private record EntityTargetView(
@@ -194,9 +197,12 @@ public final class LiveTrackedTargetResolver {
 
         @Override
         public double approximateSize() {
-            return Math.max(
-                    this.fallback.approximateSize(),
-                    Math.max(this.entity.getBbWidth(), this.entity.getBbHeight()));
+            return Math.max(0.1D, this.entity.getBbWidth());
+        }
+
+        @Override
+        public AABB targetBounds() {
+            return this.entity.getBoundingBox();
         }
     }
 }

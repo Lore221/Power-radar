@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.network;
 
+import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.bridge.ClientPayloadBridge;
@@ -218,6 +219,7 @@ public final class ModNetwork {
                     snapshot.dimensionId(),
                     snapshot.structureUuid(),
                     snapshot.version(),
+                    snapshot.status(),
                     snapshot.lines().stream()
                             .map(line -> new RadarMonitorSilhouettePayload.Line(
                                     line.x1(), line.z1(), line.x2(), line.z2()))
@@ -272,6 +274,9 @@ public final class ModNetwork {
                 return;
             }
             manager.setSelectedTargetUuid(networkId, payload.targetUuid());
+            if (payload.targetUuid() != null) {
+                PowerRadarAdvancementTriggers.TARGET_SELECTED.get().trigger(player);
+            }
         });
     }
 

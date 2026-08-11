@@ -13,6 +13,7 @@ import com.limbo2136.powerradar.api.weapon.WeaponKind;
 import com.limbo2136.powerradar.api.weapon.WeaponMount;
 import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
+import com.limbo2136.powerradar.compat.aeronautics.SableWarningManager;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
@@ -20,6 +21,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeSnapshot;
 import com.limbo2136.powerradar.bridge.TrajectoryIconBridge;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
+import com.limbo2136.powerradar.targeting.BallisticTrajectoryValidator;
 import com.limbo2136.powerradar.targeting.TargetLeadSolver;
 import com.limbo2136.powerradar.targeting.LiveTrackedTargetResolver;
 import com.limbo2136.powerradar.targeting.TargetingMath;
@@ -57,11 +59,8 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 public class TargetControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
@@ -78,7 +77,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private static final double TARGET_LEAD_CACHE_ORIGIN_SHIFT_SQR = 0.01;
     private static final long AUTOTARGET_READINESS_CACHE_TICKS = 20L;
     private static final int AUTOCANNON_OUTPUT_GRACE_TICKS = 20;
-    private static final double[] LINE_OF_SIGHT_HEIGHT_FACTORS = {0.2, 0.5, 0.9};
+    private static final long TRAJECTORY_VALIDATION_TICKS = 5L;
+    private static final long FAST_TRAJECTORY_VALIDATION_TICKS = 2L;
+    private static final long FAILED_TRAJECTORY_VALIDATION_TICKS = 3L;
+    private static final double TRAJECTORY_VALIDATION_YAW_DELTA_DEGREES = 0.5D;
+    private static final double TRAJECTORY_VALIDATION_PITCH_DELTA_DEGREES = 0.35D;
+    private static final double TRAJECTORY_VALIDATION_POSITION_SHIFT_SQR = 0.25D;
+    private static final double TRAJECTORY_VALIDATION_ORIGIN_SHIFT_SQR = 0.01D;
+    private static final double TRAJECTORY_VALIDATION_VELOCITY_SHIFT_SQR = 0.0025D;
 
     // Синхронизируемое состояние питания, наведения и выходного сигнала.
     private boolean readyToFire;
@@ -91,10 +97,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private float currentPitchDegrees;
     private double yawVelocityDegreesPerTick;
     private double pitchVelocityDegreesPerTick;
-    // Последние результаты дорогих проверок видимости и баллистики.
-    private UUID lastVisibilityTargetUuid;
-    private long lastVisibilityCheckGameTime = Long.MIN_VALUE;
-    private boolean lastTargetVisible;
+    // Последние результаты чтения баллистики CBC.
     private WeaponBallistics lastKnownBallistics;
     private String lastKnownBallisticsCannonKind = "none";
     // Состояние захвата цели и формирования импульса выстрела.
@@ -141,6 +144,24 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     private TargetLeadSolver.BallisticAim cachedLeadBallisticAim;
     private double cachedLeadFlightTicks;
     private boolean cachedLeadUsesAcceleration;
+    // Подтверждённая CBC-траектория живёт отдельно от дешёвого аналитического решения.
+    private UUID validatedTrajectoryTargetUuid;
+    private BlockPos validatedTrajectoryMountPos;
+    private WeaponBallistics validatedTrajectoryBallistics;
+    private WeaponKind validatedTrajectoryWeaponKind;
+    private boolean validatedTrajectoryHighArc;
+    private boolean validatedTrajectoryChecksBlocks;
+    private long validatedTrajectoryGameTime = Long.MIN_VALUE;
+    private Vec3 validatedTrajectoryOrigin;
+    private Vec3 validatedTrajectoryTargetPoint;
+    private Vec3 validatedTrajectoryTargetVelocity;
+    private Vec3 validatedTrajectoryInheritedVelocity;
+    private float validatedTrajectoryInputYaw;
+    private float validatedTrajectoryInputPitch;
+    private BallisticTrajectoryValidator.Result validatedTrajectoryResult;
+    private long lastBallisticsLogGameTime = Long.MIN_VALUE;
+    private UUID lastBallisticsLogTargetUuid;
+    private BallisticTrajectoryValidator.Status lastBallisticsLogStatus;
     // Скорость и ускорение подвижной платформы вычисляются в мировых координатах.
     private Vec3 lastPlatformWorldPoint;
     private Vec3 platformVelocity = Vec3.ZERO;
@@ -241,6 +262,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         invalidateBigCannonBallisticsCache();
         invalidateWeaponKindCache();
         invalidateTargetLeadCache();
+        invalidateTrajectoryValidationCache();
     }
 
     // Сохраняет только устойчивые параметры; выход выстрела всегда записывается выключенным.
@@ -267,6 +289,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         this.currentPitchDegrees = solution.currentPitchDegrees();
         boolean powered = isPowerVoltageValid();
         boolean active = powered && solution.valid();
+        if (active && solution.sableStructureTarget() && solution.targetUuid() != null) {
+            SableWarningManager.markTargeted(level.getServer(), solution.targetUuid(), level.getGameTime());
+        }
         AimStep step = active ? applyAimStep(level, solution) : AimStep.ZERO;
         if (!active) {
             this.yawVelocityDegreesPerTick = 0.0;
@@ -299,6 +324,12 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return true;
         }
         if (!fireConditionsMet) {
+            // Нельзя продолжать очередь по grace-периоду без свежей подтверждённой траектории.
+            if (!solution.targetReachable() || !solution.targetVisible()) {
+                this.autocannonOutputGraceTicks = 0;
+                this.bigCannonFireRetryTicks = 0;
+                return false;
+            }
             if (this.readyToFire && this.autocannonOutputGraceTicks > 0) {
                 this.autocannonOutputGraceTicks--;
                 this.bigCannonFireRetryTicks = 0;
@@ -392,17 +423,20 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             UUID previousAutotargetUuid = this.cachedAutotargetUuid;
             if (this.cachedAutotargetAvailable && previousAutotargetUuid != null) {
                 track = radarController.findTrackedTarget(previousAutotargetUuid);
-                if (track == null || !isSelectedTargetAlive(worldLevel, track)) {
+                if (track == null
+                        || !autotargetPermitted(networkManager, networkId, autotargetFilterMask, track)
+                        || !isSelectedTargetAlive(worldLevel, track)) {
                     track = null;
                 }
             } else {
-                track = cachedAutotargetCandidate(
-                        worldLevel, radarController, networkManager, networkId, autotargetFilterMask);
+                // Неподходящая цель уже записана в readiness-cache. Не возвращаемся к ней
+                // между снимками радара, пока не истечёт короткий срок повторной проверки.
+                track = null;
             }
             if (previousAutotargetUuid != null && track == null) {
-                this.autotargetReadinessCache.clear();
-                this.lastAutotargetCacheResetGameTime = level.getGameTime();
+                this.cachedAutotargetUuid = null;
                 this.cachedAutotargetAvailable = false;
+                this.lastAutotargetSnapshotGameTime = Long.MIN_VALUE;
             }
             selectedTarget = track == null ? null : track.targetUuid();
             this.cachedAutotargetUuid = selectedTarget;
@@ -423,9 +457,10 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return TargetSolution.invalid("no-cbc-mount");
         }
         WeaponMount cannonState = cannon.get();
+        Vec3 localMuzzleOrigin = cannonAimOrigin(cannonState);
         Vec3 currentOrigin = RadarWorldPoseResolver.worldPosition(
-                level, this.worldPosition, cannonAimOrigin(cannonState));
-        PlatformMotion platformMotion = updatePlatformMotion(level, currentOrigin);
+                level, this.worldPosition, localMuzzleOrigin);
+        PlatformMotion platformMotion = updatePlatformMotion(level, localMuzzleOrigin, currentOrigin);
         Vec3 origin = predictedLaunchOrigin(currentOrigin, platformMotion);
         boolean ammunitionAvailable = cannonState.kind() == WeaponKind.AUTOCANNON
                 || cannonState.ballistics().available();
@@ -450,9 +485,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         int lockTicks = updateTargetLock(selectedTarget);
         long gameTime = level.getGameTime();
-        TrackedTargetView aimTrack = manualTarget
-                ? track
-                : LiveTrackedTargetResolver.resolve(worldLevel, track, gameTime);
+        TrackedTargetView aimTrack = LiveTrackedTargetResolver.resolve(worldLevel, track, gameTime);
         TargetLeadSolver.LeadSolution leadSolution = cachedLeadSolution(aimTrack, selectedTarget, cannonState.mountPos(), origin, aimBallistics,
                 cannonState.kind(),
                 preferHighArc,
@@ -469,28 +502,67 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         double horizontal = TargetingMath.horizontalDistance(delta);
         float worldDesiredYaw = TargetingMath.yawTo(yawDelta);
         TargetLeadSolver.BallisticAim ballisticAim = leadSolution.ballisticAim();
+        Vec3 inheritedVelocity = platformMotion.onSable()
+                && CbcWeaponAdapter.sableProjectilesInheritPhysicsObjectVelocity()
+                ? platformMotion.velocity()
+                : Vec3.ZERO;
+        float worldInputPitch = ballisticAim.pitchDegrees();
+        if (inheritedVelocity.lengthSqr() > 1.0E-8D && aimBallistics.speedBlocksPerTick() > 0.001D) {
+            // CBC прибавит скорость носителя после выстрела; заранее вычитаем её из вектора дула.
+            Vec3 compensatedMuzzleVelocity = TargetingMath.directionFromAngles(worldDesiredYaw, worldInputPitch)
+                    .scale(aimBallistics.speedBlocksPerTick())
+                    .subtract(inheritedVelocity);
+            if (compensatedMuzzleVelocity.lengthSqr() > 1.0E-8D) {
+                Vec3 compensatedDirection = compensatedMuzzleVelocity.normalize();
+                worldDesiredYaw = TargetingMath.yawTo(compensatedDirection);
+                worldInputPitch = (float) Math.toDegrees(Math.asin(
+                        Math.clamp(compensatedDirection.y, -1.0D, 1.0D)));
+            }
+        }
+        // При ручном наведении препятствия — ответственность оператора: симуляция
+        // подтверждает только попадание в цель и не тратит время на level.clip.
+        boolean checkBlockCollisions = !manualTarget
+                && requiresDirectLineOfSight(cannonState.kind(), preferHighArc);
+        BallisticTrajectoryValidator.Result trajectoryValidation = cachedTrajectoryValidation(
+                worldLevel,
+                aimTrack,
+                selectedTarget,
+                cannonState.mountPos(),
+                origin,
+                aimBallistics,
+                cannonState.kind(),
+                preferHighArc,
+                worldDesiredYaw,
+                worldInputPitch,
+                inheritedVelocity,
+                leadSolution.usesAcceleration(),
+                checkBlockCollisions,
+                manualTarget,
+                gameTime,
+                ballisticAim.reachable());
+        worldDesiredYaw = trajectoryValidation.worldYawDegrees();
+        float worldDesiredPitch = trajectoryValidation.worldPitchDegrees();
         Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
                 level,
                 this.worldPosition,
-                TargetingMath.directionFromAngles(worldDesiredYaw, ballisticAim.pitchDegrees()));
+                TargetingMath.directionFromAngles(worldDesiredYaw, worldDesiredPitch));
         float desiredYaw = TargetingMath.yawTo(localAimDirection);
         float desiredPitch = (float) Math.toDegrees(Math.atan2(
                 localAimDirection.y,
                 Math.max(0.001D, TargetingMath.horizontalDistance(localAimDirection))));
-        boolean targetVisible = !requiresDirectLineOfSight(cannonState.kind(), preferHighArc)
-                || cachedTargetVisible(worldLevel, aimTrack, currentOrigin, gameTime);
-        boolean targetReachable = ballisticAim.reachable()
+        boolean targetVisible = !trajectoryValidation.blocked();
+        boolean targetReachable = trajectoryValidation.confirmed()
                 && TargetLeadSolver.withinLifetimeLimit(horizontal, delta.length(), aimBallistics);
         double targetDistance = TargetLeadSolver.currentTargetPoint(aimTrack).distanceTo(origin);
         double minimumFiringDistance = minimumFiringDistance(cannonState.kind());
         boolean targetOutsideMinimumDistance = targetDistance >= minimumFiringDistance;
         if (!manualTarget) {
             boolean available = targetVisible && targetReachable && targetOutsideMinimumDistance;
-            if (this.cachedAutotargetAvailable && !available) {
-                this.autotargetReadinessCache.clear();
-                this.lastAutotargetCacheResetGameTime = gameTime;
+            if (!available) {
+                rejectAutotarget(selectedTarget, gameTime);
+                return TargetSolution.invalid("autotarget-unavailable");
             }
-            this.cachedAutotargetAvailable = available;
+            this.cachedAutotargetAvailable = true;
         }
         AimAngles currentAngles = currentAimAngles(cannonState, level.getGameTime());
         float currentYaw = currentAngles.yawDegrees();
@@ -513,6 +585,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 targetOutsideMinimumDistance,
                 ammunitionAvailable,
                 platformMotion.onSable(),
+                aimTrack.classification() == TargetClassification.STRUCTURE,
                 ballisticMode(aimBallistics, ballisticAim, cannonState.ballistics()),
                 targetDistance,
                 minimumFiringDistance,
@@ -559,28 +632,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             }
         }
         return mount;
-    }
-
-    @javax.annotation.Nullable
-    // Возвращает текущую автоматическую цель, пока её снимок остаётся доступным и живым.
-    private TrackedTargetView cachedAutotargetCandidate(
-            ServerLevel level,
-            RadarTargetingDataSource radarController,
-            RadarNetworkManager networkManager,
-            UUID networkId,
-            int autotargetFilterMask
-    ) {
-        if (this.cachedAutotargetUuid == null) {
-            return null;
-        }
-        TrackedTargetView track = radarController.findTrackedTarget(this.cachedAutotargetUuid);
-        if (track == null
-                    || !autotargetPermitted(networkManager, networkId, autotargetFilterMask, track)
-                    || !isSelectedTargetAlive(level, track)) {
-            this.cachedAutotargetUuid = null;
-            return null;
-        }
-        return track;
     }
 
     @javax.annotation.Nullable
@@ -641,9 +692,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             WeaponKind cannonKind
     ) {
         TrackedTargetView aimTrack = LiveTrackedTargetResolver.resolve(level, track, level.getGameTime());
-        if (!preferHighArc && !hasLineOfSightToTrack(level, origin, aimTrack)) {
-            return false;
-        }
         if (TargetLeadSolver.currentTargetPoint(aimTrack).distanceTo(origin) < minimumFiringDistance(cannonKind)) {
             return false;
         }
@@ -775,6 +823,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             int mask,
             TrackedTargetView track
     ) {
+        if (track.classification() == TargetClassification.UNKNOWN) {
+            return false;
+        }
         String name = targetDisplayName(track);
         boolean sable = track.classification() == TargetClassification.STRUCTURE;
         if (manager.isAutotargetExcluded(networkId, track.targetUuid(), name, sable)) {
@@ -1027,6 +1078,233 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         this.cachedLeadAccelerationReady = false;
     }
 
+    private BallisticTrajectoryValidator.Result cachedTrajectoryValidation(
+            ServerLevel level,
+            TrackedTargetView target,
+            UUID targetUuid,
+            BlockPos mountPos,
+            Vec3 origin,
+            WeaponBallistics ballistics,
+            WeaponKind weaponKind,
+            boolean highArc,
+            float inputYaw,
+            float inputPitch,
+            Vec3 inheritedVelocity,
+            boolean useAcceleration,
+            boolean checkBlockCollisions,
+            boolean manualTarget,
+            long gameTime,
+            boolean analyticReachable
+    ) {
+        if (!analyticReachable) {
+            BallisticTrajectoryValidator.Result unreachable = new BallisticTrajectoryValidator.Result(
+                    BallisticTrajectoryValidator.Status.UNREACHABLE,
+                    inputYaw,
+                    inputPitch,
+                    0.0D,
+                    false,
+                    Double.NaN);
+            logBallisticValidation(
+                    target,
+                    targetUuid,
+                    origin,
+                    ballistics,
+                    weaponKind,
+                    highArc,
+                    inputYaw,
+                    inputPitch,
+                    inheritedVelocity,
+                    useAcceleration,
+                    checkBlockCollisions,
+                    manualTarget,
+                    unreachable,
+                    gameTime);
+            return unreachable;
+        }
+        Vec3 targetPoint = TargetLeadSolver.currentTargetPoint(target);
+        Vec3 targetVelocity = target.hasVelocity() ? target.velocity() : Vec3.ZERO;
+        long maximumAge = validationCacheLifetime(targetVelocity, inheritedVelocity);
+        if (this.validatedTrajectoryResult != null
+                && targetUuid.equals(this.validatedTrajectoryTargetUuid)
+                && mountPos.equals(this.validatedTrajectoryMountPos)
+                && sameBallistics(ballistics, this.validatedTrajectoryBallistics)
+                && weaponKind == this.validatedTrajectoryWeaponKind
+                && highArc == this.validatedTrajectoryHighArc
+                && checkBlockCollisions == this.validatedTrajectoryChecksBlocks
+                && gameTime - this.validatedTrajectoryGameTime < maximumAge
+                && origin.distanceToSqr(this.validatedTrajectoryOrigin) <= TRAJECTORY_VALIDATION_ORIGIN_SHIFT_SQR
+                && targetPoint.distanceToSqr(this.validatedTrajectoryTargetPoint)
+                        <= TRAJECTORY_VALIDATION_POSITION_SHIFT_SQR
+                && targetVelocity.distanceToSqr(this.validatedTrajectoryTargetVelocity)
+                        <= TRAJECTORY_VALIDATION_VELOCITY_SHIFT_SQR
+                && inheritedVelocity.distanceToSqr(this.validatedTrajectoryInheritedVelocity)
+                        <= TRAJECTORY_VALIDATION_VELOCITY_SHIFT_SQR
+                && Math.abs(Mth.wrapDegrees(inputYaw - this.validatedTrajectoryInputYaw))
+                        <= TRAJECTORY_VALIDATION_YAW_DELTA_DEGREES
+                && Math.abs(inputPitch - this.validatedTrajectoryInputPitch)
+                        <= TRAJECTORY_VALIDATION_PITCH_DELTA_DEGREES) {
+            return shiftedValidatedResult(inputYaw, inputPitch);
+        }
+
+        float validationYaw = inputYaw;
+        float validationPitch = inputPitch;
+        if (this.validatedTrajectoryResult != null
+                && this.validatedTrajectoryResult.confirmed()
+                && targetUuid.equals(this.validatedTrajectoryTargetUuid)
+                && mountPos.equals(this.validatedTrajectoryMountPos)
+                && sameBallistics(ballistics, this.validatedTrajectoryBallistics)
+                && weaponKind == this.validatedTrajectoryWeaponKind
+                && highArc == this.validatedTrajectoryHighArc
+                && checkBlockCollisions == this.validatedTrajectoryChecksBlocks) {
+            // Сохраняем найденную симуляцией поправку, одновременно перенося её вслед за
+            // свежим аналитическим углом. Это устраняет ступеньку при истечении TTL кэша.
+            validationYaw = TargetingMath.normalize360((float) (
+                    this.validatedTrajectoryResult.worldYawDegrees()
+                            + Mth.wrapDegrees(inputYaw - this.validatedTrajectoryInputYaw)));
+            validationPitch = this.validatedTrajectoryResult.worldPitchDegrees()
+                    + inputPitch - this.validatedTrajectoryInputPitch;
+        }
+        BallisticTrajectoryValidator.Result result = BallisticTrajectoryValidator.validate(
+                level,
+                target,
+                origin,
+                validationYaw,
+                validationPitch,
+                ballistics,
+                inheritedVelocity,
+                useAcceleration,
+                checkBlockCollisions,
+                gameTime);
+        logBallisticValidation(
+                target,
+                targetUuid,
+                origin,
+                ballistics,
+                weaponKind,
+                highArc,
+                inputYaw,
+                inputPitch,
+                inheritedVelocity,
+                useAcceleration,
+                checkBlockCollisions,
+                manualTarget,
+                result,
+                gameTime);
+        this.validatedTrajectoryTargetUuid = targetUuid;
+        this.validatedTrajectoryMountPos = mountPos.immutable();
+        this.validatedTrajectoryBallistics = ballistics;
+        this.validatedTrajectoryWeaponKind = weaponKind;
+        this.validatedTrajectoryHighArc = highArc;
+        this.validatedTrajectoryChecksBlocks = checkBlockCollisions;
+        this.validatedTrajectoryGameTime = gameTime;
+        this.validatedTrajectoryOrigin = origin;
+        this.validatedTrajectoryTargetPoint = targetPoint;
+        this.validatedTrajectoryTargetVelocity = targetVelocity;
+        this.validatedTrajectoryInheritedVelocity = inheritedVelocity;
+        this.validatedTrajectoryInputYaw = inputYaw;
+        this.validatedTrajectoryInputPitch = inputPitch;
+        this.validatedTrajectoryResult = result;
+        return result;
+    }
+
+    private BallisticTrajectoryValidator.Result shiftedValidatedResult(float inputYaw, float inputPitch) {
+        float yaw = TargetingMath.normalize360((float) (
+                this.validatedTrajectoryResult.worldYawDegrees()
+                        + Mth.wrapDegrees(inputYaw - this.validatedTrajectoryInputYaw)));
+        float pitch = this.validatedTrajectoryResult.worldPitchDegrees()
+                + inputPitch - this.validatedTrajectoryInputPitch;
+        return new BallisticTrajectoryValidator.Result(
+                this.validatedTrajectoryResult.status(),
+                yaw,
+                pitch,
+                this.validatedTrajectoryResult.flightTicks(),
+                this.validatedTrajectoryResult.corrected(),
+                this.validatedTrajectoryResult.missDistanceBlocks());
+    }
+
+    private void logBallisticValidation(
+            TrackedTargetView target,
+            UUID targetUuid,
+            Vec3 origin,
+            WeaponBallistics ballistics,
+            WeaponKind weaponKind,
+            boolean highArc,
+            float inputYaw,
+            float inputPitch,
+            Vec3 inheritedVelocity,
+            boolean useAcceleration,
+            boolean checkBlockCollisions,
+            boolean manualTarget,
+            BallisticTrajectoryValidator.Result result,
+            long gameTime
+    ) {
+        if (!PowerRadarDebugOptions.targetControllerBallisticsLogging()) {
+            return;
+        }
+        boolean targetChanged = !targetUuid.equals(this.lastBallisticsLogTargetUuid);
+        boolean statusChanged = result.status() != this.lastBallisticsLogStatus;
+        boolean intervalElapsed = gameTime - this.lastBallisticsLogGameTime
+                >= PowerRadarServerConfig.targetControllerBallisticsLogIntervalTicks();
+        if (!targetChanged && !statusChanged && !intervalElapsed) {
+            return;
+        }
+        this.lastBallisticsLogGameTime = gameTime;
+        this.lastBallisticsLogTargetUuid = targetUuid;
+        this.lastBallisticsLogStatus = result.status();
+        Vec3 targetVelocity = target.hasVelocity() ? target.velocity() : Vec3.ZERO;
+        Vec3 targetAcceleration = useAcceleration && target.hasAcceleration()
+                ? target.acceleration()
+                : Vec3.ZERO;
+        PowerRadar.LOGGER.info(
+                "[PowerRadar][Ballistics] controller={} target={} mode={} weapon={} arc={} status={} corrected={} collisionCheck={} origin={} targetPos={} targetVelocity={} targetAcceleration={} carrierVelocity={} speed={} gravity={} drag={} quadraticDrag={} inputYaw={} inputPitch={} resultYaw={} resultPitch={} flightTicks={} missDistance={}",
+                this.worldPosition,
+                targetUuid,
+                manualTarget ? "manual" : "automatic",
+                weaponKind,
+                highArc ? "high" : "flat",
+                result.status(),
+                result.corrected(),
+                checkBlockCollisions,
+                shortVec(origin),
+                shortVec(TargetLeadSolver.currentTargetPoint(target)),
+                shortVec(targetVelocity),
+                shortVec(targetAcceleration),
+                shortVec(inheritedVelocity),
+                round(ballistics.speedBlocksPerTick()),
+                round(ballistics.gravityBlocksPerTickSquared()),
+                round(ballistics.drag()),
+                ballistics.quadraticDrag(),
+                round(inputYaw),
+                round(inputPitch),
+                round(result.worldYawDegrees()),
+                round(result.worldPitchDegrees()),
+                round(result.flightTicks()),
+                Double.isFinite(result.missDistanceBlocks()) ? round(result.missDistanceBlocks()) : "n/a");
+    }
+
+    private long validationCacheLifetime(Vec3 targetVelocity, Vec3 inheritedVelocity) {
+        if (this.validatedTrajectoryResult != null && !this.validatedTrajectoryResult.confirmed()) {
+            return FAILED_TRAJECTORY_VALIDATION_TICKS;
+        }
+        return targetVelocity.lengthSqr() > 0.0625D || inheritedVelocity.lengthSqr() > 0.0625D
+                ? FAST_TRAJECTORY_VALIDATION_TICKS
+                : TRAJECTORY_VALIDATION_TICKS;
+    }
+
+    private void invalidateTrajectoryValidationCache() {
+        this.validatedTrajectoryTargetUuid = null;
+        this.validatedTrajectoryMountPos = null;
+        this.validatedTrajectoryBallistics = null;
+        this.validatedTrajectoryWeaponKind = null;
+        this.validatedTrajectoryChecksBlocks = false;
+        this.validatedTrajectoryGameTime = Long.MIN_VALUE;
+        this.validatedTrajectoryOrigin = null;
+        this.validatedTrajectoryTargetPoint = null;
+        this.validatedTrajectoryTargetVelocity = null;
+        this.validatedTrajectoryInheritedVelocity = null;
+        this.validatedTrajectoryResult = null;
+    }
+
     private static boolean sameBallistics(WeaponBallistics left, WeaponBallistics right) {
         return left == right || (left != null && left.equals(right));
     }
@@ -1088,53 +1366,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         return entity != null && entity.isAlive();
     }
 
-
-    // Не повторяет трассировку одной цели несколько раз в пределах одного серверного тика.
-    private boolean cachedTargetVisible(ServerLevel level, TrackedTargetView track, Vec3 origin, long gameTime) {
-        UUID targetUuid = track.targetUuid();
-        if (targetUuid == null) {
-            return false;
-        }
-        boolean sameTarget = targetUuid.equals(this.lastVisibilityTargetUuid);
-        boolean fresh = sameTarget
-                && gameTime - this.lastVisibilityCheckGameTime < PowerRadarCeeConstants.TARGET_CONTROLLER_VISIBILITY_CHECK_INTERVAL_TICKS;
-        if (fresh) {
-            return this.lastTargetVisible;
-        }
-        this.lastVisibilityTargetUuid = targetUuid;
-        this.lastVisibilityCheckGameTime = gameTime;
-        this.lastTargetVisible = hasLineOfSightToTrack(level, origin, track);
-        return this.lastTargetVisible;
-    }
-
-    // Проверяет несколько высот габарита, чтобы частичное укрытие не скрывало всю цель.
-    private static boolean hasLineOfSightToTrack(ServerLevel level, Vec3 origin, TrackedTargetView track) {
-        double height = Math.max(0.1, track.boundingHeight());
-        Vec3 position = track.position();
-        for (double factor : LINE_OF_SIGHT_HEIGHT_FACTORS) {
-            Vec3 targetPoint = new Vec3(position.x, position.y + height * factor, position.z);
-            if (hasClearLine(level, origin, targetPoint)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean hasClearLine(ServerLevel level, Vec3 origin, Vec3 targetPoint) {
-        Vec3 delta = targetPoint.subtract(origin);
-        if (delta.lengthSqr() < 0.0001) {
-            return true;
-        }
-        Vec3 start = origin.add(delta.normalize().scale(0.75));
-        HitResult hit = level.clip(new ClipContext(
-                start,
-                targetPoint,
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                CollisionContext.empty()));
-        return hit.getType() == HitResult.Type.MISS;
-    }
-
     // CBC сообщает позицию установки; вертикальная поправка переводит её к оси вылета снаряда.
     private static Vec3 cannonAimOrigin(WeaponMount cannonState) {
         return cannonState.muzzleOrigin() == null
@@ -1143,27 +1374,28 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     }
 
     // Получает скорость и ускорение точки выстрела в корневом мире, включая движение Sable.
-    private PlatformMotion updatePlatformMotion(ServerLevel level, Vec3 worldPoint) {
+    private PlatformMotion updatePlatformMotion(ServerLevel level, Vec3 localPoint, Vec3 worldPoint) {
         if (!RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)) {
             resetPlatformMotion();
             return PlatformMotion.GROUND_STATIONARY;
         }
         long gameTime = level.getGameTime();
+        Vec3 exactPointVelocity = suppressNoise(RadarWorldPoseResolver.worldPointVelocity(
+                level, this.worldPosition, localPoint), 1.0E-5D);
         if (this.lastPlatformWorldPoint == null
                 || this.lastPlatformMotionGameTime == Long.MIN_VALUE
                 || gameTime <= this.lastPlatformMotionGameTime
                 || gameTime - this.lastPlatformMotionGameTime > 5L) {
             this.lastPlatformWorldPoint = worldPoint;
             this.lastPlatformMotionGameTime = gameTime;
-            this.platformVelocity = Vec3.ZERO;
+            this.platformVelocity = exactPointVelocity;
             this.platformAcceleration = Vec3.ZERO;
-            this.platformVelocityInitialized = false;
+            this.platformVelocityInitialized = true;
             this.platformAccelerationInitialized = false;
-            return PlatformMotion.SABLE_STATIONARY;
+            return new PlatformMotion(exactPointVelocity, Vec3.ZERO, true, false, true);
         }
         double elapsedTicks = gameTime - this.lastPlatformMotionGameTime;
-        Vec3 nextVelocity = suppressNoise(
-                worldPoint.subtract(this.lastPlatformWorldPoint).scale(1.0D / elapsedTicks), 1.0E-5D);
+        Vec3 nextVelocity = suppressNoise(exactPointVelocity, 1.0E-5D);
         if (this.platformVelocityInitialized) {
             Vec3 rawAcceleration = clampAcceleration(suppressNoise(
                     nextVelocity.subtract(this.platformVelocity).scale(1.0D / elapsedTicks), 1.0E-4D));
@@ -1486,6 +1718,19 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         resetTargetLock();
     }
 
+    // Исключает недостижимую автоматическую цель и разрешает поиск следующей уже на следующем тике.
+    private void rejectAutotarget(UUID targetUuid, long gameTime) {
+        if (targetUuid != null) {
+            this.autotargetReadinessCache.put(
+                    targetUuid, new AutotargetReadiness(gameTime, false));
+        }
+        this.cachedAutotargetUuid = null;
+        this.cachedAutotargetAvailable = false;
+        this.lastAutotargetSnapshotGameTime = Long.MIN_VALUE;
+        this.lastAutotargetCacheResetGameTime = gameTime;
+        resetTargetLock();
+    }
+
     // Полный результат одного тика отделяет вычисление решения от применения приводов и выхода.
     private record TargetSolution(
             boolean valid,
@@ -1503,6 +1748,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             boolean targetOutsideMinimumDistance,
             boolean ammunitionAvailable,
             boolean onSablePlatform,
+            boolean sableStructureTarget,
             String ballisticMode,
             double targetDistanceBlocks,
             double minimumFiringDistanceBlocks,
@@ -1516,7 +1762,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     ) {
         private static TargetSolution invalid(String reason) {
             return new TargetSolution(false, reason, null, "none", false, null, null, "none", null, null,
-                    false, false, false, false, false, "none", 0.0, 0.0, 0,
+                    false, false, false, false, false, false, "none", 0.0, 0.0, 0,
                     0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F);
         }
     }

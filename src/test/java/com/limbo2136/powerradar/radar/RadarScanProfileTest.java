@@ -43,15 +43,16 @@ class RadarScanProfileTest {
     }
 
     @Test
-    void frequentDiscoveryKeepsProjectilesAndSableOnly() {
+    void frequentDiscoveryKeepsPlayersProjectilesAndSable() {
         RadarScanProfile frequent = RadarScanProfile.sectorController(RadarScanMode.SKY, 400)
                 .frequentDiscoveryOnly();
 
+        assertTrue(frequent.detectPlayers());
         assertTrue(frequent.detectProjectiles());
         assertTrue(frequent.detectSableStructures());
-        assertFalse(frequent.detectPlayers());
         assertFalse(frequent.detectHostileMobs());
         assertFalse(frequent.detectPassiveMobs());
+        assertFalse(frequent.detectRadars());
         assertFalse(frequent.detectUnknown());
     }
 

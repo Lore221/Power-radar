@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/ew_system" },
+    "facing=east": { "model": "power_radar:block/ew_system", "y": 90 },
+    "facing=south": { "model": "power_radar:block/ew_system", "y": 180 },
+    "facing=west": { "model": "power_radar:block/ew_system", "y": 270 }
+  }
+}

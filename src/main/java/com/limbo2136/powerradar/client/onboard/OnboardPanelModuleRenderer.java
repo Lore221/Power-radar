@@ -195,7 +195,13 @@ final class OnboardPanelModuleRenderer {
             applyModuleTransform(poseStack, facing, slot);
             if (type == OnboardModuleType.ATTITUDE_INDICATOR) {
                 this.attitudeRenderer.render(
-                        computer, poseStack, consumer, packedLight, packedOverlay, attitudeState);
+                        computer,
+                        poseStack,
+                        consumer,
+                        packedLight,
+                        packedOverlay,
+                        attitudeState,
+                        computer.attitudeKagMode(slot));
                 poseStack.popPose();
                 continue;
             }

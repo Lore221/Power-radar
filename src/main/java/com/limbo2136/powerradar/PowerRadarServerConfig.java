@@ -19,6 +19,11 @@ public final class PowerRadarServerConfig {
     private static final ModConfigSpec.DoubleValue BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY;
     private static final ModConfigSpec.DoubleValue MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS;
+    private static final ModConfigSpec.BooleanValue TARGET_CONTROLLER_BALLISTICS_LOGGING;
+    private static final ModConfigSpec.IntValue TARGET_CONTROLLER_BALLISTICS_LOG_INTERVAL_TICKS;
+    private static final ModConfigSpec.BooleanValue TARGET_SYSTEM_BUG_REPORT_LOGGING;
+    private static final ModConfigSpec.BooleanValue SABLE_SILHOUETTE_BUILD_LOGGING;
+    private static final ModConfigSpec.BooleanValue SABLE_POSE_LOGGING;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -59,6 +64,34 @@ public final class PowerRadarServerConfig {
                         "Distance travelled before an unassigned interception fuze performs a manual airburst.",
                         "Automatically assigned interceptor shells continue to detonate from their tracked target.")
                 .defineInRange("manual_fuze_distance_blocks", 100.0D, 1.0D, 100_000.0D);
+        builder.pop();
+
+        builder.push("logging");
+        TARGET_CONTROLLER_BALLISTICS_LOGGING = builder
+                .comment(
+                        "Logs rate-limited Target Controller ballistic validation summaries.",
+                        "Includes target motion, CBC ballistics, carrier velocity, angles, flight time and validation result.")
+                .define("target_controller_ballistics", false);
+        TARGET_CONTROLLER_BALLISTICS_LOG_INTERVAL_TICKS = builder
+                .comment(
+                        "Minimum interval between routine ballistic summaries from one Target Controller.",
+                        "Target or validation status changes are logged immediately.")
+                .defineInRange("target_controller_ballistics_interval_ticks", 20, 1, 1200);
+        TARGET_SYSTEM_BUG_REPORT_LOGGING = builder
+                .comment(
+                        "Logs the complete Target Controller state every server tick.",
+                        "This is very verbose and should only be enabled while reproducing a targeting bug.")
+                .define("target_system_bug_report", false);
+        SABLE_SILHOUETTE_BUILD_LOGGING = builder
+                .comment(
+                        "Logs one summary for every completed Sable silhouette build.",
+                        "Includes duration, scanned blocks, occupied XZ columns, output size and fallback reason.")
+                .define("sable_silhouette_builds", false);
+        SABLE_POSE_LOGGING = builder
+                .comment(
+                        "Logs Sable center, heading and rotation-point coordinates for every radar snapshot.",
+                        "This is verbose and should only be enabled while reproducing a silhouette pose bug.")
+                .define("sable_pose", false);
         builder.pop();
 
         SPEC = builder.build();
@@ -113,6 +146,26 @@ public final class PowerRadarServerConfig {
 
     public static double manualInterceptionFuzeDistanceBlocks() {
         return value(MANUAL_INTERCEPTION_FUZE_DISTANCE_BLOCKS);
+    }
+
+    public static boolean targetControllerBallisticsLogging() {
+        return value(TARGET_CONTROLLER_BALLISTICS_LOGGING);
+    }
+
+    public static int targetControllerBallisticsLogIntervalTicks() {
+        return value(TARGET_CONTROLLER_BALLISTICS_LOG_INTERVAL_TICKS);
+    }
+
+    public static boolean targetSystemBugReportLogging() {
+        return value(TARGET_SYSTEM_BUG_REPORT_LOGGING);
+    }
+
+    public static boolean sableSilhouetteBuildLogging() {
+        return value(SABLE_SILHOUETTE_BUILD_LOGGING);
+    }
+
+    public static boolean sablePoseLogging() {
+        return value(SABLE_POSE_LOGGING);
     }
 
     private static <T> T value(ModConfigSpec.ConfigValue<T> configValue) {

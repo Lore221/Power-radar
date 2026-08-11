@@ -1,0 +1,21 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "createbigcannons" }
+  ],
+  "parent": "power_radar:root",
+  "display": {
+    "icon": { "id": "power_radar:target_controller" },
+    "title": { "translate": "advancements.power_radar.craft_target_controller.title" },
+    "description": { "translate": "advancements.power_radar.craft_target_controller.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "has_item": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": "power_radar:target_controller" }] }
+    }
+  }
+}

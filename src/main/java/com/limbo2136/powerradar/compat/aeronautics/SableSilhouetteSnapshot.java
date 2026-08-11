@@ -10,6 +10,9 @@ public record SableSilhouetteSnapshot(
         UUID structureUuid,
         int version,
         long builtGameTime,
+        SableSilhouetteStatus status,
+        double anchorX,
+        double anchorZ,
         List<SableSilhouetteLine> lines,
         List<SableSilhouetteFill> fills
 ) {

@@ -1,9 +1,11 @@
 package com.limbo2136.powerradar.radar;
 
+import com.limbo2136.powerradar.PowerRadar;
+import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.compat.createbigcannons.RadarCbcProjectileCompat;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
-import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
+import com.limbo2136.powerradar.compat.aeronautics.EwSystemManager;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,7 +49,9 @@ public final class RadarScanner {
                 continue;
             }
             RadarTargetCategory category = RadarTargetClassifier.classify(entity);
-            if (category == null || !profile.detects(category)
+            // UNKNOWN подтверждается только отдельным редким проходом. Здесь проверяем
+            // уже известную сущность лишь для быстрого возврата в обычную категорию.
+            if (category == null || category == RadarTargetCategory.UNKNOWN || !profile.detects(category)
                     || !coverage.isEntityInCoverage(entity, surfaceHeights)) {
                 continue;
             }
@@ -74,14 +78,15 @@ public final class RadarScanner {
         boolean players = false;
         boolean projectiles = false;
         boolean mobs = false;
-        boolean unknown = false;
+        boolean radars = false;
         for (RadarScanProfile profile : profiles) {
-            players |= profile.detectPlayers();
+            // Невидимые игроки и мобы образуют UNKNOWN независимо от маски их исходной категории.
+            players |= profile.detectPlayers() || profile.detectUnknown();
             projectiles |= profile.detectProjectiles();
-            mobs |= profile.detectPassiveMobs() || profile.detectHostileMobs();
-            unknown |= profile.detectUnknown();
+            mobs |= profile.detectPassiveMobs() || profile.detectHostileMobs() || profile.detectUnknown();
+            radars |= profile.detectRadars();
         }
-        int typedQueries = (players ? 1 : 0) + (projectiles ? 1 : 0) + (mobs ? 1 : 0) + (unknown ? 1 : 0);
+        int typedQueries = (players ? 1 : 0) + (projectiles ? 1 : 0) + (mobs ? 1 : 0) + (radars ? 1 : 0);
         // При трёх и более группах один широкий запрос дешевле нескольких почти одинаковых выборок.
         if (typedQueries >= 3) {
             return classifyCandidates(level.getEntities((Entity) null, searchBox, Entity::isAlive));
@@ -103,9 +108,7 @@ public final class RadarScanner {
             level.getEntities(EntityTypeTest.forClass(Mob.class), searchBox, Entity::isAlive)
                     .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
         }
-        if (unknown) {
-            level.getEntities(EntityTypeTest.forClass(AbstractContraptionEntity.class), searchBox, Entity::isAlive)
-                    .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
+        if (radars) {
             level.getEntities(EntityTypeTest.forClass(RadarStructureEntity.class), searchBox, Entity::isAlive)
                     .forEach(entity -> candidates.putIfAbsent(entity.getUUID(), entity));
         }
@@ -115,6 +118,10 @@ public final class RadarScanner {
     private static List<RadarCandidate> classifyCandidates(Collection<Entity> entities) {
         List<RadarCandidate> candidates = new ArrayList<>(entities.size());
         for (Entity entity : entities) {
+            if (!(entity instanceof RadarStructureEntity)
+                    && SableRadarIntegration.isEntityOnStructure(entity)) {
+                continue;
+            }
             RadarTargetCategory category = RadarTargetClassifier.classify(entity);
             if (category != null) {
                 candidates.add(new RadarCandidate(entity, category));
@@ -159,6 +166,14 @@ public final class RadarScanner {
     ) {
         TargetKey key = TargetKey.entity(context.dimensionId(), structure.structureUuid(), -1);
         Vec3 coveragePoint = closestPoint(structure.worldBounds(), context);
+        boolean silhouetteSuppressed = EwSystemManager.suppressesSilhouette(
+                context.level().getServer(), context.dimensionId(), structure.structureUuid());
+        RadarTargetCategory category = silhouetteSuppressed
+                ? RadarTargetCategory.UNKNOWN
+                : RadarTargetCategory.SABLE_STRUCTURE;
+        if (!profile.detects(category)) {
+            return false;
+        }
         if (!seen.add(key)) {
             return false;
         }
@@ -176,12 +191,12 @@ public final class RadarScanner {
                     -1,
                     ResourceLocation.fromNamespaceAndPath("sable", "sublevel"),
                     RadarTargetSourceKind.FUTURE_SABLE_STRUCTURE,
-                    structure.displayName(),
-                    RadarTargetCategory.SABLE_STRUCTURE,
+                    silhouetteSuppressed ? null : structure.displayName(),
+                    category,
                     context.dimensionId(),
-                    structure.worldOrigin().x,
-                    structure.worldOrigin().y,
-                    structure.worldOrigin().z,
+                    structure.geometricCenter().x,
+                    structure.geometricCenter().y,
+                    structure.geometricCenter().z,
                     velocity.x,
                     velocity.y,
                     velocity.z,
@@ -191,12 +206,12 @@ public final class RadarScanner {
                     context.gameTime()));
         } else {
             track.update(
-                    RadarTargetCategory.SABLE_STRUCTURE,
-                    structure.displayName(),
+                    category,
+                    silhouetteSuppressed ? null : structure.displayName(),
                     context.dimensionId(),
-                    structure.worldOrigin().x,
-                    structure.worldOrigin().y,
-                    structure.worldOrigin().z,
+                    structure.geometricCenter().x,
+                    structure.geometricCenter().y,
+                    structure.geometricCenter().z,
                     velocity.x,
                     velocity.y,
                     velocity.z,
@@ -205,12 +220,32 @@ public final class RadarScanner {
                     size,
                     context.gameTime());
         }
-        SableRadarIntegration.markDetected(context.level(), structure, context.gameTime());
-        int silhouetteVersion = SableRadarIntegration.silhouetteSnapshot(
-                        context.level().getServer(), context.dimensionId(), structure.structureUuid())
-                .map(snapshot -> snapshot.version())
-                .orElse(0);
-        targetCache.get(key).updateSablePresentation(structure.headingDegrees(), silhouetteVersion);
+        int silhouetteVersion = 0;
+        if (!silhouetteSuppressed) {
+            SableRadarIntegration.markDetected(context.level(), structure, context.gameTime());
+            silhouetteVersion = SableRadarIntegration.silhouetteSnapshot(
+                            context.level().getServer(), context.dimensionId(), structure.structureUuid())
+                    .map(snapshot -> snapshot.version())
+                    .orElse(0);
+        }
+        // Pose3dc.position() — точное мировое положение rotation point. Передаём его
+        // относительно наблюдаемого центра, чтобы клиент не восстанавливал ось по yaw.
+        float rotationPointOffsetX = (float) (structure.worldRotationPointX() - structure.geometricCenter().x);
+        float rotationPointOffsetZ = (float) (structure.worldRotationPointZ() - structure.geometricCenter().z);
+        if (PowerRadarDebugOptions.sablePoseLogging()) {
+            PowerRadar.LOGGER.info(
+                    "[PowerRadar BugReport][SablePose][Server] tick={} structure={} center_x={} center_z={} heading={} local_pivot_x={} local_pivot_z={} world_pivot_x={} world_pivot_z={} sent_offset_x={} sent_offset_z={}",
+                    context.gameTime(), structure.structureUuid(),
+                    structure.geometricCenter().x, structure.geometricCenter().z, structure.headingDegrees(),
+                    structure.localRotationPointX(), structure.localRotationPointZ(),
+                    structure.worldRotationPointX(), structure.worldRotationPointZ(),
+                    rotationPointOffsetX, rotationPointOffsetZ);
+        }
+        targetCache.get(key).updateSablePresentation(
+                silhouetteSuppressed ? 0.0F : structure.headingDegrees(),
+                silhouetteSuppressed ? 0.0F : rotationPointOffsetX,
+                silhouetteSuppressed ? 0.0F : rotationPointOffsetZ,
+                silhouetteVersion);
         return true;
     }
 

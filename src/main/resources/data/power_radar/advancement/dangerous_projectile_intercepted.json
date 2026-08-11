@@ -1,0 +1,20 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "createbigcannons" }
+  ],
+  "parent": "power_radar:interception",
+  "display": {
+    "icon": { "id": "power_radar:interception_fuze" },
+    "title": { "translate": "advancements.power_radar.dangerous_projectile_intercepted.title" },
+    "description": { "translate": "advancements.power_radar.dangerous_projectile_intercepted.description" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "intercepted": {
+      "trigger": "power_radar:dangerous_projectile_intercepted"
+    }
+  }
+}

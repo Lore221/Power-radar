@@ -7,7 +7,9 @@ import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
@@ -125,6 +127,17 @@ public class RadarLinkBlock extends BaseEntityBlock implements IWrenchable {
                     originalState.getValue(MODEL_FACING).getClockWise());
         }
         return originalState.setValue(FACING, facing.getClockWise(Direction.Axis.Y));
+    }
+
+    @Override
+    public InteractionResult onWrenched(BlockState state, UseOnContext context) {
+        InteractionResult result = IWrenchable.super.onWrenched(state, context);
+        if (!context.getLevel().isClientSide()
+                && result.consumesAction()
+                && context.getLevel().getBlockEntity(context.getClickedPos()) instanceof RadarLinkBlockEntity link) {
+            link.reconcileFacingEndpoint(context.getPlayer());
+        }
+        return result;
     }
 
     private static VoxelShape shapeFor(Direction facing) {

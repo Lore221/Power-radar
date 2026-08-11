@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.api.target;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -45,4 +46,18 @@ public interface TrackedTargetView {
     double boundingHeight();
 
     double approximateSize();
+
+    /** Текущий мировой хитбокс; снимки без точной геометрии используют измеренные габариты. */
+    default AABB targetBounds() {
+        Vec3 base = position();
+        double width = Math.max(0.1D, approximateSize());
+        double halfWidth = width * 0.5D;
+        return new AABB(
+                base.x - halfWidth,
+                base.y,
+                base.z - halfWidth,
+                base.x + halfWidth,
+                base.y + Math.max(0.1D, boundingHeight()),
+                base.z + halfWidth);
+    }
 }

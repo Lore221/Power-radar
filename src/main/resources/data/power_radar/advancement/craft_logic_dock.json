@@ -1,0 +1,18 @@
+{
+  "parent": "power_radar:radar_network_online",
+  "display": {
+    "icon": { "id": "power_radar:logic_dock" },
+    "title": { "translate": "advancements.power_radar.craft_logic_dock.title" },
+    "description": { "translate": "advancements.power_radar.craft_logic_dock.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "has_item": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": "power_radar:logic_dock" }] }
+    }
+  }
+}

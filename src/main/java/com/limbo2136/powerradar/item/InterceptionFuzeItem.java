@@ -204,6 +204,7 @@ public class InterceptionFuzeItem extends FuzeItem {
                         threatUuid,
                         PowerRadarServerConfig.interceptionShellDestructionProbability());
         if (destruction.destroyed()) {
+            InterceptionCoordinator.awardDangerousProjectileIntercepted(level, threatUuid);
             threat.discard();
             InterceptionCoordinator.resolveThreat(level.getServer(), threatUuid);
         }

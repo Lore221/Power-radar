@@ -1,0 +1,18 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "createbigcannons" }
+  ],
+  "parent": "power_radar:craft_shell_alarm",
+  "display": {
+    "icon": { "id": "power_radar:radar_display" },
+    "title": { "translate": "advancements.power_radar.incoming_projectile.title" },
+    "description": { "translate": "advancements.power_radar.incoming_projectile.description" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "incoming_projectile": { "trigger": "power_radar:incoming_projectile" }
+  }
+}

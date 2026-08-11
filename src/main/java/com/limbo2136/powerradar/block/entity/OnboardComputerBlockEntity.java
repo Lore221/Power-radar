@@ -9,6 +9,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.compat.aeronautics.SableWarningManager;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
 import com.limbo2136.powerradar.interception.MovingProtectedZone;
@@ -51,15 +52,18 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     private static final String MODULE_STACK_TAG = "Stack";
     private static final String ACCELEROMETER_COLUMNS_TAG = "AccelerometerColumns";
     private static final String VARIOMETER_COLUMNS_TAG = "VariometerColumns";
+    private static final String ATTITUDE_KAG_SLOTS_TAG = "AttitudeKagSlots";
     @Nullable private UUID networkId;
     @Nullable private UUID interceptionNetworkId;
     private final ItemStack[] modules = new ItemStack[OnboardModuleSlot.values().length];
     private int accelerometerColumnMask;
     private int variometerColumnMask;
+    private int attitudeKagSlotMask;
     private final MovingProtectedZoneTracker protectedZoneTracker = new MovingProtectedZoneTracker();
     @Nullable private MovingProtectedZone protectedZone;
     private long lastProcessedThreatScanGameTime = Long.MIN_VALUE;
     private boolean alarmActive;
+    private boolean redstoneSignalActive;
     private boolean publishedThreats;
     private boolean networkRoleEnsured;
 
@@ -91,6 +95,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
                 RadarDisplayStructureResolver.StructureStatus.ACTIVE);
         RadarMonitorControllerBlockEntity.tick(serverLevel, pos, state, computer);
         computer.tickShellAlarm(serverLevel, state);
+        computer.updateRedstoneSignal(serverLevel, state);
     }
 
     private void validateLodestoneModules(ServerLevel level) {
@@ -272,6 +277,22 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             return;
         }
         this.alarmActive = active;
+        setChanged();
+    }
+
+    private void updateRedstoneSignal(ServerLevel level, BlockState state) {
+        boolean nextSignal = false;
+        if (isElectricallyOperational() && this.protectedZone != null && this.protectedZone.structureUuid() != null) {
+            nextSignal = SableWarningManager.warningState(
+                    level.getServer(),
+                    this.protectedZone.structureUuid(),
+                    level.getGameTime(),
+                    this.alarmActive).signalActive();
+        }
+        if (nextSignal == this.redstoneSignalActive) {
+            return;
+        }
+        this.redstoneSignalActive = nextSignal;
         Block block = state.getBlock();
         level.updateNeighborsAt(this.worldPosition, block);
         level.updateNeighbourForOutputSignal(this.worldPosition, block);
@@ -308,7 +329,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     }
 
     public boolean alarmActive() {
-        return this.alarmActive;
+        return this.redstoneSignalActive;
     }
 
     public UUID ensureNetworkId() {
@@ -508,6 +529,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             return false;
         }
         this.modules[slot.index()] = held.copyWithCount(1);
+        this.attitudeKagSlotMask &= ~(1 << slot.index());
         if (consume) {
             held.shrink(1);
         }
@@ -526,6 +548,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
             clearCombinedModule(column);
         }
         this.modules[slot.index()] = ItemStack.EMPTY;
+        this.attitudeKagSlotMask &= ~(1 << slot.index());
         setChanged();
         sendData();
         return result;
@@ -542,9 +565,25 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
         if (!removed.isEmpty()) {
             clearAllCombinedModules();
+            this.attitudeKagSlotMask = 0;
             setChanged();
         }
         return List.copyOf(removed);
+    }
+
+    public boolean attitudeKagMode(OnboardModuleSlot slot) {
+        return OnboardModuleType.fromStack(this.modules[slot.index()]) == OnboardModuleType.ATTITUDE_INDICATOR
+                && (this.attitudeKagSlotMask & 1 << slot.index()) != 0;
+    }
+
+    public boolean toggleAttitudeKagMode(OnboardModuleSlot slot) {
+        if (OnboardModuleType.fromStack(this.modules[slot.index()]) != OnboardModuleType.ATTITUDE_INDICATOR) {
+            return false;
+        }
+        this.attitudeKagSlotMask ^= 1 << slot.index();
+        setChanged();
+        sendData();
+        return true;
     }
 
     @Override
@@ -608,6 +647,9 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         if (this.variometerColumnMask != 0) {
             tag.putByte(VARIOMETER_COLUMNS_TAG, (byte) this.variometerColumnMask);
         }
+        if (this.attitudeKagSlotMask != 0) {
+            tag.putByte(ATTITUDE_KAG_SLOTS_TAG, (byte) this.attitudeKagSlotMask);
+        }
     }
 
     @Override
@@ -641,6 +683,12 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
         this.accelerometerColumnMask = tag.getByte(ACCELEROMETER_COLUMNS_TAG);
         this.variometerColumnMask = tag.getByte(VARIOMETER_COLUMNS_TAG);
+        this.attitudeKagSlotMask = tag.getByte(ATTITUDE_KAG_SLOTS_TAG);
+        for (OnboardModuleSlot slot : OnboardModuleSlot.values()) {
+            if (OnboardModuleType.fromStack(this.modules[slot.index()]) != OnboardModuleType.ATTITUDE_INDICATOR) {
+                this.attitudeKagSlotMask &= ~(1 << slot.index());
+            }
+        }
         for (OnboardModuleColumn column : OnboardModuleColumn.values()) {
             validateCombinedModule(column);
         }

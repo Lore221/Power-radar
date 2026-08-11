@@ -34,6 +34,12 @@ public final class PowerRadarCeeDeviceTypes {
                     (type, level, pos, data) -> new LogicDockCeeDevice(level, pos, data, type),
                     List.of(ModBlocks.LOGIC_DOCK.get())));
 
+    public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<EwSystemCeeDevice>> EW_SYSTEM =
+            register("ew_system", () -> new SimulatedDeviceType<EwSystemCeeDevice>(
+                    PowerRadar.id("ew_system"),
+                    (type, level, pos, data) -> new EwSystemCeeDevice(level, pos, data, type),
+                    List.of(ModBlocks.EW_SYSTEM.get())));
+
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<TargetControllerCeeDevice>> TARGET_CONTROLLER =
             CreateBigCannonsIntegration.isLoaded() ? register("target_controller", () -> new SimulatedDeviceType<TargetControllerCeeDevice>(
                     PowerRadar.id("target_controller"),

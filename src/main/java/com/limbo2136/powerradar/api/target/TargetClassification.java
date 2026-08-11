@@ -18,7 +18,7 @@ public enum TargetClassification {
             case HOSTILE_MOB -> HOSTILE_MOB;
             case PROJECTILE -> PROJECTILE;
             case SABLE_STRUCTURE -> STRUCTURE;
-            case UNKNOWN -> UNKNOWN;
+            case RADAR, UNKNOWN -> UNKNOWN;
         };
     }
 }

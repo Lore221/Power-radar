@@ -1,5 +1,6 @@
 package com.limbo2136.powerradar.block.entity;
 
+import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.RadarConstants;
@@ -11,6 +12,7 @@ import com.limbo2136.powerradar.bridge.InterceptionNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.bridge.ShellAlarmIconBridge;
 import com.limbo2136.powerradar.compat.createbigcannons.ShellAlarmCbcCompat;
+import com.limbo2136.powerradar.compat.aeronautics.SableWarningManager;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeSnapshot;
@@ -25,7 +27,6 @@ import com.limbo2136.powerradar.interception.ProtectedZoneThreatEvaluator;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
-import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.google.common.collect.ImmutableList;
@@ -61,6 +62,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -81,13 +83,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     private boolean sableProtectionMode;
     private boolean networkConnected;
     private boolean alarmActive;
+    private boolean redstoneSignalActive;
     private int trackedShellCount;
     private long lastProcessedRadarScanGameTime = Long.MIN_VALUE;
     private long lastStatusLogGameTime = Long.MIN_VALUE;
     private String lastStatusLog = "";
     private PowerRadarCeeSnapshot electrical = PowerRadarCeeSnapshot.EMPTY;
-    private UUID radarStructureEntityUuid;
-    private boolean radarStructureEntityActive;
+    private boolean legacyRadarMarkerCleanupPending = true;
     private UUID networkId;
     private boolean runtimeRegisteredLoaded;
     private boolean needsRuntimeRegister;
@@ -122,6 +124,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     private void tickServer(ServerLevel level, BlockState state) {
+        removeLegacyRadarMarker(level);
         // Геометрию и принадлежность Sable инициализируем лениво: поиск структуры выполняется
         // один раз на экземпляр BE, а последующие снимки переиспользуют сохранённую привязку.
         if (this.protectedZone == null) {
@@ -147,6 +150,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             this.needsRuntimeRegister = false;
         }
         boolean powered = this.electrical.electricalState() == PowerRadarCeeState.POWERED;
+        updateRedstoneSignal(level, state, powered);
         this.networkConnected = false;
         Set<UUID> present = new HashSet<>();
         int shellCount = 0;
@@ -164,8 +168,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
             connectedNetworkId = this.networkId;
         }
         logStatus(level, powered, connectedNetworkId, controller);
-        syncRadarStructureEntityState(level, powered && this.networkConnected);
-
         if (controller == null || this.protectedZone == null) {
             this.lastProcessedRadarScanGameTime = Long.MIN_VALUE;
             clearInactiveState(level, state);
@@ -288,7 +290,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                     this.worldPosition,
                     threatSnapshots,
                     InterceptionCoordinator.threatTtlTicksForScanInterval(
-                            radarScanIntervalTicks(radarScanGameTime, previousRadarScanGameTime)));
+                            radarScanIntervalTicks(radarScanGameTime, previousRadarScanGameTime)),
+                    zone.bounds());
             if (PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
                 PowerRadar.LOGGER.info(
                         "[PowerRadar BugReport][ShellAlarm][Scan] alarm={} network={} scanTick={} width={} height={} depth={} trackedShells={} dangerousShells={}",
@@ -304,9 +307,16 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         }
         boolean nextActive = powered && this.networkConnected
                 && this.evaluations.values().stream().anyMatch(ThreatEvaluation::dangerous);
+        if (nextActive && !this.alarmActive) {
+            for (ServerPlayer player : projectileLevel.players()) {
+                if (zone.bounds().contains(player.position())) {
+                    PowerRadarAdvancementTriggers.INCOMING_PROJECTILE.get().trigger(player);
+                }
+            }
+        }
         if (nextActive != this.alarmActive) {
             this.alarmActive = nextActive;
-            notifyRedstone(level, state);
+            updateRedstoneSignal(level, state, powered);
         }
         setChanged();
     }
@@ -348,8 +358,11 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         this.trackedShellCount = 0;
         if (this.alarmActive) {
             this.alarmActive = false;
-            notifyRedstone(level, state);
         }
+        updateRedstoneSignal(
+                level,
+                state,
+                this.electrical.electricalState() == PowerRadarCeeState.POWERED);
         if (changed) {
             setChanged();
         }
@@ -438,6 +451,24 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         level.updateNeighbourForOutputSignal(this.worldPosition, block);
     }
 
+    private void updateRedstoneSignal(ServerLevel level, BlockState state, boolean powered) {
+        boolean nextSignal = false;
+        if (powered) {
+            UUID structureUuid = this.protectedZone == null ? null : this.protectedZone.structureUuid();
+            nextSignal = structureUuid == null
+                    ? this.alarmActive
+                    : SableWarningManager.warningState(
+                            level.getServer(), structureUuid, level.getGameTime(), this.alarmActive)
+                            .signalActive();
+        }
+        if (nextSignal == this.redstoneSignalActive) {
+            return;
+        }
+        this.redstoneSignalActive = nextSignal;
+        notifyRedstone(level, state);
+        setChanged();
+    }
+
     public int protectionWidthBlocks() {
         return this.protectionDimensions == null
                 ? PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS
@@ -497,57 +528,19 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return worldLevel == null ? level : worldLevel;
     }
 
-    // Маркер отражает активную станцию для других радаров и живёт только на стороне сервера.
-    private void syncRadarStructureEntityState(ServerLevel level, boolean active) {
-        if (active == this.radarStructureEntityActive) {
+    /** Удаляет прозрачный маркер, оставшийся в мире от версий до 1.1. */
+    private void removeLegacyRadarMarker(ServerLevel level) {
+        if (!this.legacyRadarMarkerCleanupPending) {
             return;
         }
-        this.radarStructureEntityActive = active;
-        if (!active) {
-            removeRadarStructureEntity(level);
-            return;
-        }
-        RadarStructureEntity existing = findRadarStructureEntity(level);
-        if (existing != null) {
-            this.radarStructureEntityUuid = existing.getUUID();
-            return;
-        }
-        RadarStructureEntity marker = ModEntities.RADAR_STRUCTURE.get().create(level);
-        if (marker != null) {
-            marker.setControllerPos(this.worldPosition);
-            if (level.addFreshEntity(marker)) {
-                this.radarStructureEntityUuid = marker.getUUID();
-                setChanged();
-            }
-        }
-    }
-
-    private RadarStructureEntity findRadarStructureEntity(ServerLevel level) {
-        if (this.radarStructureEntityUuid != null
-                && level.getEntity(this.radarStructureEntityUuid) instanceof RadarStructureEntity marker
-                && marker.belongsTo(this.worldPosition)) {
-            return marker;
-        }
-        return level.getEntitiesOfClass(RadarStructureEntity.class, new AABB(this.worldPosition).inflate(1.0D),
-                        marker -> marker.belongsTo(this.worldPosition))
-                .stream().findFirst().orElse(null);
-    }
-
-    private void removeRadarStructureEntity(ServerLevel level) {
-        RadarStructureEntity marker = findRadarStructureEntity(level);
-        if (marker != null) {
-            marker.discard();
-        }
-        if (this.radarStructureEntityUuid != null) {
-            this.radarStructureEntityUuid = null;
+        this.legacyRadarMarkerCleanupPending = false;
+        List<RadarStructureEntity> markers = level.getEntitiesOfClass(
+                RadarStructureEntity.class,
+                new AABB(this.worldPosition).inflate(1.0D),
+                marker -> marker.belongsTo(this.worldPosition));
+        if (!markers.isEmpty()) {
+            markers.forEach(Entity::discard);
             setChanged();
-        }
-    }
-
-    public void deactivateRadarStructureEntity() {
-        this.radarStructureEntityActive = false;
-        if (this.level instanceof ServerLevel serverLevel) {
-            removeRadarStructureEntity(serverLevel);
         }
     }
 
@@ -676,7 +669,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     public boolean alarmActive() {
-        return this.alarmActive;
+        return this.redstoneSignalActive;
     }
 
     public int trackedShellCount() {
@@ -706,9 +699,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         tag.putDouble("ElectricalCurrentAmps", this.electrical.currentAmps());
         tag.putDouble("ElectricalPowerWatts", this.electrical.powerWatts());
         tag.putDouble("ElectricalResistanceOhms", this.electrical.resistanceOhms());
-        if (this.radarStructureEntityUuid != null) {
-            tag.putUUID("RadarStructureEntity", this.radarStructureEntityUuid);
-        }
         if (this.networkId != null) {
             tag.putUUID("PowerRadarNetworkId", this.networkId);
         }
@@ -740,8 +730,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 tag.contains("ElectricalResistanceOhms")
                         ? tag.getDouble("ElectricalResistanceOhms")
                         : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS));
-        this.radarStructureEntityUuid = tag.hasUUID("RadarStructureEntity")
-                ? tag.getUUID("RadarStructureEntity") : null;
         this.networkId = tag.hasUUID("PowerRadarNetworkId")
                 ? tag.getUUID("PowerRadarNetworkId") : null;
         this.interceptionNetworkId = tag.hasUUID("InterceptionNetworkId")

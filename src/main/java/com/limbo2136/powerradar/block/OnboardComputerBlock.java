@@ -128,6 +128,14 @@ public final class OnboardComputerBlock extends BaseEntityBlock
             return IWrenchable.super.onWrenched(state, context);
         }
         BlockHitResult hit = blockHitResult(context);
+        OnboardModuleSlot slot = OnboardPanelGeometry.slotAt(pos, state.getValue(FACING), hit);
+        if (slot != null
+                && OnboardModuleType.fromStack(computer.module(slot)) == OnboardModuleType.ATTITUDE_INDICATOR) {
+            if (!level.isClientSide() && computer.toggleAttitudeKagMode(slot)) {
+                IWrenchable.playRotateSound(level, pos);
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide());
+        }
         OnboardModuleColumn column = OnboardPanelGeometry.columnAt(pos, state.getValue(FACING), hit);
         if (column == null
                 || (!computer.hasAssembledModule(column) && !computer.canAssembleModule(column))) {

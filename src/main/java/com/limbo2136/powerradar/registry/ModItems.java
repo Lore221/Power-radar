@@ -36,6 +36,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = ITEMS.register(
             "onboard_computer",
             () -> new OnboardComputerBlockItem(ModBlocks.ONBOARD_COMPUTER.get(), new Item.Properties()));
+    public static final DeferredItem<BlockItem> EW_SYSTEM = registerElectricalBlock(
+            "ew_system", ModBlocks.EW_SYSTEM, Target.EW_SYSTEM);
     public static final DeferredItem<RadarFilterCardItem> TARGETING_CARD = registerCbcItem(() ->
             ITEMS.register(
                     "targeting_card",
@@ -86,6 +88,8 @@ public final class ModItems {
                     () -> new InterceptionFuzeItem(new Item.Properties().stacksTo(64))));
     public static final DeferredItem<LinkerItem> LINKER = ITEMS.register(
             "linker", () -> new LinkerItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<Item> MICROWAVE_EMITTER = ITEMS.register(
+            "microwave_emitter", () -> new Item(new Item.Properties()));
 
     private ModItems() {
     }

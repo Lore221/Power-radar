@@ -12,6 +12,7 @@ public record RadarBlipRenderData(
         int color,
         double radialFraction,
         RadarTargetCategory category,
+        float rotationDegrees,
         int targetIndex,
         int displayAgeTicks
 ) {
