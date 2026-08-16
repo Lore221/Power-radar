@@ -62,7 +62,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             return;
         }
         // После безопасной задержки сначала восстанавливается runtime-регистрация,
-        // затем привязка блока перед лицевой стороной и периодическая force-load сверка.
+        // затем привязка блока перед лицевой стороной и её периодическая сверка.
         if (link.needsRuntimeRegister || !link.runtimeRegisteredLoaded) {
             link.registerLoaded(serverLevel);
             link.needsRuntimeRegister = false;
@@ -73,7 +73,7 @@ public class RadarLinkBlockEntity extends BlockEntity {
             link.reconcileFacingEndpoint(null);
         }
         link.ticksSinceReconcile++;
-        if (link.ticksSinceReconcile >= RadarConstants.RADAR_LINK_FORCELOAD_RECONCILE_INTERVAL_TICKS) {
+        if (link.ticksSinceReconcile >= RadarConstants.RADAR_LINK_ENDPOINT_RECONCILE_INTERVAL_TICKS) {
             link.ticksSinceReconcile = 0;
             link.reconcileFacingEndpoint(null);
         }
@@ -264,7 +264,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
             RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         }
         if (this.level instanceof ServerLevel serverLevel && this.networkId != null && this.runtimeRegisteredLoaded) {
-            RadarNetworkManager.get(serverLevel.getServer()).unloadLink(this.networkId, this.globalPos());
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            invalidateCurrentLogicDockConnections(manager, serverLevel);
+            manager.unloadLink(this.networkId, this.globalPos());
             this.runtimeRegisteredLoaded = false;
         }
         super.setRemoved();
@@ -273,7 +275,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
     @Override
     public void onChunkUnloaded() {
         if (this.level instanceof ServerLevel serverLevel && this.networkId != null && this.runtimeRegisteredLoaded) {
-            RadarNetworkManager.get(serverLevel.getServer()).unloadLink(this.networkId, this.globalPos());
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            invalidateCurrentLogicDockConnections(manager, serverLevel);
+            manager.unloadLink(this.networkId, this.globalPos());
             this.runtimeRegisteredLoaded = false;
         }
         if (this.level != null && this.level.isClientSide()) {
@@ -353,6 +357,9 @@ public class RadarLinkBlockEntity extends BlockEntity {
         if (this.networkId == null) {
             return;
         }
+        if (this.level instanceof ServerLevel serverLevel) {
+            invalidateCurrentLogicDockConnections(manager, serverLevel);
+        }
         if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
             manager.detachMonitorFromLink(this.networkId, linkGlobalPos);
         }
@@ -366,10 +373,20 @@ public class RadarLinkBlockEntity extends BlockEntity {
     private void syncChanged() {
         setChanged();
         if (this.level instanceof ServerLevel serverLevel) {
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
             if (this.networkId != null) {
-                RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(this.networkId);
+                manager.invalidateLogicDockCache(this.networkId);
             }
+            invalidateCurrentLogicDockConnections(manager, serverLevel);
             serverLevel.sendBlockUpdated(this.worldPosition, this.getBlockState(), this.getBlockState(), 2);
+        }
+    }
+
+    private void invalidateCurrentLogicDockConnections(RadarNetworkManager manager, ServerLevel level) {
+        if (this.endpointRole == RadarLinkEndpointRole.LOGIC_DOCK
+                && this.endpointPos != null
+                && this.endpointPos.dimension().equals(level.dimension())) {
+            manager.invalidateLogicDockCachesAt(level, this.endpointPos.pos());
         }
     }
 

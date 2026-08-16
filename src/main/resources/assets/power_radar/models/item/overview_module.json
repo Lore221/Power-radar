@@ -1,5 +1,5 @@
 {
-  "parent": "power_radar:block/overview_module",
+  "parent": "power_radar:block/overview_module/solo",
   "display": {
     "gui": {
       "rotation": [30, 225, 0],

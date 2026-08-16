@@ -1,0 +1,18 @@
+{
+	"parent": "power_radar:block/radar_panel/solo",
+	"textures": {
+		"1": "power_radar:block/panel3"
+	},
+	"elements": [
+		{
+			"from": [0, 0, 0],
+			"to": [16, 16, 13],
+			"faces": {
+				"north": {"uv": [0, 0, 8, 16], "texture": "#1"},
+				"south": {"uv": [0.66667, 0, 4.66666, 5.33333], "texture": "#0"},
+				"up": {"uv": [5.33333, 5.66666, 9.66667, 10.33334], "rotation": 270, "texture": "#0"},
+				"down": {"uv": [9.66667, 5.66666, 5.33333, 10.33334], "rotation": 270, "texture": "#0"}
+			}
+		}
+	]
+}

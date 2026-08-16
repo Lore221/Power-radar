@@ -1,0 +1,29 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:tag_empty",
+      "tag": "c:ingots/steel"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "AAA",
+    "CCC",
+    "BBB"
+  ],
+  "key": {
+    "A": {
+      "item": "power_radar:microwave_emitter"
+    },
+    "B": {
+      "item": "minecraft:iron_ingot"
+    },
+    "C": {
+      "item": "electroenergetics:inductor"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_panel",
+    "count": 1
+  }
+}

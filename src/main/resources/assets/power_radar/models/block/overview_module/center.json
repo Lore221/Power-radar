@@ -1,0 +1,11 @@
+{
+  "parent": "block/block",
+  "loader": "neoforge:obj",
+  "render_type": "minecraft:cutout",
+  "flip_v": true,
+  "model": "power_radar:models/block/overview_module/center.obj",
+  "textures": {
+    "0": "power_radar:block/overview_module",
+    "particle": "power_radar:block/overview_module"
+  }
+}

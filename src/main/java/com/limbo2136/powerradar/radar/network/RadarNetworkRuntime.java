@@ -11,11 +11,10 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 import net.minecraft.core.GlobalPos;
 
-/** Загружаемое состояние сети: ссылки, leases, ревизии и производные снимки без NBT-владения. */
+/** Загружаемое состояние сети: ссылки, ревизии и производные снимки без NBT-владения. */
 public class RadarNetworkRuntime {
     private final Set<GlobalPos> loadedLinks = new HashSet<>();
     private final Map<GlobalPos, GlobalPos> monitorLinkToMonitorPos = new HashMap<>();
-    private final RadarNetworkChunkLoadState chunkLoadState = new RadarNetworkChunkLoadState();
     private final SelectedTargetRuntimeState selectedTarget = new SelectedTargetRuntimeState();
     @Nullable
     private DisplaySnapshotCacheEntry displaySnapshot;
@@ -27,10 +26,6 @@ public class RadarNetworkRuntime {
 
     public Map<GlobalPos, GlobalPos> monitorLinkToMonitorPos() {
         return this.monitorLinkToMonitorPos;
-    }
-
-    public RadarNetworkChunkLoadState chunkLoadState() {
-        return this.chunkLoadState;
     }
 
     public Optional<UUID> selectedTargetUuid() {

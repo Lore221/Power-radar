@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.item;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.PowerRadarServerConfig;
+import com.limbo2136.powerradar.compat.createbigcannons.InterceptedProjectileCbcCompat;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
@@ -205,7 +206,9 @@ public class InterceptionFuzeItem extends FuzeItem {
                         PowerRadarServerConfig.interceptionShellDestructionProbability());
         if (destruction.destroyed()) {
             InterceptionCoordinator.awardDangerousProjectileIntercepted(level, threatUuid);
-            threat.discard();
+            if (!InterceptedProjectileCbcCompat.detonateIfSupported(threat)) {
+                threat.discard();
+            }
             InterceptionCoordinator.resolveThreat(level.getServer(), threatUuid);
         }
         return destruction;

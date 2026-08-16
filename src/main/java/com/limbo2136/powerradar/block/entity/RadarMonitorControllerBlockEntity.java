@@ -72,7 +72,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private long lastSentBlockStaticGameTime = Long.MIN_VALUE;
     private long lastSentBlockSnapshotScanGameTime = Long.MIN_VALUE;
     private boolean needsStructureReconcile = true;
-    private boolean needsLeaseReconcile = true;
     private int startupSafetyTicks = 2;
     private boolean removingOrUnloading;
     private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
@@ -80,10 +79,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private double cachedElectricalCurrentAmps;
     private double cachedElectricalPowerWatts;
     private double cachedElectricalResistanceOhms = PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS;
-    @Nullable
-    private UUID cachedConsumerLeaseNetworkId;
-    @Nullable
-    private GlobalPos cachedConsumerLeaseLinkPos;
     @Nullable
     private RadarMonitorSnapshotPayload cachedSnapshot;
     @Nullable
@@ -115,7 +110,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     public void onLoad() {
         super.onLoad();
         this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
-        this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
         if (this.level instanceof ServerLevel serverLevel) {
@@ -127,7 +121,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     public void clearRemoved() {
         super.clearRemoved();
         this.needsStructureReconcile = usesDisplayStructureResolver() && !hasDisplayStructureCache();
-        this.needsLeaseReconcile = true;
         this.startupSafetyTicks = 2;
         this.removingOrUnloading = false;
     }
@@ -135,13 +128,11 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     public void prepareForBlockRemoval() {
         this.removingOrUnloading = true;
         invalidateSnapshotCache();
-        reconcileConsumerLease(true);
     }
 
     @Override
     public void onChunkUnloaded() {
         this.removingOrUnloading = true;
-        releaseCachedConsumerLease();
         super.onChunkUnloaded();
     }
 
@@ -706,7 +697,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
             this.structureRevision++;
             invalidateSnapshotCache();
             updateElectricalStateAndLoad();
-            requestLeaseReconcile();
             syncChanged();
             if (this.level instanceof ServerLevel serverLevel) {
                 sendBlockSnapshotToNearby(serverLevel);
@@ -770,10 +760,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
 
     public boolean isRendererEnabled() {
         return hasValidDisplayStructure() && isElectricallyOperational();
-    }
-
-    public boolean canHoldConsumerLease() {
-        return canHoldLeaseNow();
     }
 
     protected boolean hasValidDisplayStructure() {
@@ -873,81 +859,17 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
     private void runDeferredLifecycleWork(Level level, BlockPos pos) {
         if (this.removingOrUnloading) {
             this.needsStructureReconcile = false;
-            this.needsLeaseReconcile = false;
             return;
         }
         if (this.startupSafetyTicks > 0) {
             this.startupSafetyTicks--;
             return;
         }
-        // Двухтиковая задержка отделяет загрузку NBT от сверки соседей и runtime-lease.
+        // Двухтиковая задержка отделяет загрузку NBT от сверки соседей.
         if (this.needsStructureReconcile) {
             this.needsStructureReconcile = false;
             RadarDisplayStructureResolver.reconcileAround(level, pos, "deferred-startup");
         }
-        if (this.needsLeaseReconcile && canHoldLeaseNow()) {
-            this.needsLeaseReconcile = false;
-            reconcileConsumerLease(false);
-        }
-    }
-
-    private void requestLeaseReconcile() {
-        if (this.removingOrUnloading) {
-            this.needsLeaseReconcile = false;
-            return;
-        }
-        this.needsLeaseReconcile = true;
-        if (canHoldLeaseNow()) {
-            reconcileConsumerLease(false);
-            this.needsLeaseReconcile = false;
-        }
-    }
-
-    private boolean canHoldLeaseNow() {
-        return !this.removingOrUnloading && isRendererEnabled();
-    }
-
-    private void reconcileConsumerLease(boolean releaseOnly) {
-        if (!(this.level instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        RadarLinkConnectionResolver.Resolution linkResolution =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, this.worldPosition);
-        if (linkResolution.status() != RadarLinkConnectionResolver.Status.SINGLE
-                || linkResolution.link().networkId() == null) {
-            return;
-        }
-        UUID networkId = linkResolution.link().networkId();
-        GlobalPos linkPos = GlobalPos.of(serverLevel.dimension(), linkResolution.link().getBlockPos());
-        if (releaseOnly) {
-            this.cachedConsumerLeaseNetworkId = null;
-            this.cachedConsumerLeaseLinkPos = null;
-            RadarNetworkManager.get(serverLevel.getServer()).releaseMonitorConsumerLease(
-                    networkId,
-                    linkPos
-            );
-        } else {
-            this.cachedConsumerLeaseNetworkId = networkId;
-            this.cachedConsumerLeaseLinkPos = linkPos;
-            RadarNetworkManager.get(serverLevel.getServer()).reconcileMonitorConsumerLease(
-                    networkId,
-                    linkPos
-            );
-        }
-    }
-
-    private void releaseCachedConsumerLease() {
-        if (!(this.level instanceof ServerLevel serverLevel)
-                || this.cachedConsumerLeaseNetworkId == null
-                || this.cachedConsumerLeaseLinkPos == null) {
-            return;
-        }
-        RadarNetworkManager.get(serverLevel.getServer()).releaseMonitorConsumerLease(
-                this.cachedConsumerLeaseNetworkId,
-                this.cachedConsumerLeaseLinkPos
-        );
-        this.cachedConsumerLeaseNetworkId = null;
-        this.cachedConsumerLeaseLinkPos = null;
     }
 
     public boolean applyElectricalSnapshot(PowerRadarCeeSnapshot snapshot) {
@@ -972,13 +894,6 @@ public class RadarMonitorControllerBlockEntity extends SmartBlockEntity implemen
                 || previousState != this.electricalState;
         if (changed) {
             invalidateSnapshotCache();
-            if (previousState != this.electricalState) {
-                if (this.electricalState != PowerRadarCeeState.POWERED) {
-                    releaseCachedConsumerLease();
-                } else {
-                    requestLeaseReconcile();
-                }
-            }
             syncChanged();
         }
         return changed;

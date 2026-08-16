@@ -43,7 +43,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="electroenergetics"
 type="required"
-versionRange="[${electroenergetics_version},)"
+versionRange="[${electroenergetics_min_version},)"
 ordering="AFTER"
 side="BOTH"
 

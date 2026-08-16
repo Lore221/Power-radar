@@ -79,13 +79,16 @@ public final class RadarLinkConnectionResolver {
             BlockPos endpointPos,
             BlockPos linkPos
     ) {
-        BlockState state = level.getBlockState(linkPos);
+        BlockState state = LoadedRadarWorldAccess.blockState(level, linkPos);
+        if (state == null) {
+            return null;
+        }
         if (!state.hasProperty(RadarLinkBlock.FACING)
                 || !state.is(com.limbo2136.powerradar.registry.ModBlocks.RADAR_LINK.get())
                 || !linkPos.relative(state.getValue(RadarLinkBlock.FACING)).equals(endpointPos)) {
             return null;
         }
-        BlockEntity blockEntity = level.getBlockEntity(linkPos);
+        BlockEntity blockEntity = LoadedRadarWorldAccess.blockEntity(level, linkPos);
         return blockEntity instanceof RadarLinkBlockEntity link && link.networkId() != null ? link : null;
     }
 

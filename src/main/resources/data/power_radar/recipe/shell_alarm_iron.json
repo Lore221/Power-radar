@@ -1,0 +1,42 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "createbigcannons"
+    },
+    {
+      "type": "neoforge:tag_empty",
+      "tag": "c:ingots/steel"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "ACA",
+    "FEF",
+    "BDB"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:iron_ingot"
+    },
+    "B": {
+      "item": "electroenergetics:connector"
+    },
+    "C": {
+      "item": "power_radar:radar_display"
+    },
+    "D": {
+      "item": "electroenergetics:transformer"
+    },
+    "E": {
+      "item": "create:electron_tube"
+    },
+    "F": {
+      "item": "create:transmitter"
+    }
+  },
+  "result": {
+    "id": "power_radar:shell_alarm",
+    "count": 1
+  }
+}

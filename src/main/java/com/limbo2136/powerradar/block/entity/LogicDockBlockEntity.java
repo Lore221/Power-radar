@@ -142,6 +142,13 @@ public class LogicDockBlockEntity extends BlockEntity
         }
     }
 
+    public void invalidateConnectedNetworks() {
+        if (this.level instanceof ServerLevel serverLevel) {
+            RadarNetworkManager.get(serverLevel.getServer())
+                    .invalidateLogicDockCachesAt(serverLevel, this.worldPosition);
+        }
+    }
+
     @Override
     public boolean addToGoggleTooltip(List<Component> tooltip, boolean sneaking) {
         int firstNewLine = tooltip.size();

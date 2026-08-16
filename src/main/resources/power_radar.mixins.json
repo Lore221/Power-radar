@@ -4,7 +4,8 @@
   "package": "com.limbo2136.powerradar.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "CompassNavigationTargetMixin"
+    "CompassNavigationTargetMixin",
+    "FuzedBigCannonProjectileInvoker"
   ],
   "injectors": {
     "defaultRequire": 0

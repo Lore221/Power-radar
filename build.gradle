@@ -161,7 +161,7 @@ tasks.withType(ProcessResources).configureEach {
             mod_authors            : mod_authors,
             mod_description        : mod_description,
             architectury_version             : architectury_version,
-            electroenergetics_version        : electroenergetics_version,
+            electroenergetics_min_version    : electroenergetics_min_version,
             create_big_cannons_version       : create_big_cannons_version,
             ritchies_projectile_lib_version : ritchies_projectile_lib_version,
             aeronautics_version              : aeronautics_version,

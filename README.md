@@ -17,7 +17,8 @@ Different radar controllers cover different roles:
 - Base Radar provides general-purpose detection.
 - Air Radar monitors elevated targets and airspace.
 - Surface Radar monitors targets below and around the installation.
-- Onboard Computer provides radar functionality for moving Aeronautics structures.
+
+The Onboard Computer acts as a compact radar-network terminal for moving Aeronautics structures.
 
 Logic Docks accept filter cards and define which detected targets are distributed through the network. Monitor controllers provide target counts, selected-target coordinates, target category, and speed to Create display links.
 
@@ -32,12 +33,13 @@ In-game Ponder scenes explain the main devices and network setup.
 - Configurable radar ranges, vertical limits, and scan angles
 - Mechanical sirens and electrical diagnostics
 - Create display-link integration
+- A dedicated advancement tree
 
 ## Optional integrations
 
 ### Create Big Cannons
 
-When [Create Big Cannons](https://github.com/Cannoneers-of-Create/CreateBigCannons) is installed, Power Radar adds:
+When [Create Big Cannons](https://www.curseforge.com/minecraft/mc-mods/create-big-cannons) is installed, Power Radar adds:
 
 - Target Controllers
 - Shell Alarms
@@ -49,7 +51,7 @@ Create Big Cannons and Ritchie's Projectile Library are optional. The related co
 
 ### Create: Aeronautics
 
-When [Create: Aeronautics](https://www.curseforge.com/minecraft/mc-mods/create-aeronautics) is installed, Power Radar adds onboard radar support for moving structures and physical mass values for its blocks. Aviator's Goggles display those properties using the native Aeronautics tooltip style.
+When [Create: Aeronautics](https://www.curseforge.com/minecraft/mc-mods/create-aeronautics) is installed, Power Radar adds onboard radar support for moving structures, powered EW systems that conceal a structure's exact silhouette, and physical mass values for its blocks. Aviator's Goggles display those properties using the native Aeronautics tooltip style.
 
 Create: Aeronautics and Sable are optional.
 
@@ -57,15 +59,13 @@ Create: Aeronautics and Sable are optional.
 
 - Minecraft 1.21.1
 - NeoForge 21.1.229 or newer
-- Create 6.0.10
+- Create 6.0.10 or newer within the 6.0.x series
 - Architectury API 13.0.8 or newer
-- Create: Electro Energetics 1.21.1-1.2.0-123 or newer
+- Create: Electro Energetics 1.21.1-1.2.0-121 or newer
 
 ## Download
 
-Power Radar has not been officially released yet.
-
-The latest releases will be available on the [GitHub Releases](https://github.com/Lore221/Power-radar/releases) page.
+The latest release is available on the [GitHub Releases](https://github.com/Lore221/Power-radar/releases) page. CurseForge and Modrinth download links will be added here after their project pages are published.
 
 Please report problems through the [issue tracker](https://github.com/Lore221/Power-radar/issues).
 

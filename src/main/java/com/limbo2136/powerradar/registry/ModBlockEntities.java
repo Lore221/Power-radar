@@ -3,7 +3,6 @@ package com.limbo2136.powerradar.registry;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.MechanicalSirenBlockEntity;
-import com.limbo2136.powerradar.block.entity.OverviewModuleBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
@@ -48,11 +47,6 @@ public final class ModBlockEntities {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EwSystemBlockEntity>> EW_SYSTEM =
             BLOCK_ENTITIES.register("ew_system", () -> BlockEntityType.Builder
                     .of(EwSystemBlockEntity::new, ModBlocks.EW_SYSTEM.get()).build(null));
-
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OverviewModuleBlockEntity>> OVERVIEW_MODULE =
-            BLOCK_ENTITIES.register("overview_module", () -> BlockEntityType.Builder
-                    .of(OverviewModuleBlockEntity::new, ModBlocks.OVERVIEW_MODULE.get())
-                    .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarLinkBlockEntity>> RADAR_LINK =
             BLOCK_ENTITIES.register("radar_link", () -> BlockEntityType.Builder

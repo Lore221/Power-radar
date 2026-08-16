@@ -1836,8 +1836,6 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     ) {
         private static final PlatformMotion GROUND_STATIONARY =
                 new PlatformMotion(Vec3.ZERO, Vec3.ZERO, false, false, false);
-        private static final PlatformMotion SABLE_STATIONARY =
-                new PlatformMotion(Vec3.ZERO, Vec3.ZERO, false, false, true);
     }
 
     // Специализация Create сохраняет стандартный двухпозиционный тумблер с собственными иконками.

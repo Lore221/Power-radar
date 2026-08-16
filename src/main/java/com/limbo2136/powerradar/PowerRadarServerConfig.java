@@ -13,8 +13,6 @@ public final class PowerRadarServerConfig {
     private static final ModConfigSpec.IntValue ENTITY_QUERY_SLICE_SIZE;
     private static final ModConfigSpec.BooleanValue DETECT_PASSIVE_MOBS_BY_DEFAULT;
     private static final ModConfigSpec.IntValue RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS;
-    private static final ModConfigSpec.BooleanValue RADAR_LINK_FORCELOAD_ENABLED;
-    private static final ModConfigSpec.IntValue RADAR_LINK_FORCELOAD_RADIUS_CHUNKS;
     private static final ModConfigSpec.DoubleValue AUTOCANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY;
@@ -41,8 +39,6 @@ public final class PowerRadarServerConfig {
 
         builder.push("radar_link");
         RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS = builder.defineInRange("max_connection_distance_blocks", 128, 1, 100_000);
-        RADAR_LINK_FORCELOAD_ENABLED = builder.define("force_load_enabled", true);
-        RADAR_LINK_FORCELOAD_RADIUS_CHUNKS = builder.defineInRange("force_load_radius_chunks", 1, 0, 32);
         builder.pop();
 
         builder.push("target_controller");
@@ -122,14 +118,6 @@ public final class PowerRadarServerConfig {
 
     public static int radarLinkMaxConnectionDistanceBlocks() {
         return value(RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS);
-    }
-
-    public static boolean radarLinkForceLoadEnabled() {
-        return value(RADAR_LINK_FORCELOAD_ENABLED);
-    }
-
-    public static int radarLinkForceLoadRadiusChunks() {
-        return value(RADAR_LINK_FORCELOAD_RADIUS_CHUNKS);
     }
 
     public static double autocannonMinFiringDistanceBlocks() {

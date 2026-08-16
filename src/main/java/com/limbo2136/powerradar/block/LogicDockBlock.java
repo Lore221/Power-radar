@@ -153,6 +153,7 @@ public class LogicDockBlock extends BaseEntityBlock
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof LogicDockBlockEntity dock) {
+            dock.invalidateConnectedNetworks();
             dock.dropCards();
         }
         super.onRemove(state, level, pos, newState, movedByPiston);

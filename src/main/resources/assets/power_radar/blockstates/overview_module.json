@@ -1,7 +1,16 @@
 {
   "variants": {
-    "": {
-      "model": "power_radar:block/overview_module"
+    "connected_down=false,connected_up=false": {
+      "model": "power_radar:block/overview_module/solo"
+    },
+    "connected_down=false,connected_up=true": {
+      "model": "power_radar:block/overview_module/bottom"
+    },
+    "connected_down=true,connected_up=true": {
+      "model": "power_radar:block/overview_module/center"
+    },
+    "connected_down=true,connected_up=false": {
+      "model": "power_radar:block/overview_module/top"
     }
   }
 }

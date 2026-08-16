@@ -1,0 +1,35 @@
+{
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:tag_empty",
+      "tag": "c:ingots/steel"
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " D ",
+    "ABA",
+    "CEC"
+  ],
+  "key": {
+    "A": {
+      "item": "minecraft:iron_ingot"
+    },
+    "B": {
+      "item": "create:electron_tube"
+    },
+    "C": {
+      "item": "electroenergetics:connector"
+    },
+    "D": {
+      "tag": "c:plates/copper"
+    },
+    "E": {
+      "item": "electroenergetics:transformer"
+    }
+  },
+  "result": {
+    "id": "power_radar:radar_monitor_controller",
+    "count": 1
+  }
+}

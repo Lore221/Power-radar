@@ -22,9 +22,7 @@ public final class RadarConstants {
     public static final int RADAR_MONITOR_STRUCTURE_RECONCILE_INTERVAL_TICKS = 100;
     public static final int RADAR_MONITOR_BLOCK_SYNC_RANGE_BLOCKS = 64;
     public static final int RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS = 128;
-    public static final int RADAR_LINK_FORCELOAD_RADIUS_CHUNKS = 1;
-    public static final int RADAR_LINK_FORCELOAD_RECONCILE_INTERVAL_TICKS = 100;
-    public static final boolean RADAR_LINK_FORCELOAD_ENABLED = true;
+    public static final int RADAR_LINK_ENDPOINT_RECONCILE_INTERVAL_TICKS = 100;
     public static final int RADAR_LINK_OUTLINE_RANGE_BLOCKS = 64;
     public static final int RADAR_LINK_OUTLINE_PULSE_PERIOD_TICKS = 16;
     public static final int RADAR_LINK_OUTLINE_PULSE_HALF_PERIOD_TICKS = 8;
@@ -74,11 +72,4 @@ public final class RadarConstants {
         return PowerRadarServerConfig.radarLinkMaxConnectionDistanceBlocks();
     }
 
-    public static boolean radarLinkForceLoadEnabled() {
-        return PowerRadarServerConfig.radarLinkForceLoadEnabled();
-    }
-
-    public static int radarLinkForceLoadRadiusChunks() {
-        return PowerRadarServerConfig.radarLinkForceLoadRadiusChunks();
-    }
 }

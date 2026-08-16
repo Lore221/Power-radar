@@ -98,7 +98,7 @@ public final class BallisticTrajectoryValidator {
             AABB targetBox = targetBox(target, gameTime, sampleTicks, useAcceleration);
             Optional<Vec3> targetHit = segmentHit(targetBox, position, nextPosition);
 
-            BlockHitResult blockHit = checkBlockCollisions && segmentChunksLoaded(level, position, nextPosition)
+            BlockHitResult blockHit = checkBlockCollisions && segmentChunksReady(level, position, nextPosition)
                     ? level.clip(new ClipContext(
                             position,
                             nextPosition,
@@ -214,7 +214,16 @@ public final class BallisticTrajectoryValidator {
         return ticks;
     }
 
-    private static boolean segmentChunksLoaded(ServerLevel level, Vec3 from, Vec3 to) {
+    /**
+     * Проверяет только уже готовые FULL-чанки, не создавая запросов на их загрузку.
+     *
+     * <p>{@code ServerChunkCache.hasChunk()} здесь недостаточно: он проверяет ticket level
+     * holder-а, поэтому может вернуть {@code true}, пока FULL-чанк ещё генерируется. Следующий
+     * {@code level.clip()} в таком случае синхронно продолжит генерацию мира. Проверка через
+     * {@code getChunkNow()} не создаёт ticket/future и не позволяет баллистике удерживать
+     * generation references при выходе из мира.</p>
+     */
+    private static boolean segmentChunksReady(ServerLevel level, Vec3 from, Vec3 to) {
         int minimumChunkX = SectionPos.blockToSectionCoord(BlockPos.containing(
                 Math.min(from.x, to.x), Math.min(from.y, to.y), Math.min(from.z, to.z)).getX());
         int maximumChunkX = SectionPos.blockToSectionCoord(BlockPos.containing(
@@ -225,7 +234,7 @@ public final class BallisticTrajectoryValidator {
                 Math.max(from.x, to.x), Math.max(from.y, to.y), Math.max(from.z, to.z)).getZ());
         for (int chunkX = minimumChunkX; chunkX <= maximumChunkX; chunkX++) {
             for (int chunkZ = minimumChunkZ; chunkZ <= maximumChunkZ; chunkZ++) {
-                if (!level.getChunkSource().hasChunk(chunkX, chunkZ)) {
+                if (level.getChunkSource().getChunkNow(chunkX, chunkZ) == null) {
                     return false;
                 }
             }
