@@ -10,6 +10,7 @@ import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.logic.LogicDockCardInventory;
 import com.limbo2136.powerradar.logic.LogicDockPolicySource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,11 +36,10 @@ import net.minecraft.client.renderer.MultiBufferSource;
 /** Половинный Logic Dock использует те же карты и сетевую политику, что и обычный блок. */
 public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachment
         implements LogicDockPolicySource {
-    private static final long LINK_CACHE_VALIDATION_INTERVAL_TICKS = 20L;
-
     private final LogicDockCardInventory cards = new LogicDockCardInventory();
-    private long lastLinkCacheValidationGameTime = Long.MIN_VALUE;
     private boolean previousOperational;
+    @Nullable
+    private UUID networkId;
     @Nullable
     private UUID registeredNetworkId;
 
@@ -57,6 +57,16 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
         return PowerRadarElectricalParameters.Voltages.logicDock();
     }
 
+    @Nullable
+    public UUID networkId() {
+        return this.networkId;
+    }
+
+    @Override
+    public void onInserted(ItemStack stack, Player player, InteractionHand hand, BlockHitResult hitResult) {
+        this.networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+    }
+
     @Override
     protected void afterElectricalTick(SimulationResults results) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
@@ -70,7 +80,7 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
         }
         this.previousOperational = operational;
 
-        refreshNetworkIfDue(serverLevel);
+        refreshNetworkRegistration(serverLevel);
         if (this.registeredNetworkId != null) {
             RadarNetworkManager.get(serverLevel.getServer()).touchPanelLogicDock(
                     this.registeredNetworkId,
@@ -119,7 +129,11 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
     @Override
     public List<ItemStack> getDrops() {
         ArrayList<ItemStack> drops = new ArrayList<>();
-        drops.add(defaultDroppedStack());
+        ItemStack dock = defaultDroppedStack();
+        if (this.networkId != null) {
+            dock.set(ModDataComponents.POWER_RADAR_NETWORK_ID.get(), this.networkId);
+        }
+        drops.add(dock);
         for (int slot = 0; slot < LogicDockCardInventory.SLOT_COUNT; slot++) {
             ItemStack card = this.cards.card(slot);
             if (!card.isEmpty()) {
@@ -207,12 +221,16 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
     @Override
     public void read(CompoundTag tag, boolean clientPacket, HolderLookup.Provider registries) {
         super.read(tag, clientPacket, registries);
+        this.networkId = tag.hasUUID("RadarNetworkId") ? tag.getUUID("RadarNetworkId") : null;
         this.cards.read(tag, registries);
     }
 
     @Override
     public void write(CompoundTag tag, boolean clientPacket, HolderLookup.Provider registries) {
         super.write(tag, clientPacket, registries);
+        if (this.networkId != null) {
+            tag.putUUID("RadarNetworkId", this.networkId);
+        }
         this.cards.write(tag, registries);
     }
 
@@ -241,26 +259,17 @@ public final class LogicDockPanelAttachment extends AbstractPoweredPanelAttachme
         }
     }
 
-    private void refreshNetworkIfDue(ServerLevel level) {
+    private void refreshNetworkRegistration(ServerLevel level) {
         long gameTime = level.getGameTime();
-        if (this.lastLinkCacheValidationGameTime != Long.MIN_VALUE
-                && gameTime - this.lastLinkCacheValidationGameTime
-                < LINK_CACHE_VALIDATION_INTERVAL_TICKS) {
-            return;
-        }
-        UUID resolvedNetworkId = RadarPanelMonitorRuntime
-                .resolvePanelNetwork(level, this.pos)
-                .networkId();
-        this.lastLinkCacheValidationGameTime = gameTime;
-        if (Objects.equals(this.registeredNetworkId, resolvedNetworkId)) {
+        if (Objects.equals(this.registeredNetworkId, this.networkId)) {
             return;
         }
 
         unregisterFromNetwork();
-        this.registeredNetworkId = resolvedNetworkId;
-        if (resolvedNetworkId != null) {
+        this.registeredNetworkId = this.networkId;
+        if (this.registeredNetworkId != null) {
             RadarNetworkManager.get(level.getServer()).touchPanelLogicDock(
-                    resolvedNetworkId,
+                    this.registeredNetworkId,
                     GlobalPos.of(level.dimension(), this.pos),
                     this.slot.ordinal(),
                     this,

@@ -22,11 +22,17 @@ public final class PowerRadarCeeDeviceTypes {
                     List.of(ModBlocks.RADAR_CONTROLLER.get(), ModBlocks.AIR_RADAR_CONTROLLER.get(),
                             ModBlocks.SURFACE_RADAR_CONTROLLER.get())));
 
-    public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<MonitorControllerCeeDevice>> RADAR_MONITOR_CONTROLLER =
-            register("radar_monitor_controller", () -> new SimulatedDeviceType<MonitorControllerCeeDevice>(
-                    PowerRadar.id("radar_monitor_controller"),
-                    (type, level, pos, devicesSavedData) -> new MonitorControllerCeeDevice(level, pos, devicesSavedData, type),
-                    List.of(ModBlocks.RADAR_MONITOR_CONTROLLER.get(), ModBlocks.ONBOARD_COMPUTER.get())));
+    public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<RadarDisplayCeeDevice>> RADAR_DISPLAY =
+            register("radar_display", () -> new SimulatedDeviceType<RadarDisplayCeeDevice>(
+                    PowerRadar.id("radar_display"),
+                    (type, level, pos, devicesSavedData) -> new RadarDisplayCeeDevice(level, pos, devicesSavedData, type),
+                    List.of(ModBlocks.RADAR_DISPLAY.get())));
+
+    public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<OnboardComputerCeeDevice>> ONBOARD_COMPUTER =
+            register("onboard_computer", () -> new SimulatedDeviceType<OnboardComputerCeeDevice>(
+                    PowerRadar.id("onboard_computer"),
+                    (type, level, pos, devicesSavedData) -> new OnboardComputerCeeDevice(level, pos, devicesSavedData, type),
+                    List.of(ModBlocks.ONBOARD_COMPUTER.get())));
 
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<LogicDockCeeDevice>> LOGIC_DOCK =
             register("logic_dock", () -> new SimulatedDeviceType<LogicDockCeeDevice>(

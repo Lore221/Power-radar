@@ -2,6 +2,7 @@
   "parent": "block/block",
   "loader": "neoforge:obj",
   "render_type": "minecraft:cutout",
+  "automatic_culling": false,
   "flip_v": true,
   "model": "power_radar:models/block/overview_module/solo.obj",
   "textures": {

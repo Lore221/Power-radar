@@ -44,7 +44,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-public final class OnboardComputerBlockEntity extends RadarMonitorControllerBlockEntity {
+public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockEntity {
     private static final String NETWORK_TAG = "NetworkId";
     private static final String INTERCEPTION_NETWORK_TAG = "InterceptionNetworkId";
     private static final String MODULES_TAG = "OnboardModules";
@@ -93,7 +93,7 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         }
         computer.updateDisplayStructure(pos, 1, state.getValue(OnboardComputerBlock.FACING),
                 RadarDisplayStructureResolver.StructureStatus.ACTIVE);
-        RadarMonitorControllerBlockEntity.tick(serverLevel, pos, state, computer);
+        AbstractRadarMonitorBlockEntity.tick(serverLevel, pos, state, computer);
         computer.tickShellAlarm(serverLevel, state);
         computer.updateRedstoneSignal(serverLevel, state);
     }
@@ -380,10 +380,10 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
         RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
         if (this.networkRoleEnsured
                 && manager.networkExists(this.networkId)
-                && !manager.controlConsumersAllowed(this.networkId)) {
+                && !manager.targetControllersAllowed(this.networkId)) {
             return;
         }
-        manager.setControlConsumersAllowed(this.networkId, false);
+        manager.setTargetControllersAllowed(this.networkId, false);
         this.networkRoleEnsured = true;
     }
 
@@ -592,8 +592,8 @@ public final class OnboardComputerBlockEntity extends RadarMonitorControllerBloc
     }
 
     @Override
-    protected boolean usesDisplayStructureResolver() {
-        return false;
+    public void setRadarNetworkId(@Nullable UUID networkId) {
+        // Бортовой компьютер владеет своей закрытой сетью и не принимает внешнюю привязку.
     }
 
     @Override

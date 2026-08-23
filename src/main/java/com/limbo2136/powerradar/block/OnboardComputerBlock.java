@@ -3,12 +3,11 @@ package com.limbo2136.powerradar.block;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
-import com.limbo2136.powerradar.compat.electroenergetics.MonitorControllerCeeDevice;
+import com.limbo2136.powerradar.compat.electroenergetics.OnboardComputerCeeDevice;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeContactGeometry;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeDeviceTypes;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeTerminalPair;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.onboard.OnboardModuleColumn;
 import com.limbo2136.powerradar.onboard.OnboardModuleSlot;
@@ -52,7 +51,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class OnboardComputerBlock extends BaseEntityBlock
-        implements IWrenchable, ElectricalDeviceBlock<MonitorControllerCeeDevice> {
+        implements IWrenchable, ElectricalDeviceBlock<OnboardComputerCeeDevice> {
     public static final MapCodec<OnboardComputerBlock> CODEC = simpleCodec(OnboardComputerBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
@@ -85,7 +84,6 @@ public final class OnboardComputerBlock extends BaseEntityBlock
     @Override
     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         ensureNodesExist(level, pos, state);
-        PowerRadarCeeIntegration.configureOnboardComputerLoad(level, pos);
         super.tick(state, level, pos, random);
     }
 
@@ -266,8 +264,8 @@ public final class OnboardComputerBlock extends BaseEntityBlock
     }
 
     @Override
-    public SimulatedDeviceType<MonitorControllerCeeDevice> getDevice() {
-        return PowerRadarCeeDeviceTypes.RADAR_MONITOR_CONTROLLER.get();
+    public SimulatedDeviceType<OnboardComputerCeeDevice> getDevice() {
+        return PowerRadarCeeDeviceTypes.ONBOARD_COMPUTER.get();
     }
 
     @Override

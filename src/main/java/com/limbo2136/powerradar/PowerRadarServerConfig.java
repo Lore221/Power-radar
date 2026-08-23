@@ -12,7 +12,7 @@ public final class PowerRadarServerConfig {
     private static final ModConfigSpec.IntValue STALE_TRACK_EXPIRATION_TICKS;
     private static final ModConfigSpec.IntValue ENTITY_QUERY_SLICE_SIZE;
     private static final ModConfigSpec.BooleanValue DETECT_PASSIVE_MOBS_BY_DEFAULT;
-    private static final ModConfigSpec.IntValue RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS;
+    private static final ModConfigSpec.IntValue RADAR_NETWORK_SOURCE_RANGE_BLOCKS;
     private static final ModConfigSpec.DoubleValue AUTOCANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue BIG_CANNON_MIN_FIRING_DISTANCE_BLOCKS;
     private static final ModConfigSpec.DoubleValue INTERCEPTION_SHELL_DESTRUCTION_PROBABILITY;
@@ -37,8 +37,10 @@ public final class PowerRadarServerConfig {
         DETECT_PASSIVE_MOBS_BY_DEFAULT = builder.define("detect_passive_mobs_by_default", true);
         builder.pop();
 
-        builder.push("radar_link");
-        RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS = builder.defineInRange("max_connection_distance_blocks", 128, 1, 100_000);
+        builder.push("radar_network");
+        RADAR_NETWORK_SOURCE_RANGE_BLOCKS = builder
+                .comment("Maximum distance at which a consumer receives snapshots from one radar source.")
+                .defineInRange("source_range_blocks", 64, 1, 100_000);
         builder.pop();
 
         builder.push("target_controller");
@@ -116,8 +118,8 @@ public final class PowerRadarServerConfig {
         return value(DETECT_PASSIVE_MOBS_BY_DEFAULT);
     }
 
-    public static int radarLinkMaxConnectionDistanceBlocks() {
-        return value(RADAR_LINK_MAX_CONNECTION_DISTANCE_BLOCKS);
+    public static int radarNetworkSourceRangeBlocks() {
+        return value(RADAR_NETWORK_SOURCE_RANGE_BLOCKS);
     }
 
     public static double autocannonMinFiringDistanceBlocks() {

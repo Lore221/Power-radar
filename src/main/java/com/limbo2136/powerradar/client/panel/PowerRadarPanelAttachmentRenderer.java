@@ -3,20 +3,18 @@ package com.limbo2136.powerradar.client.panel;
 import com.george_vi.electroenergetics.content.electrical_panel.ElectricalPanelBlockEntity;
 import com.george_vi.electroenergetics.content.electrical_panel.ElectricalPanelBlock;
 import com.limbo2136.powerradar.PowerRadar;
-import com.limbo2136.powerradar.client.RadarMonitorControllerBlockEntityRenderer;
+import com.limbo2136.powerradar.client.RadarMonitorRenderer;
 import com.limbo2136.powerradar.client.instrument.AttitudeIndicatorAngleCache;
-import com.limbo2136.powerradar.client.radarlink.PanelRadarLinkClientCache;
+import com.limbo2136.powerradar.client.radarlink.RadarLinkClientOutlineHandler;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.AttitudeIndicatorPanelAttachment;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.LogicDockPanelAttachment;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarDisplayPanelAttachment;
-import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarLinkPanelAttachment;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.createmod.catnip.render.CachedBuffers;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -28,8 +26,16 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 
 /** Клиентская отрисовка корпусов и карты модулей электрического щитка. */
 public final class PowerRadarPanelAttachmentRenderer {
-    private static final ResourceLocation RADAR_LINK_LOCATION =
-            PowerRadar.id("block/electrical_panel/radar_link");
+    private static final double FRAME_DEPTH = 1.0D / 512.0D;
+    private static final double FRAME_Z = 15.05D / 16.0D;
+    private static final double DISPLAY_FRAME_MIN_X = 1.5D / 16.0D;
+    private static final double DISPLAY_FRAME_MAX_X = 14.5D / 16.0D;
+    private static final double DISPLAY_FRAME_MIN_Y = 0.5D / 16.0D;
+    private static final double DISPLAY_FRAME_MAX_Y = 14.5D / 16.0D;
+    private static final double LOGIC_DOCK_FRAME_MIN_X = 1.5D / 16.0D;
+    private static final double LOGIC_DOCK_FRAME_MAX_X = 8.0D / 16.0D;
+    private static final double LOGIC_DOCK_FRAME_MIN_Y = 1.5D / 16.0D;
+    private static final double LOGIC_DOCK_FRAME_MAX_Y = 14.5D / 16.0D;
     private static final ResourceLocation RADAR_DISPLAY_LOCATION =
             PowerRadar.id("block/electrical_panel/radar_display");
     private static final ResourceLocation ATTITUDE_INDICATOR_LOCATION =
@@ -44,7 +50,6 @@ public final class PowerRadarPanelAttachmentRenderer {
             PowerRadar.id("block/electrical_panel/display_card");
     private static final ResourceLocation LOGIC_DOCK_ALLOWLIST_CARD_LOCATION =
             PowerRadar.id("block/electrical_panel/allowlist_card");
-    private static final PartialModel RADAR_LINK = PartialModel.of(RADAR_LINK_LOCATION);
     private static final PartialModel RADAR_DISPLAY = PartialModel.of(RADAR_DISPLAY_LOCATION);
     private static final PartialModel ATTITUDE_INDICATOR = PartialModel.of(ATTITUDE_INDICATOR_LOCATION);
     private static final PartialModel ATTITUDE_SPHERE = PartialModel.of(ATTITUDE_SPHERE_LOCATION);
@@ -80,14 +85,13 @@ public final class PowerRadarPanelAttachmentRenderer {
     // Сфера сохраняет мировой горизонт, поэтому визуально вращается против крена и тангажа щитка.
     private static final float SPHERE_BANK_SIGN = -1.0F;
     private static final float SPHERE_PITCH_SIGN = -1.0F;
-    private static final RadarMonitorControllerBlockEntityRenderer MONITOR_RENDERER =
-            new RadarMonitorControllerBlockEntityRenderer(null);
+    private static final RadarMonitorRenderer MONITOR_RENDERER =
+            new RadarMonitorRenderer(null);
 
     private PowerRadarPanelAttachmentRenderer() {
     }
 
     public static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
-        event.register(ModelResourceLocation.standalone(RADAR_LINK_LOCATION));
         event.register(ModelResourceLocation.standalone(RADAR_DISPLAY_LOCATION));
         event.register(ModelResourceLocation.standalone(ATTITUDE_INDICATOR_LOCATION));
         event.register(ModelResourceLocation.standalone(ATTITUDE_SPHERE_LOCATION));
@@ -95,34 +99,6 @@ public final class PowerRadarPanelAttachmentRenderer {
         event.register(ModelResourceLocation.standalone(LOGIC_DOCK_TARGETING_CARD_LOCATION));
         event.register(ModelResourceLocation.standalone(LOGIC_DOCK_DISPLAY_CARD_LOCATION));
         event.register(ModelResourceLocation.standalone(LOGIC_DOCK_ALLOWLIST_CARD_LOCATION));
-    }
-
-    /** Обновляет индекс подсветки по фактическому слоту, поэтому один щиток может хранить несколько Link. */
-    public static void tickLinkClient(
-            RadarLinkPanelAttachment attachment,
-            ElectricalPanelBlockEntity panel
-    ) {
-        if (!(panel.getLevel() instanceof ClientLevel clientLevel)) {
-            return;
-        }
-        PanelRadarLinkClientCache.registerOrUpdate(
-                clientLevel,
-                panel.getBlockPos(),
-                attachment.slot,
-                attachment.networkId());
-    }
-
-    public static void renderLink(
-            RadarLinkPanelAttachment attachment,
-            ElectricalPanelBlockEntity panel,
-            PoseStack poseStack,
-            MultiBufferSource buffers,
-            int packedLight
-    ) {
-        attachment.transformPose(poseStack, panel);
-        CachedBuffers.partial(RADAR_LINK, panel.getBlockState())
-                .light(packedLight)
-                .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
     }
 
     public static void renderDisplay(
@@ -139,6 +115,10 @@ public final class PowerRadarPanelAttachmentRenderer {
                 .light(packedLight)
                 .overlay(packedOverlay)
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
+        renderNetworkFrame(
+                attachment.networkId(), poseStack, buffers,
+                DISPLAY_FRAME_MIN_X, DISPLAY_FRAME_MIN_Y,
+                DISPLAY_FRAME_MAX_X, DISPLAY_FRAME_MAX_Y);
 
         // Окно модели занимает x/y 3..13 и лежит на z=10; карта рисуется в этом квадрате.
         poseStack.translate(3.0D / 16.0D, 3.0D / 16.0D, 2.0D / 16.0D);
@@ -171,6 +151,10 @@ public final class PowerRadarPanelAttachmentRenderer {
                 .light(packedLight)
                 .overlay(packedOverlay)
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
+        renderNetworkFrame(
+                attachment.networkId(), poseStack, buffers,
+                LOGIC_DOCK_FRAME_MIN_X, LOGIC_DOCK_FRAME_MIN_Y,
+                LOGIC_DOCK_FRAME_MAX_X, LOGIC_DOCK_FRAME_MAX_Y);
 
         if (attachment.hasCard(0)) {
             renderLogicDockCard(
@@ -253,6 +237,30 @@ public final class PowerRadarPanelAttachmentRenderer {
                 .overlay(packedOverlay)
                 .renderInto(poseStack, buffers.getBuffer(RenderType.cutout()));
         poseStack.popPose();
+    }
+
+    private static void renderNetworkFrame(
+            java.util.UUID networkId,
+            PoseStack poseStack,
+            MultiBufferSource buffers,
+            double minX,
+            double minY,
+            double maxX,
+            double maxY
+    ) {
+        if (!RadarLinkClientOutlineHandler.isSelectedRadarNetwork(networkId)) {
+            return;
+        }
+        int color = RadarLinkClientOutlineHandler.radarPulseColor();
+        float red = (color >> 16 & 0xFF) / 255.0F;
+        float green = (color >> 8 & 0xFF) / 255.0F;
+        float blue = (color & 0xFF) / 255.0F;
+        LevelRenderer.renderLineBox(
+                poseStack,
+                buffers.getBuffer(RenderType.lines()),
+                minX, minY, FRAME_Z,
+                maxX, maxY, FRAME_Z + FRAME_DEPTH,
+                red, green, blue, 1.0F);
     }
 
     private static void renderPanelWindow(

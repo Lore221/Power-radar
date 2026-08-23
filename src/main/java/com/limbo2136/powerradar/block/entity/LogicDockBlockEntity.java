@@ -3,8 +3,9 @@ package com.limbo2136.powerradar.block.entity;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.logic.LogicDockCardInventory;
 import com.limbo2136.powerradar.logic.LogicDockPolicySource;
-import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
@@ -15,6 +16,8 @@ import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.List;
+import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -28,9 +31,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class LogicDockBlockEntity extends BlockEntity
-        implements IHaveGoggleInformation, LogicDockPolicySource {
+        implements IHaveGoggleInformation, LogicDockPolicySource, RadarNetworkMember {
     private final LogicDockCardInventory cards = new LogicDockCardInventory();
     private PowerRadarCeeSnapshot electrical = PowerRadarCeeSnapshot.EMPTY;
+    @Nullable
+    private UUID networkId;
 
     public LogicDockBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.LOGIC_DOCK.get(), pos, state);
@@ -40,8 +45,13 @@ public class LogicDockBlockEntity extends BlockEntity
     public void onLoad() {
         super.onLoad();
         if (this.level instanceof ServerLevel serverLevel) {
+            if (this.networkId != null) {
+                RadarNetworkManager.get(serverLevel.getServer()).loadLogicDock(
+                        this.networkId, net.minecraft.core.GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+            }
             serverLevel.scheduleTick(this.worldPosition, this.getBlockState().getBlock(), 1);
         }
+        RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
     }
 
     public static void serverTick(
@@ -142,6 +152,50 @@ public class LogicDockBlockEntity extends BlockEntity
         }
     }
 
+    @Override
+    public void onChunkUnloaded() {
+        unregisterLogicDock();
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        super.onChunkUnloaded();
+    }
+
+    @Override
+    public void setRemoved() {
+        unregisterLogicDock();
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        super.setRemoved();
+    }
+
+    @Override
+    @Nullable
+    public UUID radarNetworkId() {
+        return this.networkId;
+    }
+
+    @Override
+    public void setRadarNetworkId(@Nullable UUID networkId) {
+        if (java.util.Objects.equals(this.networkId, networkId)) {
+            return;
+        }
+        UUID oldNetworkId = this.networkId;
+        if (this.level instanceof ServerLevel serverLevel && oldNetworkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadLogicDock(
+                    oldNetworkId, net.minecraft.core.GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+        }
+        this.networkId = networkId;
+        if (this.level instanceof ServerLevel serverLevel && networkId != null) {
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            manager.loadLogicDock(networkId,
+                    net.minecraft.core.GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+        }
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, networkId);
+        setChanged();
+        if (this.level instanceof ServerLevel serverLevel) {
+            serverLevel.sendBlockUpdated(this.worldPosition, getBlockState(), getBlockState(), 3);
+        }
+    }
+
     public void invalidateConnectedNetworks() {
         if (this.level instanceof ServerLevel serverLevel) {
             RadarNetworkManager.get(serverLevel.getServer())
@@ -193,19 +247,12 @@ public class LogicDockBlockEntity extends BlockEntity
 
     // Вычисляет сетевой статус только если соответствующая строка включена в раскладке очков.
     private void appendNetworkStatus(List<Component> tooltip, ServerLevel serverLevel) {
-        RadarLinkConnectionResolver.Resolution resolution =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, worldPosition);
-        if (resolution.status() != RadarLinkConnectionResolver.Status.SINGLE || resolution.link().networkId() == null) {
+        if (this.networkId == null) {
             tooltip.add(Component.translatable("goggles.power_radar.logic_dock.disconnected"));
             return;
         }
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
-        if (!manager.controlConsumersAllowed(resolution.link().networkId())) {
-            tooltip.add(Component.translatable("goggles.power_radar.logic_dock.onboard_network"));
-            return;
-        }
-        RadarNetworkManager.LogicDockResolution dock = manager
-                .resolveLogicDock(resolution.link().networkId());
+        RadarNetworkManager.LogicDockResolution dock = manager.resolveLogicDock(this.networkId);
         tooltip.add(Component.translatable(dock.conflict()
                 ? "goggles.power_radar.logic_dock.conflict"
                 : "goggles.power_radar.logic_dock.connected"));
@@ -221,10 +268,14 @@ public class LogicDockBlockEntity extends BlockEntity
         tag.putDouble("ElectricalCurrentAmps", this.electrical.currentAmps());
         tag.putDouble("ElectricalPowerWatts", this.electrical.powerWatts());
         tag.putDouble("ElectricalResistanceOhms", this.electrical.resistanceOhms());
+        if (this.networkId != null) {
+            tag.putUUID("PowerRadarNetworkId", this.networkId);
+        }
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        UUID oldNetworkId = this.networkId;
         super.loadAdditional(tag, registries);
         this.cards.read(tag, registries);
         PowerRadarCeeState state;
@@ -242,6 +293,11 @@ public class LogicDockBlockEntity extends BlockEntity
                 tag.contains("ElectricalResistanceOhms")
                         ? tag.getDouble("ElectricalResistanceOhms")
                         : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS);
+        this.networkId = tag.hasUUID("PowerRadarNetworkId")
+                ? tag.getUUID("PowerRadarNetworkId")
+                : null;
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, this.networkId);
     }
 
     @Override
@@ -263,14 +319,16 @@ public class LogicDockBlockEntity extends BlockEntity
     }
 
     private void invalidateNetworkPolicyCache() {
-        if (!(this.level instanceof ServerLevel serverLevel)) {
+        if (!(this.level instanceof ServerLevel serverLevel) || this.networkId == null) {
             return;
         }
-        RadarLinkConnectionResolver.Resolution resolution =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(serverLevel, this.worldPosition);
-        if (resolution.status() == RadarLinkConnectionResolver.Status.SINGLE
-                && resolution.link().networkId() != null) {
-            RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(resolution.link().networkId());
+        RadarNetworkManager.get(serverLevel.getServer()).invalidateLogicDockCache(this.networkId);
+    }
+
+    private void unregisterLogicDock() {
+        if (this.level instanceof ServerLevel serverLevel && this.networkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadLogicDock(
+                    this.networkId, net.minecraft.core.GlobalPos.of(serverLevel.dimension(), this.worldPosition));
         }
     }
 

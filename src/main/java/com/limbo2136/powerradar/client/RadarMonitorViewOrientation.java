@@ -1,12 +1,12 @@
 package com.limbo2136.powerradar.client;
 
 import com.limbo2136.powerradar.config.PowerRadarClientConfig;
-import com.limbo2136.powerradar.block.RadarMonitorControllerBlock;
 import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 import com.limbo2136.powerradar.radar.RadarGeometry;
 import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class RadarMonitorViewOrientation {
@@ -23,8 +23,8 @@ public final class RadarMonitorViewOrientation {
             return displayData.monitorViewYawDegrees();
         }
         BlockState state = minecraft.level.getBlockState(displayData.monitorPos());
-        Direction facing = state.hasProperty(RadarMonitorControllerBlock.FACING)
-                ? state.getValue(RadarMonitorControllerBlock.FACING)
+        Direction facing = state.hasProperty(HorizontalDirectionalBlock.FACING)
+                ? state.getValue(HorizontalDirectionalBlock.FACING)
                 : Direction.NORTH;
         return RadarGeometry.yawDegrees(facing.getOpposite());
     }

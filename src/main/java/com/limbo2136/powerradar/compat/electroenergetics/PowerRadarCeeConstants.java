@@ -59,8 +59,9 @@ public final class PowerRadarCeeConstants {
     }
 
     public static double monitorNominalPowerWatts(int activeDisplayCount) {
-        return activeDisplayCount <= 0 ? 0.0 : PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts()
-                + PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts() * activeDisplayCount;
+        return activeDisplayCount <= 0 ? 0.0 : PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts()
+                + PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts()
+                        * Math.max(0, activeDisplayCount - 1);
     }
 
     public static int radarBaseRangeBlocks(int phasedArrayPanelCount) {

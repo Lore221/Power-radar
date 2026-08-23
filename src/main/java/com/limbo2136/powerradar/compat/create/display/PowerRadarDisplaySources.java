@@ -41,7 +41,7 @@ public final class PowerRadarDisplaySources {
     public static void setup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             DisplaySource.BY_BLOCK_ENTITY.register(
-                    ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(),
+                    ModBlockEntities.RADAR_DISPLAY.get(),
                     List.of(
                             MONITOR_TARGET_COUNT.get(),
                             SELECTED_TARGET_COORDINATES.get(),

@@ -6,7 +6,6 @@ import com.limbo2136.powerradar.block.OverviewModuleBlock;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
 import com.limbo2136.powerradar.block.RadarDisplayBlock;
-import com.limbo2136.powerradar.block.RadarMonitorControllerBlock;
 import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.limbo2136.powerradar.block.ShellAlarmBlock;
 import com.limbo2136.powerradar.block.TargetControllerBlock;
@@ -52,9 +51,6 @@ public final class ModBlocks {
 
     public static final DeferredBlock<OverviewModuleBlock> OVERVIEW_MODULE = BLOCKS.registerBlock(
             "overview_module", OverviewModuleBlock::new, lightProperties());
-
-    public static final DeferredBlock<RadarMonitorControllerBlock> RADAR_MONITOR_CONTROLLER = BLOCKS.registerBlock(
-            "radar_monitor_controller", RadarMonitorControllerBlock::new, mediumProperties());
 
     public static final DeferredBlock<RadarDisplayBlock> RADAR_DISPLAY = BLOCKS.registerBlock(
             "radar_display", RadarDisplayBlock::new, lightProperties());

@@ -19,7 +19,6 @@ public final class PowerRadarTooltipSettings {
                 SURFACE_RADAR_CONTROLLER,
                 PHASED_ARRAY_PANEL,
                 OVERVIEW_MODULE,
-                MONITOR_CONTROLLER,
                 RADAR_DISPLAY,
                 LOGIC_DOCK,
                 ONBOARD_COMPUTER,
@@ -99,9 +98,6 @@ public final class PowerRadarTooltipSettings {
                         Map.entry(Target.OVERVIEW_MODULE, List.of(
                                         field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.RANGE_BONUS))),
-                        Map.entry(Target.MONITOR_CONTROLLER, List.of(
-                                        field(InventoryField.NOMINAL_POWER),
-                                        field(InventoryField.NOMINAL_VOLTAGE))),
                         Map.entry(Target.RADAR_DISPLAY, List.of(
                                         field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.NOMINAL_VOLTAGE))),
@@ -118,9 +114,6 @@ public final class PowerRadarTooltipSettings {
                                         field(InventoryField.INTERNAL_RESISTANCE),
                                         field(InventoryField.NOMINAL_VOLTAGE))),
                         Map.entry(Target.SHELL_ALARM, List.of(
-                                        field(InventoryField.NOMINAL_POWER),
-                                        field(InventoryField.NOMINAL_VOLTAGE))),
-                        Map.entry(Target.RADAR_LINK, List.of(
                                         field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.NOMINAL_VOLTAGE))),
                         Map.entry(Target.EW_SYSTEM, List.of(
@@ -148,7 +141,7 @@ public final class PowerRadarTooltipSettings {
                                         field(GoggleField.STATUS),
                                         field(GoggleField.POWER),
                                         field(GoggleField.EFFECTIVE_RANGE))),
-                        Map.entry(Target.MONITOR_CONTROLLER, List.of(
+                        Map.entry(Target.RADAR_DISPLAY, List.of(
                                         field(GoggleField.TITLE),
                                         field(GoggleField.POWER))),
                         Map.entry(Target.LOGIC_DOCK, List.of(

@@ -4,7 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.MechanicalSirenBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
-import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarDisplayBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
@@ -30,9 +30,9 @@ public final class ModBlockEntities {
                             ModBlocks.SURFACE_RADAR_CONTROLLER.get())
                     .build(null));
 
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarMonitorControllerBlockEntity>> RADAR_MONITOR_CONTROLLER =
-            BLOCK_ENTITIES.register("radar_monitor_controller", () -> BlockEntityType.Builder
-                    .of(RadarMonitorControllerBlockEntity::new, ModBlocks.RADAR_MONITOR_CONTROLLER.get())
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarDisplayBlockEntity>> RADAR_DISPLAY =
+            BLOCK_ENTITIES.register("radar_display", () -> BlockEntityType.Builder
+                    .of(RadarDisplayBlockEntity::new, ModBlocks.RADAR_DISPLAY.get())
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LogicDockBlockEntity>> LOGIC_DOCK =

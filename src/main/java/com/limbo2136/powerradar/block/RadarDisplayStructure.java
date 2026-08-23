@@ -9,12 +9,28 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
-public record RadarDisplayStructure(BlockPos origin, int size, Direction facing, Set<BlockPos> positions) {
+public record RadarDisplayStructure(
+        BlockPos origin,
+        int width,
+        int height,
+        Direction facing,
+        Set<BlockPos> positions
+) {
+    public RadarDisplayStructure(BlockPos origin, int size, Direction facing, Set<BlockPos> positions) {
+        this(origin, size, size, facing, positions);
+    }
+
+    public int size() {
+        return Math.min(this.width, this.height);
+    }
+
     public boolean assembled() {
         return this.origin != null
-                && this.size >= RadarDisplayStructureResolver.MIN_SIZE
-                && this.size <= RadarDisplayStructureResolver.MAX_SIZE
-                && this.positions.size() == this.size * this.size;
+                && this.width >= RadarDisplayStructureResolver.MIN_SIZE
+                && this.width <= RadarDisplayStructureResolver.MAX_SIZE
+                && this.height >= RadarDisplayStructureResolver.MIN_SIZE
+                && this.height <= RadarDisplayStructureResolver.MAX_SIZE
+                && this.positions.size() == this.width * this.height;
     }
 
     public boolean contains(BlockPos pos) {
@@ -34,7 +50,7 @@ public record RadarDisplayStructure(BlockPos origin, int size, Direction facing,
     }
 
     public RadarDisplayFrameShape frameShape(BlockPos pos) {
-        if (this.size <= 1) {
+        if (this.width <= 1 && this.height <= 1) {
             return RadarDisplayFrameShape.SINGLE;
         }
         Direction rightAxis = RadarDisplayStructureResolver.right(this.facing);
@@ -42,9 +58,28 @@ public record RadarDisplayStructure(BlockPos origin, int size, Direction facing,
         int v = pos.getY() - this.origin.getY();
 
         boolean left = u == 0;
-        boolean right = u == this.size - 1;
+        boolean right = u == this.width - 1;
         boolean bottom = v == 0;
-        boolean top = v == this.size - 1;
+        boolean top = v == this.height - 1;
+
+        if (this.width == 1) {
+            if (top) {
+                return RadarDisplayFrameShape.VERTICAL_TOP;
+            }
+            if (bottom) {
+                return RadarDisplayFrameShape.VERTICAL_BOTTOM;
+            }
+            return RadarDisplayFrameShape.VERTICAL;
+        }
+        if (this.height == 1) {
+            if (left) {
+                return RadarDisplayFrameShape.HORIZONTAL_LEFT;
+            }
+            if (right) {
+                return RadarDisplayFrameShape.HORIZONTAL_RIGHT;
+            }
+            return RadarDisplayFrameShape.HORIZONTAL;
+        }
 
         if (top && left) {
             return RadarDisplayFrameShape.TOP_LEFT;
@@ -74,10 +109,19 @@ public record RadarDisplayStructure(BlockPos origin, int size, Direction facing,
     }
 
     public static List<BlockPos> squarePositions(BlockPos origin, Direction facing, int size) {
+        return rectanglePositions(origin, facing, size, size);
+    }
+
+    public static List<BlockPos> rectanglePositions(
+            BlockPos origin,
+            Direction facing,
+            int width,
+            int height
+    ) {
         Direction right = RadarDisplayStructureResolver.right(facing);
-        ArrayList<BlockPos> positions = new ArrayList<>(size * size);
-        for (int u = 0; u < size; u++) {
-            for (int v = 0; v < size; v++) {
+        ArrayList<BlockPos> positions = new ArrayList<>(width * height);
+        for (int u = 0; u < width; u++) {
+            for (int v = 0; v < height; v++) {
                 positions.add(RadarDisplayStructureResolver.localOffset(origin, right, u, v));
             }
         }

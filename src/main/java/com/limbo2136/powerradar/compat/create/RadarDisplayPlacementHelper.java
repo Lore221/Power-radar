@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.compat.create;
 import com.limbo2136.powerradar.block.RadarDisplayBlock;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 import net.createmod.catnip.placement.IPlacementHelper;
 import net.createmod.catnip.placement.PlacementOffset;
@@ -27,8 +28,24 @@ public class RadarDisplayPlacementHelper implements IPlacementHelper {
 
     @Override
     public PlacementOffset getOffset(Player player, Level level, BlockState state, BlockPos pos, BlockHitResult hitResult) {
-        if (!state.hasProperty(RadarDisplayBlock.FACING)) {
+        Optional<BlockPos> target = findTargetPos(level, state, pos, hitResult);
+        if (target.isEmpty()) {
             return PlacementOffset.fail();
+        }
+        Direction clickedFacing = state.getValue(RadarDisplayBlock.FACING);
+        return PlacementOffset.success(target.get(), newState -> newState.hasProperty(RadarDisplayBlock.FACING)
+                ? newState.setValue(RadarDisplayBlock.FACING, clickedFacing)
+                : newState);
+    }
+
+    public Optional<BlockPos> findTargetPos(
+            Level level,
+            BlockState state,
+            BlockPos pos,
+            BlockHitResult hitResult
+    ) {
+        if (!state.hasProperty(RadarDisplayBlock.FACING)) {
+            return Optional.empty();
         }
 
         Direction clickedFacing = state.getValue(RadarDisplayBlock.FACING);
@@ -40,12 +57,8 @@ public class RadarDisplayPlacementHelper implements IPlacementHelper {
                 direction -> level.getBlockState(pos.relative(direction)).canBeReplaced()
         );
         if (directions.isEmpty()) {
-            return PlacementOffset.fail();
+            return Optional.empty();
         }
-
-        BlockPos targetPos = pos.relative(directions.getFirst());
-        return PlacementOffset.success(targetPos, newState -> newState.hasProperty(RadarDisplayBlock.FACING)
-                ? newState.setValue(RadarDisplayBlock.FACING, clickedFacing)
-                : newState);
+        return Optional.of(pos.relative(directions.getFirst()));
     }
 }

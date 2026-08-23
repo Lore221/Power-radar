@@ -4,13 +4,13 @@
 
 Power Radar is a Minecraft 1.21.1 addon for Create and Create: Electro Energetics that adds configurable radar, monitoring, targeting, and base-defense systems.
 
-Instead of treating every detector as an isolated block, Power Radar organizes devices into radar networks. Radar controllers collect targets, monitor controllers present network data, Logic Docks determine which targets matter, and Radar Links connect the system to displays and other equipment.
+Instead of treating every detector as an isolated block, Power Radar organizes devices into radar networks. Each radar controller is a network source, powered radar displays present locally available data, and Logic Docks determine which targets matter.
 
 The mod is designed around Create machinery and uses the electrical simulation from [Create: Electro Energetics](https://github.com/george8188625/Create-Electro-Energetics), including nominal voltage, power consumption, electrical panels, and working-state diagnostics.
 
 ### Usage
 
-A basic installation consists of a radar controller, radar panels, an overview module, a monitor controller, and one or more displays. Devices can be linked into the same network with the Linker.
+A basic installation consists of a radar controller, radar panels, an overview module, and one or more radar displays. A block item can copy a network directly from a radar controller before placement, while the Linker configures blocks that are already installed.
 
 Different radar controllers cover different roles:
 
@@ -20,7 +20,7 @@ Different radar controllers cover different roles:
 
 The Onboard Computer acts as a compact radar-network terminal for moving Aeronautics structures.
 
-Logic Docks accept filter cards and define which detected targets are distributed through the network. Monitor controllers provide target counts, selected-target coordinates, target category, and speed to Create display links.
+Logic Docks accept filter cards and define which detected targets are distributed through the network. Root radar displays provide target counts, selected-target coordinates, target category, and speed to Create display links.
 
 In-game Ponder scenes explain the main devices and network setup.
 
@@ -28,8 +28,8 @@ In-game Ponder scenes explain the main devices and network setup.
 
 - Base, Air, and Surface Radar Controllers
 - Radar Panels and Overview Modules
-- Radar Monitor Controllers and modular displays
-- Logic Docks, filter cards, Radar Links, and Linkers
+- Powered Radar Displays that assemble into rectangular monitors
+- Logic Docks, filter cards, and configurable radar networks
 - Configurable radar ranges, vertical limits, and scan angles
 - Mechanical sirens and electrical diagnostics
 - Create display-link integration

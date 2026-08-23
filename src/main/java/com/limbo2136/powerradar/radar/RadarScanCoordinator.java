@@ -82,7 +82,6 @@ public final class RadarScanCoordinator {
                 ? SableRadarIntegration.loadedStructures(level)
                 : List.of();
         Map<RadarScanRequest, Set<TargetKey>> seenByRequest = new IdentityHashMap<>();
-        Map<RadarScanRequest, Set<java.util.UUID>> sableDetectedByRequest = new IdentityHashMap<>();
         Map<RadarScanRequest, RadarCoverageFilter.PreparedCoverage> coverageByRequest = new IdentityHashMap<>();
         RadarSurfaceHeightCache surfaceHeights = new RadarSurfaceHeightCache(level);
         int entityCandidates = 0;
@@ -130,9 +129,7 @@ public final class RadarScanCoordinator {
                         if (RadarScanner.processSableCandidate(
                                 member.request.discoveryProfile(), member.request.context(),
                                 member.request.targetCache(), structure, seen, coverage, surfaceHeights)) {
-                            sableDetectedByRequest
-                                    .computeIfAbsent(member.request, ignored -> new HashSet<>())
-                                    .add(structure.structureUuid());
+                            member.request.sableCoverage().record(structure.structureUuid());
                         }
                     }
                 }
@@ -147,7 +144,7 @@ public final class RadarScanCoordinator {
             SableWarningManager.replaceRadarCoverage(
                     level,
                     request.radarId(),
-                    sableDetectedByRequest.getOrDefault(request, Set.of()),
+                    request.sableCoverage().snapshot(),
                     request.context().gameTime());
             if (request.refreshProfile() != null) {
                 RadarScanner.refreshTrackedEntities(

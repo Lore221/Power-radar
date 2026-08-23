@@ -22,8 +22,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 
 /**
- * Авторитетное хранилище топологии в SavedData основного мира. Миграции выполняются строго
- * последовательно, а записи будущих версий сохраняются без нормализации их NBT.
+ * Авторитетное хранилище настроек сетей в SavedData основного мира.
+ * Топология до 1.2 несовместима и намеренно не переносится.
  */
 public class RadarNetworkSavedData extends SavedData {
     public static final String NAME = "power_radar_networks";
@@ -36,7 +36,8 @@ public class RadarNetworkSavedData extends SavedData {
     private static final String WHITELISTED_SABLE_KEY = "WhitelistedSable";
     private static final String SELECTED_TARGET_UUID_KEY = "SelectedTargetUuid";
     private static final String AUTOTARGET_FILTER_MASK_KEY = "AutotargetFilterMask";
-    private static final String CONTROL_CONSUMERS_ALLOWED_KEY = "ControlConsumersAllowed";
+    private static final String TARGET_CONTROLLERS_ALLOWED_KEY = "TargetControllersAllowed";
+    private static final String LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY = "ControlConsumersAllowed";
 
     private final Map<UUID, RadarNetworkRecord> networks = new LinkedHashMap<>();
     private final List<CompoundTag> preservedFutureNetworkTags = new ArrayList<>();
@@ -84,7 +85,7 @@ public class RadarNetworkSavedData extends SavedData {
                 record.setSelectedTargetUuid(networkTag.getUUID(SELECTED_TARGET_UUID_KEY));
             }
             record.setAutotargetFilterMask(networkTag.getInt(AUTOTARGET_FILTER_MASK_KEY));
-            record.setControlConsumersAllowed(networkTag.getBoolean(CONTROL_CONSUMERS_ALLOWED_KEY));
+            record.setTargetControllersAllowed(networkTag.getBoolean(TARGET_CONTROLLERS_ALLOWED_KEY));
             if (data.networks.putIfAbsent(id, record) != null) {
                 needsResave = true;
                 PowerRadar.LOGGER.warn("[PowerRadar] Skipping duplicate radar network record {}", id);
@@ -121,7 +122,7 @@ public class RadarNetworkSavedData extends SavedData {
                 networkTag.putUUID(SELECTED_TARGET_UUID_KEY, record.selectedTargetUuid());
             }
             networkTag.putInt(AUTOTARGET_FILTER_MASK_KEY, record.autotargetFilterMask());
-            networkTag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, record.controlConsumersAllowed());
+            networkTag.putBoolean(TARGET_CONTROLLERS_ALLOWED_KEY, record.targetControllersAllowed());
             networksTag.add(networkTag);
         }
         for (CompoundTag futureNetworkTag : this.preservedFutureNetworkTags) {
@@ -181,45 +182,11 @@ public class RadarNetworkSavedData extends SavedData {
         if (schemaVersion < 0) {
             return MigrationResult.invalid("negative schema version " + schemaVersion);
         }
-
-        // Нельзя перескакивать версии: каждый шаг отвечает только за добавленный им контракт.
-        boolean changed = false;
-        while (schemaVersion < RadarNetworkRecord.SCHEMA_VERSION) {
-            switch (schemaVersion) {
-                case 0 -> migrateV0ToV1(tag);
-                case 1 -> migrateV1ToV2(tag);
-                case 2 -> migrateV2ToV3(tag);
-                case 3 -> migrateV3ToV4(tag);
-                default -> throw new IllegalStateException("Unsupported radar network schema " + schemaVersion);
-            }
-            schemaVersion++;
-            tag.putInt(SCHEMA_VERSION_KEY, schemaVersion);
-            changed = true;
+        if (schemaVersion < RadarNetworkRecord.SCHEMA_VERSION) {
+            return MigrationResult.invalid("legacy pre-1.2 network schema " + schemaVersion);
         }
-        changed |= normalizeCurrentSchema(tag);
+        boolean changed = normalizeCurrentSchema(tag);
         return MigrationResult.current(tag, changed);
-    }
-
-    private static void migrateV0ToV1(CompoundTag tag) {
-        ensureCompoundList(tag, LINK_NODES_KEY);
-        ensureCompoundList(tag, CONTROLLER_BINDINGS_KEY);
-    }
-
-    private static void migrateV1ToV2(CompoundTag tag) {
-        ensureStringList(tag, WHITELISTED_PLAYERS_KEY);
-        ensureStringList(tag, WHITELISTED_SABLE_KEY);
-    }
-
-    private static void migrateV2ToV3(CompoundTag tag) {
-        if (!tag.contains(AUTOTARGET_FILTER_MASK_KEY, Tag.TAG_INT)) {
-            tag.putInt(AUTOTARGET_FILTER_MASK_KEY, 0);
-        }
-    }
-
-    private static void migrateV3ToV4(CompoundTag tag) {
-        if (!tag.contains(CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)) {
-            tag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, true);
-        }
     }
 
     private static boolean normalizeCurrentSchema(CompoundTag tag) {
@@ -232,8 +199,14 @@ public class RadarNetworkSavedData extends SavedData {
             tag.putInt(AUTOTARGET_FILTER_MASK_KEY, 0);
             changed = true;
         }
-        if (!tag.contains(CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)) {
-            tag.putBoolean(CONTROL_CONSUMERS_ALLOWED_KEY, true);
+        if (!tag.contains(TARGET_CONTROLLERS_ALLOWED_KEY, Tag.TAG_BYTE)) {
+            boolean allowed = !tag.contains(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)
+                    || tag.getBoolean(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY);
+            tag.putBoolean(TARGET_CONTROLLERS_ALLOWED_KEY, allowed);
+            changed = true;
+        }
+        if (tag.contains(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY)) {
+            tag.remove(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY);
             changed = true;
         }
         return changed;

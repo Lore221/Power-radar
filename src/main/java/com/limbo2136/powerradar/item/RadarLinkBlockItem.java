@@ -35,10 +35,11 @@ public class RadarLinkBlockItem extends BlockItem {
         Player player = context.getPlayer();
         Level level = context.getLevel();
         if (player != null && !player.isShiftKeyDown()
-                && RadarNetworkTuning.isSourceAt(level, context.getClickedPos())) {
+                && RadarNetworkTuning.isRadarSourceAt(level, context.getClickedPos())) {
             ItemStack stack = context.getItemInHand();
             if (!level.isClientSide()) {
-                UUID targetNetworkId = RadarNetworkTuning.ensureNetworkAt(level, context.getClickedPos());
+                UUID targetNetworkId = RadarNetworkTuning.ensureRadarSourceNetworkAt(
+                        level, context.getClickedPos());
                 UUID currentNetworkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
                 if (targetNetworkId.equals(currentNetworkId)) {
                     player.displayClientMessage(Component.translatable("message.power_radar.radar_link.already_tuned"), true);

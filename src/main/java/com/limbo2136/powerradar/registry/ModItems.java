@@ -4,6 +4,7 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.PowerRadarDescriptionBlockItem;
 import com.limbo2136.powerradar.item.RadarLinkBlockItem;
+import com.limbo2136.powerradar.item.RadarNetworkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
 import com.limbo2136.powerradar.item.InterceptionControllerBlockItem;
@@ -25,13 +26,13 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public final class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(PowerRadar.MOD_ID);
 
-    public static final DeferredItem<BlockItem> RADAR_CONTROLLER = registerElectricalBlock(
+    public static final DeferredItem<BlockItem> RADAR_CONTROLLER = registerRadarNetworkBlock(
             "radar_controller", ModBlocks.RADAR_CONTROLLER, Target.RADAR_CONTROLLER);
-    public static final DeferredItem<BlockItem> AIR_RADAR_CONTROLLER = registerElectricalBlock(
+    public static final DeferredItem<BlockItem> AIR_RADAR_CONTROLLER = registerRadarNetworkBlock(
             "air_radar_controller", ModBlocks.AIR_RADAR_CONTROLLER, Target.AIR_RADAR_CONTROLLER);
-    public static final DeferredItem<BlockItem> SURFACE_RADAR_CONTROLLER = registerElectricalBlock(
+    public static final DeferredItem<BlockItem> SURFACE_RADAR_CONTROLLER = registerRadarNetworkBlock(
             "surface_radar_controller", ModBlocks.SURFACE_RADAR_CONTROLLER, Target.SURFACE_RADAR_CONTROLLER);
-    public static final DeferredItem<BlockItem> LOGIC_DOCK = registerElectricalBlock(
+    public static final DeferredItem<BlockItem> LOGIC_DOCK = registerRadarNetworkBlock(
             "logic_dock", ModBlocks.LOGIC_DOCK, Target.LOGIC_DOCK);
     public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = ITEMS.register(
             "onboard_computer",
@@ -58,16 +59,14 @@ public final class ModItems {
             "overview_module", ModBlocks.OVERVIEW_MODULE, Target.OVERVIEW_MODULE);
     public static final DeferredItem<IncompleteOverviewModuleItem> INCOMPLETE_OVERVIEW_MODULE = ITEMS.register(
             "incomplete_overview_module", () -> new IncompleteOverviewModuleItem(new Item.Properties()));
-    public static final DeferredItem<BlockItem> RADAR_MONITOR_CONTROLLER = registerElectricalBlock(
-            "radar_monitor_controller", ModBlocks.RADAR_MONITOR_CONTROLLER, Target.MONITOR_CONTROLLER);
-    public static final DeferredItem<BlockItem> RADAR_DISPLAY = registerElectricalBlock(
+    public static final DeferredItem<BlockItem> RADAR_DISPLAY = registerRadarNetworkBlock(
             "radar_display", ModBlocks.RADAR_DISPLAY, Target.RADAR_DISPLAY);
     public static final DeferredItem<RadarLinkBlockItem> RADAR_LINK = ITEMS.register(
             "radar_link", () -> new RadarLinkBlockItem(ModBlocks.RADAR_LINK.get(), new Item.Properties()));
     public static final DeferredItem<BlockItem> TARGET_CONTROLLER = registerCbcItem(() ->
             ITEMS.register(
                     "target_controller",
-                    () -> new PowerRadarElectricalBlockItem(
+                    () -> new RadarNetworkBlockItem(
                             ModBlocks.TARGET_CONTROLLER.get(), new Item.Properties(), Target.TARGET_CONTROLLER)));
     public static final DeferredItem<BlockItem> MECHANICAL_SIREN = ITEMS.register(
             "mechanical_siren",
@@ -104,6 +103,15 @@ public final class ModItems {
             Target tooltipTarget
     ) {
         return ITEMS.register(name, () -> new PowerRadarElectricalBlockItem(
+                block.get(), new Item.Properties(), tooltipTarget));
+    }
+
+    private static DeferredItem<BlockItem> registerRadarNetworkBlock(
+            String name,
+            Supplier<? extends Block> block,
+            Target tooltipTarget
+    ) {
+        return ITEMS.register(name, () -> new RadarNetworkBlockItem(
                 block.get(), new Item.Properties(), tooltipTarget));
     }
 

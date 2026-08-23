@@ -67,17 +67,13 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         switch (field) {
             case NOMINAL_POWER -> appendElectricalStat(
                     tooltip,
-                    target == Target.RADAR_LINK
-                            ? "power_radar.tooltip.nominal_power_in_panel"
-                            : "power_radar.tooltip.nominal_power",
+                    "power_radar.tooltip.nominal_power",
                     PowerRadarCeeFormatter.powerComponent(nominalPowerWatts(target)),
                     powerLevel(nominalPowerWatts(target)),
                     wearingGoggles);
             case NOMINAL_VOLTAGE -> appendElectricalStat(
                     tooltip,
-                    target == Target.RADAR_DISPLAY || target == Target.RADAR_LINK
-                            ? "power_radar.tooltip.nominal_voltage_in_panel"
-                            : "power_radar.tooltip.nominal_voltage",
+                    "power_radar.tooltip.nominal_voltage",
                     PowerRadarCeeFormatter.voltageComponent(nominalVoltageVolts(target)),
                     scaledLevel(nominalVoltageVolts(target), 200.0D),
                     wearingGoggles);
@@ -161,15 +157,13 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
                 PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts();
             case PHASED_ARRAY_PANEL -> PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts();
             case OVERVIEW_MODULE -> PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
-            case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts();
-            case RADAR_DISPLAY -> PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts();
+            case RADAR_DISPLAY -> PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts();
             case LOGIC_DOCK -> PowerRadarElectricalParameters.Ratings.logicDockPowerWatts();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts();
-            case RADAR_LINK -> PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts();
             case EW_SYSTEM -> PowerRadarElectricalParameters.Ratings.ewSystemPowerWatts();
             case TARGET_CONTROLLER, INTERCEPTION_CONTROLLER, MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER ->
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER, RADAR_LINK ->
                 0.0D;
         };
     }
@@ -197,14 +191,12 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
             case TARGET_CONTROLLER -> PowerRadarElectricalParameters.Voltages.targetController().nominal();
             case INTERCEPTION_CONTROLLER ->
                 PowerRadarElectricalParameters.Voltages.interceptionController().nominal();
-            case MONITOR_CONTROLLER -> PowerRadarElectricalParameters.Voltages.monitorController().nominal();
-            case RADAR_DISPLAY -> PowerRadarElectricalParameters.Voltages.panelRadarDisplay().nominal();
-            case RADAR_LINK -> PowerRadarElectricalParameters.Voltages.panelRadarLink().nominal();
+            case RADAR_DISPLAY -> PowerRadarElectricalParameters.Voltages.radarDisplay().nominal();
             case LOGIC_DOCK -> PowerRadarElectricalParameters.Voltages.logicDock().nominal();
             case ONBOARD_COMPUTER -> PowerRadarElectricalParameters.Voltages.onboardComputer().nominal();
             case EW_SYSTEM -> PowerRadarElectricalParameters.Voltages.ewSystem().nominal();
             case MECHANICAL_SIREN,
-                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER ->
+                    TARGETING_CARD, ALLOWLIST_CARD, DISPLAY_CARD, INTERCEPTION_FUZE, LINKER, RADAR_LINK ->
                 0.0D;
         };
     }

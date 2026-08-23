@@ -12,8 +12,8 @@ import net.minecraft.server.level.ServerLevel;
 
 /** Серверное краткоживущее состояние предупреждений для Sable-структур. */
 public final class SableWarningManager {
-    // Скан публикуется после тиков block entity, поэтому +1 сохраняет ровно два наблюдаемых тика сигнала.
-    private static final int COVERAGE_ENTRY_SIGNAL_TICKS = 3;
+    // Скан публикуется после тиков block entity, поэтому +1 сохраняет ровно пять наблюдаемых тиков сигнала.
+    private static final int COVERAGE_ENTRY_SIGNAL_TICKS = 6;
     private static final int TARGETING_SIGNAL_TICKS = 5;
     private static final int TARGETING_SILENCE_TICKS = 5;
     private static final int TARGETING_TTL_TICKS = 2;

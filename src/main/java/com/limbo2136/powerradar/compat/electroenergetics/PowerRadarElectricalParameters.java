@@ -18,15 +18,11 @@ public final class PowerRadarElectricalParameters {
 
         // Базовые значения напряжения. Порядок: номинал, минимум, максимум.
         private static final LoadVoltageRange DEFAULT_RADAR_VOLTAGE = new LoadVoltageRange(380.0D, 120.0D, 400.0D);
-        private static final LoadVoltageRange DEFAULT_MONITOR_CONTROLLER_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
+        private static final LoadVoltageRange DEFAULT_RADAR_DISPLAY_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
                         250.0D);
         private static final LoadVoltageRange DEFAULT_SHELL_ALARM_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
                         250.0D);
         private static final LoadVoltageRange DEFAULT_LOGIC_DOCK_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D, 26.0D);
-        private static final LoadVoltageRange DEFAULT_PANEL_RADAR_DISPLAY_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D,
-                        26.0D);
-        private static final LoadVoltageRange DEFAULT_PANEL_RADAR_LINK_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D,
-                        26.0D);
         private static final LoadVoltageRange DEFAULT_ONBOARD_COMPUTER_VOLTAGE = new LoadVoltageRange(220.0D, 180.0D,
                         250.0D);
         private static final LoadVoltageRange DEFAULT_EW_SYSTEM_VOLTAGE = new LoadVoltageRange(24.0D, 18.0D, 26.0D);
@@ -45,21 +41,18 @@ public final class PowerRadarElectricalParameters {
         private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
         private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
         private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
-        private static final double DEFAULT_MONITOR_CONTROLLER_POWER_WATTS = 250.0D;
+        private static final double DEFAULT_RADAR_DISPLAY_BASE_POWER_WATTS = 250.0D;
         private static final double DEFAULT_RADAR_DISPLAY_POWER_WATTS = 25.0D;
         private static final double DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS = 25.0D;
-        private static final double DEFAULT_PANEL_RADAR_LINK_POWER_WATTS = 10.0D;
         private static final double DEFAULT_LOGIC_DOCK_POWER_WATTS = 50.0D;
         private static final double DEFAULT_ONBOARD_COMPUTER_POWER_WATTS = 1000.0D;
         private static final double DEFAULT_SHELL_ALARM_POWER_WATTS = 750.0D;
         private static final double DEFAULT_EW_SYSTEM_POWER_WATTS = 600.0D;
 
         private static LoadVoltageConfig radarVoltageConfig;
-        private static LoadVoltageConfig monitorControllerVoltageConfig;
+        private static LoadVoltageConfig radarDisplayVoltageConfig;
         private static LoadVoltageConfig shellAlarmVoltageConfig;
         private static LoadVoltageConfig logicDockVoltageConfig;
-        private static LoadVoltageConfig panelRadarDisplayVoltageConfig;
-        private static LoadVoltageConfig panelRadarLinkVoltageConfig;
         private static LoadVoltageConfig onboardComputerVoltageConfig;
         private static LoadVoltageConfig ewSystemVoltageConfig;
         private static ModConfigSpec.DoubleValue targetControllerMinimumVoltage;
@@ -73,10 +66,9 @@ public final class PowerRadarElectricalParameters {
         private static ModConfigSpec.DoubleValue radarControllerPowerWatts;
         private static ModConfigSpec.DoubleValue phasedArrayPanelPowerWatts;
         private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
-        private static ModConfigSpec.DoubleValue monitorControllerPowerWatts;
+        private static ModConfigSpec.DoubleValue radarDisplayBasePowerWatts;
         private static ModConfigSpec.DoubleValue radarDisplayPowerWatts;
         private static ModConfigSpec.DoubleValue panelRadarDisplayPowerWatts;
-        private static ModConfigSpec.DoubleValue panelRadarLinkPowerWatts;
         private static ModConfigSpec.DoubleValue logicDockPowerWatts;
         private static ModConfigSpec.DoubleValue onboardComputerPowerWatts;
         private static ModConfigSpec.DoubleValue shellAlarmPowerWatts;
@@ -101,19 +93,13 @@ public final class PowerRadarElectricalParameters {
 
                 radarVoltageConfig = defineLoadVoltages(builder, "radar", DEFAULT_RADAR_VOLTAGE,
                                 "Power supply for radar controllers and their modules, in volts.");
-                monitorControllerVoltageConfig = defineLoadVoltages(builder, "monitor_controller",
-                                DEFAULT_MONITOR_CONTROLLER_VOLTAGE,
-                                "Radar Monitor Controller power supply, in volts.");
+                radarDisplayVoltageConfig = defineLoadVoltages(builder, "radar_display",
+                                DEFAULT_RADAR_DISPLAY_VOLTAGE,
+                                "Radar Display power supply in the world and electrical panel, in volts.");
                 shellAlarmVoltageConfig = defineLoadVoltages(builder, "shell_alarm", DEFAULT_SHELL_ALARM_VOLTAGE,
                                 "Shell Alarm power supply, in volts.");
                 logicDockVoltageConfig = defineLoadVoltages(builder, "logic_dock", DEFAULT_LOGIC_DOCK_VOLTAGE,
                                 "Logic Dock power supply for both the world block and electrical panel attachment, in volts.");
-                panelRadarDisplayVoltageConfig = defineLoadVoltages(builder, "panel_radar_display",
-                                DEFAULT_PANEL_RADAR_DISPLAY_VOLTAGE,
-                                "Radar Display power supply (in electrical panel), in volts.");
-                panelRadarLinkVoltageConfig = defineLoadVoltages(builder, "panel_radar_link",
-                                DEFAULT_PANEL_RADAR_LINK_VOLTAGE,
-                                "Radar Link power supply (in electrical panel), in volts.");
                 onboardComputerVoltageConfig = defineLoadVoltages(builder, "onboard_computer",
                                 DEFAULT_ONBOARD_COMPUTER_VOLTAGE, "OnBoard Computer power supply, in volts.");
                 ewSystemVoltageConfig = defineLoadVoltages(builder, "ew_system", DEFAULT_EW_SYSTEM_VOLTAGE,
@@ -193,18 +179,15 @@ public final class PowerRadarElectricalParameters {
                                 "Nominal power added by each phased-array panel.");
                 overviewModulePowerWatts = power(builder, "overview_module_power_watts",
                                 DEFAULT_OVERVIEW_MODULE_POWER_WATTS, "Nominal power added by each overview module.");
-                monitorControllerPowerWatts = power(builder, "monitor_controller_power_watts",
-                                DEFAULT_MONITOR_CONTROLLER_POWER_WATTS,
-                                "Nominal base power of the monitor controller.");
+                radarDisplayBasePowerWatts = power(builder, "radar_display_base_power_watts",
+                                DEFAULT_RADAR_DISPLAY_BASE_POWER_WATTS,
+                                "Nominal power of a single root Radar Display.");
                 radarDisplayPowerWatts = power(builder, "radar_display_power_watts",
                                 DEFAULT_RADAR_DISPLAY_POWER_WATTS,
                                 "Nominal power added by each display block in a large monitor.");
                 panelRadarDisplayPowerWatts = power(builder, "panel_radar_display_power_watts",
                                 DEFAULT_PANEL_RADAR_DISPLAY_POWER_WATTS,
                                 "Nominal power of a standalone Radar Display installed in an electrical panel.");
-                panelRadarLinkPowerWatts = power(builder, "panel_radar_link_power_watts",
-                                DEFAULT_PANEL_RADAR_LINK_POWER_WATTS,
-                                "Nominal power of a Radar Link installed in an electrical panel.");
                 logicDockPowerWatts = power(builder, "logic_dock_power_watts",
                                 DEFAULT_LOGIC_DOCK_POWER_WATTS, "Logic Dock nominal power.");
                 onboardComputerPowerWatts = power(builder, "onboard_computer_power_watts",
@@ -242,9 +225,9 @@ public final class PowerRadarElectricalParameters {
                         return value(radarVoltageConfig);
                 }
 
-                public static LoadVoltageRange monitorController() {
+                public static LoadVoltageRange radarDisplay() {
                         ensureConfigDefined();
-                        return value(monitorControllerVoltageConfig);
+                        return value(radarDisplayVoltageConfig);
                 }
 
                 public static LoadVoltageRange shellAlarm() {
@@ -255,16 +238,6 @@ public final class PowerRadarElectricalParameters {
                 public static LoadVoltageRange logicDock() {
                         ensureConfigDefined();
                         return value(logicDockVoltageConfig);
-                }
-
-                public static LoadVoltageRange panelRadarDisplay() {
-                        ensureConfigDefined();
-                        return value(panelRadarDisplayVoltageConfig);
-                }
-
-                public static LoadVoltageRange panelRadarLink() {
-                        ensureConfigDefined();
-                        return value(panelRadarLinkVoltageConfig);
                 }
 
                 public static LoadVoltageRange onboardComputer() {
@@ -325,9 +298,9 @@ public final class PowerRadarElectricalParameters {
                         return value(overviewModulePowerWatts);
                 }
 
-                public static double monitorControllerPowerWatts() {
+                public static double radarDisplayBasePowerWatts() {
                         ensureConfigDefined();
-                        return value(monitorControllerPowerWatts);
+                        return value(radarDisplayBasePowerWatts);
                 }
 
                 public static double radarDisplayPowerWatts() {
@@ -338,11 +311,6 @@ public final class PowerRadarElectricalParameters {
                 public static double panelRadarDisplayPowerWatts() {
                         ensureConfigDefined();
                         return value(panelRadarDisplayPowerWatts);
-                }
-
-                public static double panelRadarLinkPowerWatts() {
-                        ensureConfigDefined();
-                        return value(panelRadarLinkPowerWatts);
                 }
 
                 public static double logicDockPowerWatts() {

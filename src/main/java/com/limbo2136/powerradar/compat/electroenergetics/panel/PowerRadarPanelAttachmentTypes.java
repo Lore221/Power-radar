@@ -19,12 +19,6 @@ public final class PowerRadarPanelAttachmentTypes {
     private static final DeferredRegister<PanelAttachmentType> ATTACHMENT_TYPES =
             DeferredRegister.create(CEERegistries.PANEL_ATTACHMENT_TYPE, PowerRadar.MOD_ID);
 
-    public static final DeferredHolder<PanelAttachmentType, PanelAttachmentType> RADAR_LINK =
-            ATTACHMENT_TYPES.register("panel_radar_link", () -> new PanelAttachmentType(
-                    RadarLinkPanelAttachment::new,
-                    ModItems.RADAR_LINK.get(),
-                    PanelAttachmentMode.THIRD));
-
     public static final DeferredHolder<PanelAttachmentType, PanelAttachmentType> RADAR_DISPLAY =
             ATTACHMENT_TYPES.register("panel_radar_display", () -> new PanelAttachmentType(
                     RadarDisplayPanelAttachment::new,

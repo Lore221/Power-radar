@@ -17,6 +17,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.interception.InterceptionBallistics;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
+import com.limbo2136.powerradar.interception.InterceptionPlan;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
@@ -57,16 +58,18 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private static final int INTERCEPT_FAST_ROOT_ITERATIONS = 16;
     private static final int INTERCEPT_FAST_SECANT_ITERATIONS = 8;
     private static final int INTERCEPT_FAST_MINIMIZE_ITERATIONS = 12;
+    private static final int SABLE_MUZZLE_PREDICTION_ITERATIONS = 2;
     private static final double MIN_LINEAR_DRAG = 1.0E-6;
     private static final double INTERCEPT_PITCH_HINT_RANGE_DEGREES = 10.0;
     private static final double MAX_TIMING_ERROR_TICKS = 3.0;
+    private static final double SABLE_PLAN_IMPROVEMENT_TICKS = 0.25;
     private static final double AIM_TOLERANCE_DEGREES = 2.0;
     private static final double AIM_REACTION_TICKS = 1.0;
     private static final double CBC_FIRE_SIGNAL_DELAY_TICKS = 1.0;
-    private static final long INTERCEPTION_BURST_TICKS = 12L;
     private static final long CONTROLLER_SNAPSHOT_REFRESH_TICKS = 10L;
     private static final long AIM_ANGLE_RESYNC_TICKS = 40L;
     private static final long MOUNT_CACHE_RESYNC_TICKS = 40L;
+    private static final int UNSOLVED_ASSIGNMENT_RETRY_TICKS = 20;
 
     // Синхронизируемые питание, команда наведения и итоговый краснокаменный выход.
     private boolean readyToFire;
@@ -84,16 +87,17 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private double interceptTicks;
     private Status status = Status.NO_NETWORK;
 
-    // Назначение угрозы и burst-окно принадлежат runtime-координатору и не сохраняются в NBT.
+    // Назначение угрозы и режим сопровождения принадлежат runtime-координатору и не сохраняются в NBT.
     private String lastNetworkStatus = "NO_NETWORK";
     private String lastSolveReason = "startup";
     private long lastClientSyncGameTime = Long.MIN_VALUE;
     private long lastPublishedThreatRevision = Long.MIN_VALUE;
     private long lastControllerSnapshotGameTime = Long.MIN_VALUE;
     private UUID trackingThreatUuid;
-    private UUID burstThreatUuid;
-    private Vec3 burstAimPoint;
-    private long burstEndsAtGameTime = Long.MIN_VALUE;
+    private UUID unsolvedThreatUuid;
+    private int consecutiveUnsolvedTicks;
+    private InterceptionPlan interceptionPlan;
+    private UUID engagedThreatUuid;
 
     // Кэши CBC ограничивают дорогую инспекцию установки и периодически сверяются с живым mount.
     private BlockPos lastMissingWeaponMountPos;
@@ -240,9 +244,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 && Math.abs(aim.remainingYawError) <= AIM_TOLERANCE_DEGREES
                 && Math.abs(aim.remainingPitchError) <= AIM_TOLERANCE_DEGREES;
         if (nextReady && this.interceptionNetworkId != null && this.assignedThreatUuid != null) {
-            if (!burstActiveFor(this.assignedThreatUuid, level.getGameTime())) {
-                startBurst(this.assignedThreatUuid, solution.aimPoint, level.getGameTime());
-            }
+            this.engagedThreatUuid = this.assignedThreatUuid;
             this.trackingThreatUuid = this.assignedThreatUuid;
             InterceptionCoordinator.registerPendingLaunch(
                     level,
@@ -289,7 +291,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 && threatRevision == this.lastPublishedThreatRevision
                 && !snapshotDue) {
             this.trackingThreatUuid = null;
-            clearBurst();
+            resetUnsolvedAssignment();
+            clearInterceptionPlan();
+            clearEngagement();
             this.lastSolveReason = "idle";
             return Solution.invalid();
         }
@@ -354,14 +358,20 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 level, resolvedNetworkId, this.worldPosition);
         if (this.assignedThreatUuid == null) {
             this.trackingThreatUuid = null;
-            clearBurst();
+            resetUnsolvedAssignment();
+            clearInterceptionPlan();
+            clearEngagement();
             this.lastSolveReason = "idle";
             return Solution.hold(cannon, currentAngles);
         }
         if (this.trackingThreatUuid != null
                 && !this.trackingThreatUuid.equals(this.assignedThreatUuid)) {
             this.trackingThreatUuid = null;
-            clearBurst();
+            clearInterceptionPlan();
+            clearEngagement();
+        }
+        if (this.interceptionPlan != null && !planMatches(this.assignedThreatUuid)) {
+            clearInterceptionPlan();
         }
         ThreatSnapshot threatSnapshot = InterceptionCoordinator.threatSnapshot(
                 level.getServer(),
@@ -389,76 +399,84 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 threatSnapshot.gravity(),
                 threatSnapshot.drag(),
                 threatSnapshot.quadraticDrag());
-        if (burstActiveFor(this.assignedThreatUuid, gameTime)) {
-            // После первого готового выстрела точка фиксируется на короткое burst-окно,
-            // чтобы серия autocannon не дёргалась между соседними решениями.
-            if (hasPassedReference(trackedPosition, trackedVelocity, threatReference, 0.0D)) {
-                clearBurst();
-                rejectAssignment(level);
-                this.lastSolveReason = "burst-window-passed";
-                return Solution.unreachable(cannon, currentAngles);
-            }
-            Vec3 delta = this.burstAimPoint.subtract(launchMuzzle);
-            BallisticAim burstAim = ballisticAim(delta, interceptorBallistics);
-            boolean clearShot = burstAim.reachable
-                    && hasClearLine(worldLevel, worldMuzzle, this.burstAimPoint);
-            if (!clearShot) {
-                clearBurst();
-                rejectAssignment(level);
-                this.lastSolveReason = burstAim.reachable ? "burst-obstructed" : "burst-unreachable";
-                return Solution.unreachable(cannon, currentAngles);
-            }
-            Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
-                    level,
-                    this.worldPosition,
-                    TargetingMath.directionFromAngles(TargetingMath.yawTo(delta), burstAim.pitchDegrees));
-            float desiredYaw = TargetingMath.yawTo(localAimDirection);
-            float desiredPitch = pitchTo(localAimDirection);
-            this.lastSolveReason = "burst";
-            this.trackingThreatUuid = this.assignedThreatUuid;
-            return new Solution(
-                    true,
-                    cannon,
-                    cannon.mountPos(),
-                    launchMuzzle,
-                    this.burstAimPoint,
-                    interceptorBallistics.available(),
-                    true,
-                    desiredYaw,
-                    desiredPitch,
-                    currentAngles.yawDegrees(),
-                    currentAngles.pitchDegrees(),
-                    Mth.wrapDegrees(desiredYaw - currentAngles.yawDegrees()),
-                    Mth.wrapDegrees(desiredPitch - currentAngles.pitchDegrees()),
-                    burstAim.flightTicks,
-                    0.0);
+        boolean onSable = RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition);
+        boolean engaging = engagementActiveFor(this.assignedThreatUuid);
+        if (engaging) {
+            clearInterceptionPlan();
         }
-        clearBurst();
-        // Вне burst-окна решение заново учитывает движение угрозы, платформы и время наведения.
+        PlannedIntercept planned = null;
+        if (!engaging && planMatches(this.assignedThreatUuid)) {
+            planned = solveInterceptionPlan(
+                    level,
+                    worldLevel,
+                    cannon,
+                    currentAngles,
+                    worldMuzzle,
+                    launchMuzzle,
+                    worldCurrentYaw,
+                    worldCurrentPitch,
+                    interceptorBallistics,
+                    gameTime,
+                    onSable);
+            if (!onSable && planned != null) {
+                return planned.solution();
+            }
+            if (planned == null) {
+                clearInterceptionPlan();
+                this.trackingThreatUuid = null;
+            }
+        }
+
+        // На земле полный поиск нужен только при назначении или потере плана. На Sable он
+        // каждый тик ищет более выгодную замену ещё достижимой мировой точке.
+        // После открытия огня обе платформы переходят к точному сопровождению живой угрозы.
+        boolean preAim = !engaging
+                && (onSable || !this.assignedThreatUuid.equals(this.trackingThreatUuid));
+        boolean maximizeCorrectionReserve = onSable && !engaging;
+        Vec3 interceptMuzzle = launchMuzzle;
         Intercept intercept = findIntercept(
-                launchMuzzle,
-                threatReference,
-                trackedPosition,
-                trackedVelocity,
-                threatBallistics,
-                interceptorBallistics,
-                worldCurrentYaw,
-                worldCurrentPitch,
-                maxStepDegreesPerTick(),
-                aimAccelerationDegreesPerTickSquared(),
-                !this.assignedThreatUuid.equals(this.trackingThreatUuid));
-        if (!intercept.reachable || intercept.timingError > MAX_TIMING_ERROR_TICKS) {
-            rejectAssignment(level);
-            this.lastSolveReason = "no-intercept-solution";
+                interceptMuzzle, threatReference, trackedPosition, trackedVelocity,
+                threatBallistics, interceptorBallistics, worldCurrentYaw, worldCurrentPitch,
+                maxStepDegreesPerTick(), aimAccelerationDegreesPerTickSquared(),
+                preAim, maximizeCorrectionReserve);
+        if (onSable) {
+            for (int iteration = 0;
+                    iteration < SABLE_MUZZLE_PREDICTION_ITERATIONS && intercept.reachable;
+                    iteration++) {
+                interceptMuzzle = launchMuzzle.add(this.worldMuzzleVelocity.scale(intercept.aimTicks));
+                intercept = findIntercept(
+                        interceptMuzzle, threatReference, trackedPosition, trackedVelocity,
+                        threatBallistics, interceptorBallistics, worldCurrentYaw, worldCurrentPitch,
+                        maxStepDegreesPerTick(), aimAccelerationDegreesPerTickSquared(),
+                        preAim, maximizeCorrectionReserve);
+            }
+        }
+        if (!intercept.reachable
+                || !planningTimingAccepted(intercept, maximizeCorrectionReserve)) {
+            if (planned != null) {
+                this.lastSolveReason = "planned-sable-no-alternative";
+                return planned.solution();
+            }
+            boolean retrying = retainUnsolvedAssignmentForRetry(level);
+            this.lastSolveReason = retrying
+                    ? "no-intercept-solution-retrying"
+                    : "no-intercept-solution";
             return Solution.unreachable(cannon, currentAngles);
         }
         boolean clearShot = hasClearLine(worldLevel, worldMuzzle, intercept.position);
         if (!clearShot) {
+            if (planned != null) {
+                this.lastSolveReason = "planned-sable-alternative-obstructed";
+                return planned.solution();
+            }
+            if (onSable) {
+                boolean retrying = retainUnsolvedAssignmentForRetry(level);
+                this.lastSolveReason = retrying ? "obstructed-retrying" : "obstructed";
+                return Solution.unreachable(cannon, currentAngles);
+            }
             rejectAssignment(level);
             this.lastSolveReason = "obstructed";
-        } else {
-            this.lastSolveReason = "ok";
-            this.trackingThreatUuid = this.assignedThreatUuid;
+            return Solution.unreachable(cannon, currentAngles);
         }
         if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
             PowerRadar.LOGGER.info(
@@ -476,7 +494,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     round(interceptorBallistics.speedBlocksPerTick()),
                     round(interceptorBallistics.gravityBlocksPerTickSquared()),
                     round(interceptorBallistics.drag()),
-                    shortVec(launchMuzzle),
+                    shortVec(interceptMuzzle),
                     round(cannon.currentPitchDegrees()),
                     round(cannon.physicalPitchDegrees()),
                     round(cannon.worldToLogicalPitchMultiplier()),
@@ -487,18 +505,18 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     round(intercept.flightTicks),
                     round(intercept.timingError));
         }
-        Vec3 delta = intercept.position.subtract(launchMuzzle);
+        Vec3 delta = intercept.position.subtract(interceptMuzzle);
         Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
                 level,
                 this.worldPosition,
                 TargetingMath.directionFromAngles(TargetingMath.yawTo(delta), intercept.pitchDegrees));
         float desiredYaw = TargetingMath.yawTo(localAimDirection);
         float desiredPitch = pitchTo(localAimDirection);
-        return new Solution(
+        Solution candidateSolution = new Solution(
                 true,
                 cannon,
                 cannon.mountPos(),
-                launchMuzzle,
+                interceptMuzzle,
                 intercept.position,
                 interceptorBallistics.available(),
                 clearShot,
@@ -510,6 +528,116 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 Mth.wrapDegrees(desiredPitch - currentAngles.pitchDegrees()),
                 intercept.flightTicks,
                 intercept.timingError);
+        if (engaging) {
+            this.lastSolveReason = onSable ? "engaging-sable" : "engaging-ground";
+            this.trackingThreatUuid = this.assignedThreatUuid;
+            resetUnsolvedAssignment();
+            return candidateSolution;
+        }
+        double candidateCorrectionReserve = correctionReserveTicks(intercept);
+        if (planned != null && !InterceptionPlan.hasMeaningfullyLargerCorrectionReserve(
+                candidateCorrectionReserve,
+                planned.correctionReserveTicks(),
+                SABLE_PLAN_IMPROVEMENT_TICKS)) {
+            this.lastSolveReason = "planned-sable-no-better-alternative";
+            return planned.solution();
+        }
+        this.interceptionPlan = new InterceptionPlan(
+                this.assignedThreatUuid,
+                intercept.position,
+                gameTime + intercept.targetTicks);
+        this.lastSolveReason = onSable
+                ? (planned == null ? "plan-acquired-sable" : "plan-replaced-sable")
+                : "plan-acquired-ground";
+        this.trackingThreatUuid = this.assignedThreatUuid;
+        resetUnsolvedAssignment();
+        return candidateSolution;
+    }
+
+    @Nullable
+    private PlannedIntercept solveInterceptionPlan(
+            ServerLevel level,
+            ServerLevel worldLevel,
+            WeaponMount cannon,
+            AimAngles currentAngles,
+            Vec3 worldMuzzle,
+            Vec3 launchMuzzle,
+            float worldCurrentYaw,
+            float worldCurrentPitch,
+            WeaponBallistics interceptorBallistics,
+            long gameTime,
+            boolean onSable
+    ) {
+        InterceptionPlan plan = this.interceptionPlan;
+        if (plan == null) {
+            return null;
+        }
+        double remainingTicks = plan.remainingTicks(gameTime);
+        if (remainingTicks < MIN_INTERCEPTION_TICKS) {
+            this.lastSolveReason = "plan-expired";
+            return null;
+        }
+
+        Vec3 plannedLaunchMuzzle = launchMuzzle;
+        Vec3 delta = plan.aimPoint().subtract(plannedLaunchMuzzle);
+        BallisticAim aim = BallisticAim.UNREACHABLE;
+        float worldDesiredYaw = 0.0F;
+        double aimTicks = 0.0D;
+        int predictionIterations = onSable ? SABLE_MUZZLE_PREDICTION_ITERATIONS + 1 : 1;
+        for (int iteration = 0; iteration < predictionIterations; iteration++) {
+            delta = plan.aimPoint().subtract(plannedLaunchMuzzle);
+            aim = ballisticAim(delta, interceptorBallistics);
+            if (!aim.reachable) {
+                this.lastSolveReason = "plan-ballistically-unreachable";
+                return null;
+            }
+            worldDesiredYaw = TargetingMath.yawTo(delta);
+            aimTicks = estimateAimTicks(
+                    Mth.wrapDegrees(worldDesiredYaw - worldCurrentYaw),
+                    Mth.wrapDegrees(aim.pitchDegrees - worldCurrentPitch),
+                    maxStepDegreesPerTick(),
+                    aimAccelerationDegreesPerTickSquared());
+            if (onSable) {
+                plannedLaunchMuzzle = launchMuzzle.add(this.worldMuzzleVelocity.scale(aimTicks));
+            }
+        }
+        double signedTimingError = InterceptionPlan.signedTimingError(
+                remainingTicks, aimTicks, aim.flightTicks);
+        if (InterceptionPlan.deadlineMissed(signedTimingError, MAX_TIMING_ERROR_TICKS)) {
+            this.lastSolveReason = "plan-deadline-missed";
+            return null;
+        }
+        if (!hasClearLine(worldLevel, worldMuzzle, plan.aimPoint())) {
+            this.lastSolveReason = "plan-obstructed";
+            return null;
+        }
+
+        Vec3 localAimDirection = RadarWorldPoseResolver.localDirection(
+                level,
+                this.worldPosition,
+                TargetingMath.directionFromAngles(worldDesiredYaw, aim.pitchDegrees));
+        float desiredYaw = TargetingMath.yawTo(localAimDirection);
+        float desiredPitch = pitchTo(localAimDirection);
+        this.lastSolveReason = onSable ? "planned-sable" : "planned-ground";
+        this.trackingThreatUuid = this.assignedThreatUuid;
+        resetUnsolvedAssignment();
+        Solution solution = new Solution(
+                true,
+                cannon,
+                cannon.mountPos(),
+                plannedLaunchMuzzle,
+                plan.aimPoint(),
+                interceptorBallistics.available(),
+                true,
+                desiredYaw,
+                desiredPitch,
+                currentAngles.yawDegrees(),
+                currentAngles.pitchDegrees(),
+                Mth.wrapDegrees(desiredYaw - currentAngles.yawDegrees()),
+                Mth.wrapDegrees(desiredPitch - currentAngles.pitchDegrees()),
+                aim.flightTicks,
+                Math.abs(signedTimingError));
+        return new PlannedIntercept(solution, -signedTimingError);
     }
 
     private Optional<WeaponMount> inspectWeaponMount(ServerLevel level, BlockPos mountPos) {
@@ -567,7 +695,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             float currentPitch,
             double maxStep,
             double acceleration,
-            boolean preAim
+            boolean preAim,
+            boolean maximizeCorrectionReserve
     ) {
         // Линейное сопротивление допускает быстрый аналитический прогноз позиции снаряда.
         Intercept fastIntercept = findLinearDragIntercept(
@@ -581,7 +710,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 currentPitch,
                 maxStep,
                 acceleration,
-                preAim);
+                preAim,
+                maximizeCorrectionReserve);
         if (fastIntercept.reachable) {
             return fastIntercept;
         }
@@ -612,7 +742,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 best = evaluated;
             }
             if (preAim && evaluated.reachable
-                    && evaluated.timingError <= MAX_TIMING_ERROR_TICKS) {
+                    && planningTimingAccepted(evaluated, maximizeCorrectionReserve)) {
                 window.add(evaluated);
             }
             if (!preAim && best.reachable && best.timingError <= 0.35) {
@@ -620,8 +750,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             }
         }
         if (preAim && !window.isEmpty()) {
-            int firstThirdIndex = (window.size() - 1) / 3;
-            best = window.get(firstThirdIndex);
+            best = selectPreAimIntercept(window, maximizeCorrectionReserve);
         }
         if (!best.reachable) {
             return best;
@@ -646,7 +775,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             Intercept evaluated = evaluateIntercept(
                     muzzle, position, tick, interceptorBallistics,
                     currentYaw, currentPitch, maxStep, acceleration);
-            if (betterIntercept(evaluated, best)) {
+            if (maximizeCorrectionReserve
+                    ? betterCorrectionReserve(evaluated, best)
+                    : betterIntercept(evaluated, best)) {
                 best = evaluated;
             }
         }
@@ -664,7 +795,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             float currentPitch,
             double maxStep,
             double acceleration,
-            boolean preAim
+            boolean preAim,
+            boolean maximizeCorrectionReserve
     ) {
         if (shellBallistics.quadraticDrag()
                 || shellBallistics.drag() <= MIN_LINEAR_DRAG
@@ -706,6 +838,21 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 signChangeBrackets.add(new TimingBracket(previous.tick, sample.tick));
             }
             previous = sample;
+        }
+
+        if (preAim && maximizeCorrectionReserve) {
+            return findMaximumCorrectionReserveLinearIntercept(
+                    muzzle,
+                    threatReference,
+                    shellPosition,
+                    shellVelocity,
+                    shellBallistics,
+                    interceptorBallistics,
+                    currentYaw,
+                    currentPitch,
+                    maxStep,
+                    acceleration,
+                    samples);
         }
 
         for (TimingBracket bracket : signChangeBrackets) {
@@ -760,10 +907,91 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
 
         if (preAim && !window.isEmpty()) {
-            window.sort(java.util.Comparator.comparingDouble(Intercept::targetTicks));
-            return window.get((window.size() - 1) / 3);
+            return selectPreAimIntercept(window, maximizeCorrectionReserve);
         }
         return best;
+    }
+
+    private static Intercept selectPreAimIntercept(
+            List<Intercept> window,
+            boolean maximizeCorrectionReserve
+    ) {
+        if (maximizeCorrectionReserve) {
+            return window.stream()
+                    .max(java.util.Comparator.comparingDouble(
+                            InterceptionControllerBlockEntity::correctionReserveTicks))
+                    .orElse(Intercept.UNREACHABLE);
+        }
+        window.sort(java.util.Comparator.comparingDouble(Intercept::targetTicks));
+        return window.get((window.size() - 1) / 3);
+    }
+
+    private static Intercept findMaximumCorrectionReserveLinearIntercept(
+            Vec3 muzzle,
+            ProtectedReferenceMotion threatReference,
+            Vec3 shellPosition,
+            Vec3 shellVelocity,
+            ShellAlarmCbcCompat.Ballistics shellBallistics,
+            WeaponBallistics interceptorBallistics,
+            float currentYaw,
+            float currentPitch,
+            double maxStep,
+            double acceleration,
+            List<CheapTimingSample> samples
+    ) {
+        Intercept best = Intercept.UNREACHABLE;
+        double pitchHint = Double.NaN;
+        for (CheapTimingSample sample : samples) {
+            Intercept candidate = evaluateLinearDragInterceptAt(
+                    muzzle, threatReference, shellPosition, shellVelocity, shellBallistics,
+                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration,
+                    sample.tick, pitchHint);
+            if (candidate.reachable) {
+                pitchHint = candidate.pitchDegrees;
+            }
+            if (betterCorrectionReserve(candidate, best)) {
+                best = candidate;
+            }
+        }
+        if (!best.reachable) {
+            return best;
+        }
+
+        double lowTick = Math.max(MIN_INTERCEPTION_TICKS,
+                best.targetTicks - INTERCEPT_FAST_STEP_TICKS);
+        double highTick = Math.min(MAX_INTERCEPTION_TICKS,
+                best.targetTicks + INTERCEPT_FAST_STEP_TICKS);
+        for (double tick = lowTick; tick <= highTick + 0.0001D; tick += 1.0D) {
+            Intercept candidate = evaluateLinearDragInterceptAt(
+                    muzzle, threatReference, shellPosition, shellVelocity, shellBallistics,
+                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration,
+                    tick, pitchHint);
+            if (candidate.reachable) {
+                pitchHint = candidate.pitchDegrees;
+            }
+            if (betterCorrectionReserve(candidate, best)) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    private static boolean planningTimingAccepted(Intercept intercept, boolean maximizeCorrectionReserve) {
+        return maximizeCorrectionReserve
+                ? interceptTimingErrorSigned(intercept) <= MAX_TIMING_ERROR_TICKS
+                : intercept.timingError <= MAX_TIMING_ERROR_TICKS;
+    }
+
+    private static boolean betterCorrectionReserve(Intercept candidate, Intercept current) {
+        return candidate.reachable
+                && planningTimingAccepted(candidate, true)
+                && (!current.reachable
+                || correctionReserveTicks(candidate) > correctionReserveTicks(current));
+    }
+
+    private static double correctionReserveTicks(Intercept intercept) {
+        return InterceptionPlan.correctionReserveTicks(
+                intercept.targetTicks, intercept.aimTicks, intercept.flightTicks);
     }
 
     private static double currentError(Intercept intercept) {
@@ -1382,7 +1610,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
         this.assignedThreatUuid = null;
         this.trackingThreatUuid = null;
-        clearBurst();
+        resetUnsolvedAssignment();
+        clearInterceptionPlan();
+        clearEngagement();
         this.lastPublishedThreatRevision = Long.MIN_VALUE;
         this.lastControllerSnapshotGameTime = Long.MIN_VALUE;
         resetSableTrackingState();
@@ -1395,9 +1625,44 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
         this.assignedThreatUuid = null;
         this.trackingThreatUuid = null;
-        clearBurst();
+        resetUnsolvedAssignment();
+        clearInterceptionPlan();
+        clearEngagement();
         this.lastControllerSnapshotGameTime = Long.MIN_VALUE;
         resetAimFeedForward();
+    }
+
+    private boolean retainUnsolvedAssignmentForRetry(ServerLevel level) {
+        UUID threatUuid = this.assignedThreatUuid;
+        if (threatUuid == null) {
+            resetUnsolvedAssignment();
+            return false;
+        }
+        if (!threatUuid.equals(this.unsolvedThreatUuid)) {
+            this.unsolvedThreatUuid = threatUuid;
+            this.consecutiveUnsolvedTicks = 0;
+        }
+        this.consecutiveUnsolvedTicks++;
+        this.trackingThreatUuid = null;
+        resetAimFeedForward();
+        if (this.consecutiveUnsolvedTicks < UNSOLVED_ASSIGNMENT_RETRY_TICKS) {
+            return true;
+        }
+        rejectAssignment(level);
+        return false;
+    }
+
+    private void resetUnsolvedAssignment() {
+        this.unsolvedThreatUuid = null;
+        this.consecutiveUnsolvedTicks = 0;
+    }
+
+    private boolean planMatches(@Nullable UUID threatUuid) {
+        return this.interceptionPlan != null && this.interceptionPlan.matches(threatUuid);
+    }
+
+    private void clearInterceptionPlan() {
+        this.interceptionPlan = null;
     }
 
     private void resetSableTrackingState() {
@@ -1414,23 +1679,12 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         this.pitchFeedForwardDegreesPerTick = 0.0D;
     }
 
-    private boolean burstActiveFor(UUID threatUuid, long gameTime) {
-        return threatUuid != null
-                && threatUuid.equals(this.burstThreatUuid)
-                && this.burstAimPoint != null
-                && gameTime < this.burstEndsAtGameTime;
+    private boolean engagementActiveFor(@Nullable UUID threatUuid) {
+        return threatUuid != null && threatUuid.equals(this.engagedThreatUuid);
     }
 
-    private void startBurst(UUID threatUuid, Vec3 aimPoint, long gameTime) {
-        this.burstThreatUuid = threatUuid;
-        this.burstAimPoint = aimPoint;
-        this.burstEndsAtGameTime = gameTime + INTERCEPTION_BURST_TICKS;
-    }
-
-    private void clearBurst() {
-        this.burstThreatUuid = null;
-        this.burstAimPoint = null;
-        this.burstEndsAtGameTime = Long.MIN_VALUE;
+    private void clearEngagement() {
+        this.engagedThreatUuid = null;
     }
 
     private Status statusFor(Solution solution, boolean powered, boolean ready) {
@@ -1667,6 +1921,9 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private record AimFeedForward(double yawDegreesPerTick, double pitchDegreesPerTick) {
         private static final AimFeedForward ZERO = new AimFeedForward(0.0D, 0.0D);
+    }
+
+    private record PlannedIntercept(Solution solution, double correctionReserveTicks) {
     }
 
     private record ProtectedReferenceMotion(Vec3 position, Vec3 velocity, Vec3 acceleration) {

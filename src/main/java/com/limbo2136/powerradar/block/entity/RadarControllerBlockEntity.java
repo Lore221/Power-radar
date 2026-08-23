@@ -25,6 +25,7 @@ import com.limbo2136.powerradar.radar.RadarScanContext;
 import com.limbo2136.powerradar.radar.RadarAssemblyValidator;
 import com.limbo2136.powerradar.radar.RadarScanCoordinator;
 import com.limbo2136.powerradar.radar.RadarScanRequest;
+import com.limbo2136.powerradar.radar.RadarSableCoverageAccumulator;
 import com.limbo2136.powerradar.radar.RadarScanSlicePlan;
 import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarScanProfile;
@@ -35,6 +36,8 @@ import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCache;
 import com.limbo2136.powerradar.radar.RadarTargetTrack;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
@@ -62,7 +65,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
 
-public class RadarControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation, RadarTargetingDataSource {
+public class RadarControllerBlockEntity extends SmartBlockEntity
+        implements IHaveGoggleInformation, RadarTargetingDataSource, RadarNetworkMember {
     private static final int REGULAR_DISCOVERY_WINDOW_MULTIPLIER = 5;
 
     // Синхронизируемое состояние конструкции и последнего опубликованного сканирования.
@@ -84,7 +88,10 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     private double radarOriginY;
     private double radarOriginZ;
     private final RadarTargetCache targetCache = new RadarTargetCache();
+    private final RadarSableCoverageAccumulator activeScanSableCoverage =
+            new RadarSableCoverageAccumulator();
     private boolean removingOrUnloading;
+    private UUID networkId;
 
     // Электрический снимок изменяет дальность только при открытии следующего окна сканирования.
     private PowerRadarCeeState electricalState = PowerRadarCeeState.INVALID_STRUCTURE;
@@ -125,20 +132,78 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         super.onLoad();
         this.removingOrUnloading = false;
         if (this.level instanceof ServerLevel serverLevel) {
+            if (this.networkId != null) {
+                RadarNetworkManager.get(serverLevel.getServer()).loadRadarSource(
+                        this.networkId, GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+            }
             serverLevel.scheduleTick(this.worldPosition, this.getBlockState().getBlock(), 1);
         }
+        RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
     }
 
     @Override
     public void onChunkUnloaded() {
         this.removingOrUnloading = true;
+        unregisterRadarSource();
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         super.onChunkUnloaded();
     }
 
     @Override
     public void remove() {
         this.removingOrUnloading = true;
+        unregisterRadarSource();
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
         super.remove();
+    }
+
+    @Override
+    public UUID radarNetworkId() {
+        return this.networkId;
+    }
+
+    public UUID ensureRadarNetworkId() {
+        if (this.networkId == null && this.level instanceof ServerLevel serverLevel) {
+            setRadarNetworkId(RadarNetworkManager.get(serverLevel.getServer()).createNetwork());
+        }
+        return this.networkId;
+    }
+
+    @Override
+    public boolean createsRadarNetworkWhenUntuned() {
+        return true;
+    }
+
+    @Override
+    public void setRadarNetworkId(UUID networkId) {
+        UUID replacement = networkId;
+        if (replacement == null && this.level instanceof ServerLevel serverLevel) {
+            replacement = RadarNetworkManager.get(serverLevel.getServer()).createNetwork();
+        }
+        if (java.util.Objects.equals(this.networkId, replacement)) {
+            return;
+        }
+        UUID oldNetworkId = this.networkId;
+        if (this.level instanceof ServerLevel serverLevel && oldNetworkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadRadarSource(
+                    oldNetworkId, GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+        }
+        this.networkId = replacement;
+        if (this.level instanceof ServerLevel serverLevel && replacement != null) {
+            RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
+            manager.ensureNetwork(replacement);
+            manager.loadRadarSource(replacement, GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+        }
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, replacement);
+        syncChanged();
+    }
+
+    private void unregisterRadarSource() {
+        if (this.level instanceof ServerLevel serverLevel && this.networkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadRadarSource(
+                    this.networkId, GlobalPos.of(serverLevel.dimension(), this.worldPosition));
+        }
     }
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, RadarControllerBlockEntity blockEntity) {
@@ -149,6 +214,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
             return;
         }
 
+        blockEntity.ensureRadarNetworkId();
         blockEntity.tick();
         if (blockEntity.radarStructureEntitySyncPending) {
             blockEntity.radarStructureEntitySyncPending = false;
@@ -216,6 +282,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
                         publishTick ? this.activeScanProfile : null,
                         tickContext,
                         this.targetCache,
+                        this.activeScanSableCoverage,
                         discoverySlices,
                         publishTick,
                         publishTick ? () -> this.lastScanGameTime = tickContext.gameTime() : null));
@@ -223,7 +290,8 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
         } else if (publishTick && this.activeScanContext != null) {
             RadarScanContext tickContext = scanContextAt(level.getGameTime());
             RadarScanCoordinator.submit(level, new RadarScanRequest(
-                    this.radarId(), null, null, tickContext, this.targetCache, List.of(), true,
+                    this.radarId(), null, null, tickContext, this.targetCache,
+                    this.activeScanSableCoverage, List.of(), true,
                     () -> this.lastScanGameTime = tickContext.gameTime()));
         }
     }
@@ -283,6 +351,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     }
 
     private void refreshScanWindow(ServerLevel level) {
+        this.activeScanSableCoverage.reset();
         // Режим задаёт тип блока, а display-карта сети фильтрует цели до их публикации.
         RadarScanMode blockMode = fixedScanMode();
         int networkDisplayMask = RadarNetworkManager.get(level.getServer()).displayFilterMaskForController(
@@ -811,6 +880,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
+        if (this.networkId != null) {
+            tag.putUUID("PowerRadarNetworkId", this.networkId);
+        }
         tag.putString("ScanMode", this.scanMode.name());
         tag.putBoolean("Assembled", this.assembled);
         tag.putInt("ValidPanelCount", this.validPanelCount);
@@ -837,7 +909,13 @@ public class RadarControllerBlockEntity extends SmartBlockEntity implements IHav
 
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        UUID oldNetworkId = this.networkId;
         super.read(tag, registries, clientPacket);
+        this.networkId = tag.hasUUID("PowerRadarNetworkId")
+                ? tag.getUUID("PowerRadarNetworkId")
+                : null;
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, this.networkId);
         this.scanMode = RadarScanMode.byName(tag.getString("ScanMode"));
         this.assembled = tag.getBoolean("Assembled");
         this.validPanelCount = tag.getInt("ValidPanelCount");

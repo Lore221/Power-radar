@@ -9,7 +9,6 @@
     "power_radar:logic_dock",
     "power_radar:ew_system",
     "power_radar:onboard_computer",
-    "power_radar:radar_monitor_controller",
     "power_radar:radar_display",
     "power_radar:radar_link",
     {

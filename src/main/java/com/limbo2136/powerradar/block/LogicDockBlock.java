@@ -50,12 +50,11 @@ public class LogicDockBlock extends BaseEntityBlock
     // Боковые электрические контакты остаются визуальными и в физическую форму не входят.
     private static final ModelBox[] MODEL_BOXES = {
             new ModelBox(0.0, 0.0, 0.0, 16.0, 4.0, 16.0),
-            new ModelBox(0.0, 4.0, 13.0, 16.0, 16.0, 16.0),
             new ModelBox(0.0, 4.0, 3.0, 3.0, 6.0, 10.0),
             new ModelBox(13.0, 4.0, 3.0, 16.0, 6.0, 10.0),
             new ModelBox(8.67, 4.0, 3.0, 11.67, 6.0, 10.0),
             new ModelBox(4.34, 4.0, 3.0, 7.34, 6.0, 10.0),
-            new ModelBox(0.0, 4.0, 10.0, 16.0, 6.0, 13.0),
+            new ModelBox(0.0, 4.0, 10.0, 16.0, 6.0, 16.0),
             new ModelBox(0.0, 4.0, 0.0, 16.0, 6.0, 3.0)
     };
     private static final VoxelShape NORTH_SHAPE = buildShape(Direction.NORTH);

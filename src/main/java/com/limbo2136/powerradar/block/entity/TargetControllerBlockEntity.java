@@ -20,6 +20,7 @@ import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalPar
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
 import com.limbo2136.powerradar.compat.electroenergetics.TargetControllerCeeSnapshot;
 import com.limbo2136.powerradar.bridge.TrajectoryIconBridge;
+import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
 import com.limbo2136.powerradar.targeting.BallisticTrajectoryValidator;
 import com.limbo2136.powerradar.targeting.TargetLeadSolver;
@@ -27,9 +28,9 @@ import com.limbo2136.powerradar.targeting.LiveTrackedTargetResolver;
 import com.limbo2136.powerradar.targeting.TargetingMath;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
-import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
 import com.limbo2136.powerradar.radar.network.SelectedTargetRuntimeSnapshot;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
@@ -48,6 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -63,7 +65,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-public class TargetControllerBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
+public class TargetControllerBlockEntity extends SmartBlockEntity
+        implements IHaveGoggleInformation, RadarNetworkMember {
     // Временные интервалы и допуски задаются в серверных тиках, блоках и градусах.
     // Эти значения согласуют захват цели, кэширование решения и импульсы для CBC.
     private static final double CBC_CANNON_AIM_ORIGIN_Y_OFFSET = 2.0;
@@ -179,9 +182,58 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     // Выбор траектории хранится локально на контроллере и влияет только на большую пушку.
     private TrajectoryModeBehaviour trajectoryMode;
     private boolean cachedHighArcMode;
+    @Nullable
+    private UUID networkId;
 
     public TargetControllerBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.TARGET_CONTROLLER.get(), pos, blockState);
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        super.onChunkUnloaded();
+    }
+
+    @Override
+    public void remove() {
+        RadarNetworkNodeClientCacheBridge.onRemoved(this.level, this.worldPosition);
+        super.remove();
+    }
+
+    @Override
+    @Nullable
+    public UUID radarNetworkId() {
+        return this.networkId;
+    }
+
+    @Override
+    public void setRadarNetworkId(@Nullable UUID networkId) {
+        if (networkId != null
+                && this.level instanceof ServerLevel serverLevel
+                && !RadarNetworkManager.get(serverLevel.getServer()).targetControllersAllowed(networkId)) {
+            networkId = null;
+        }
+        if (java.util.Objects.equals(this.networkId, networkId)) {
+            return;
+        }
+        UUID oldNetworkId = this.networkId;
+        this.networkId = networkId;
+        if (this.level instanceof ServerLevel serverLevel && networkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).ensureNetwork(networkId);
+        }
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, networkId);
+        resetAutotargetSearchState();
+        invalidateTargetLeadCache();
+        setChanged();
+        sendData();
     }
 
     // Создаёт двухпозиционную панель Create на допустимых боковых гранях блока.
@@ -222,6 +274,11 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     // Передаёт серверный тик Create и основной цикл управления одному экземпляру контроллера.
     public static void serverTick(net.minecraft.world.level.Level level, BlockPos pos, BlockState state, TargetControllerBlockEntity controller) {
         if (level instanceof ServerLevel serverLevel) {
+            if (controller.networkId != null
+                    && !RadarNetworkManager.get(serverLevel.getServer())
+                            .targetControllersAllowed(controller.networkId)) {
+                controller.setRadarNetworkId(null);
+            }
             controller.tick();
             controller.tickServer(serverLevel, state);
         }
@@ -241,7 +298,13 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     // Восстанавливает устойчивое состояние, но намеренно сбрасывает переходный сигнал выстрела и все кэши.
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        UUID oldNetworkId = this.networkId;
         super.read(tag, registries, clientPacket);
+        this.networkId = tag.hasUUID("PowerRadarNetworkId")
+                ? tag.getUUID("PowerRadarNetworkId")
+                : null;
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, this.networkId);
         this.cachedHighArcMode = this.trajectoryMode != null && this.trajectoryMode.getValue() == 1;
         // Выход выстрела переходный: сохранённый высокий уровень не создаст фронт сигнала,
         // который нужен большой пушке CBC после повторной загрузки чанка.
@@ -269,6 +332,9 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
+        if (this.networkId != null) {
+            tag.putUUID("PowerRadarNetworkId", this.networkId);
+        }
         tag.putBoolean("ReadyToFire", false);
         tag.putDouble("PowerVoltage", this.powerVoltageVolts);
         tag.putDouble("CurrentAmps", this.currentAmps);
@@ -359,16 +425,11 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
             return TargetSolution.invalid("cbc-missing");
         }
         ServerLevel worldLevel = authoritativeLevel(level);
-        RadarLinkConnectionResolver.Resolution linkResolution =
-                RadarLinkConnectionResolver.findSingleLinkFacingEndpointCached(level, this.worldPosition);
-        if (linkResolution.status() != RadarLinkConnectionResolver.Status.SINGLE || linkResolution.link().networkId() == null) {
-            return TargetSolution.invalid("no-radar-link");
+        UUID networkId = this.networkId;
+        if (networkId == null) {
+            return TargetSolution.invalid("no-radar-network");
         }
-        UUID networkId = linkResolution.link().networkId();
         RadarNetworkManager networkManager = RadarNetworkManager.get(level.getServer());
-        if (!networkManager.controlConsumersAllowed(networkId)) {
-            return TargetSolution.invalid("onboard-network");
-        }
         UUID selectedTarget = networkManager.selectedTargetUuid(networkId).orElse(null);
         boolean manualTarget = selectedTarget != null;
         long policyRevision = networkManager.settingsRevision(networkId);
@@ -383,7 +444,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         RadarNetworkManager.ControllersResolution controllerResolution = networkManager.resolveControllersForConsumer(
                         networkId,
-                        GlobalPos.of(level.dimension(), linkResolution.link().getBlockPos()));
+                        GlobalPos.of(level.dimension(), this.worldPosition));
         if (controllerResolution.status() != RadarNetworkConnectionStatus.CONNECTED
                 || controllerResolution.controllers().isEmpty()) {
             return TargetSolution.invalid("radar-offline");
@@ -406,17 +467,14 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
                 invalidateTargetLeadCache();
                 return TargetSolution.invalid("manual-target-unreachable");
             } else if (!manualSnapshot.alive() || manualSnapshot.target() == null) {
-                networkManager.setSelectedTargetUuid(networkId, null);
-                manualTarget = false;
-                selectedTarget = null;
+                invalidateTargetLeadCache();
+                return TargetSolution.invalid("manual-target-unavailable");
             } else {
                 track = manualSnapshot.target();
             }
             if (track != null && track.classification() == TargetClassification.PROJECTILE) {
-                networkManager.setSelectedTargetUuid(networkId, null);
-                manualTarget = false;
-                selectedTarget = null;
-                track = null;
+                invalidateTargetLeadCache();
+                return TargetSolution.invalid("manual-target-projectile");
             }
         }
         if (!manualTarget || selectedTarget == null) {
@@ -1495,8 +1553,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         }
         if (!solution.valid()) {
             return switch (solution.reason()) {
-                case "no-radar-link" -> FireStatus.NO_RADAR_LINK;
-                case "onboard-network" -> FireStatus.ONBOARD_NETWORK;
+                case "no-radar-network" -> FireStatus.NO_RADAR_NETWORK;
                 case "radar-offline" -> FireStatus.RADAR_OFFLINE;
                 case "no-cbc-mount", "cbc-missing" -> FireStatus.NO_CANNON;
                 case "manual-target-unreachable" -> FireStatus.TARGET_UNREACHABLE;
@@ -1772,8 +1829,7 @@ public class TargetControllerBlockEntity extends SmartBlockEntity implements IHa
         READY("goggles.power_radar.target_controller.fire_status.ready"),
         UNDERVOLTAGE("goggles.power_radar.target_controller.fire_status.undervoltage"),
         OVERVOLTAGE("goggles.power_radar.target_controller.fire_status.overvoltage"),
-        NO_RADAR_LINK("goggles.power_radar.target_controller.fire_status.no_radar_link"),
-        ONBOARD_NETWORK("goggles.power_radar.target_controller.fire_status.onboard_network"),
+        NO_RADAR_NETWORK("goggles.power_radar.target_controller.fire_status.no_radar_link"),
         RADAR_OFFLINE("goggles.power_radar.target_controller.fire_status.radar_offline"),
         NO_CANNON("goggles.power_radar.target_controller.fire_status.no_cannon"),
         NO_TARGET("goggles.power_radar.target_controller.fire_status.no_target"),

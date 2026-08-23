@@ -34,7 +34,6 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             ModBlocks.AIR_RADAR_CONTROLLER.getId(),
             ModBlocks.SURFACE_RADAR_CONTROLLER.getId(),
             ModBlocks.RADAR_LINK.getId(),
-            ModBlocks.RADAR_MONITOR_CONTROLLER.getId(),
             ModBlocks.RADAR_DISPLAY.getId(),
             ModBlocks.RADAR_PANEL.getId(),
             ModBlocks.OVERVIEW_MODULE.getId()
@@ -59,7 +58,6 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
         helper.forComponents(
             ModBlocks.TARGET_CONTROLLER.getId(),
             ModBlocks.LOGIC_DOCK.getId(),
-            ModBlocks.RADAR_MONITOR_CONTROLLER.getId(),
             ModBlocks.RADAR_DISPLAY.getId(),
             ModItems.TARGETING_CARD.getId()
         )
@@ -105,7 +103,6 @@ public class PowerRadarPonderPlugin implements PonderPlugin {
             .add(ModBlocks.ONBOARD_COMPUTER.getId())
             .add(ModBlocks.RADAR_PANEL.getId())
             .add(ModBlocks.OVERVIEW_MODULE.getId())
-            .add(ModBlocks.RADAR_MONITOR_CONTROLLER.getId())
             .add(ModBlocks.RADAR_DISPLAY.getId())
             .add(ModBlocks.RADAR_LINK.getId())
             .add(ModItems.LINKER.getId())

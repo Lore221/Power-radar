@@ -26,6 +26,7 @@ import com.limbo2136.powerradar.interception.MovingProtectedZoneTracker;
 import com.limbo2136.powerradar.interception.ProtectedZoneThreatEvaluator;
 import com.limbo2136.powerradar.radar.network.CombinedRadarDataSource;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
@@ -74,7 +75,8 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGoggleInformation {
+public class ShellAlarmBlockEntity extends SmartBlockEntity
+        implements IHaveGoggleInformation, RadarNetworkMember {
     private static final BehaviourType<ShellAlarmDimensionsBehaviour> DIMENSIONS_BEHAVIOUR_TYPE = new BehaviourType<>();
     private final Map<UUID, ThreatEvaluation> evaluations = new HashMap<>();
     private final MovingProtectedZoneTracker protectedZoneTracker = new MovingProtectedZoneTracker();
@@ -546,17 +548,28 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
 
     // Логическая радарная сеть и interception-сеть намеренно имеют разные UUID и жизненные циклы.
     public void initializeNetwork(UUID networkId) {
-        if (networkId == null || !(this.level instanceof ServerLevel serverLevel)) {
+        setRadarNetworkId(networkId);
+    }
+
+    @Override
+    public void setRadarNetworkId(UUID networkId) {
+        if (java.util.Objects.equals(this.networkId, networkId)) {
             return;
         }
-        RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
-        if (this.networkId != null && !this.networkId.equals(networkId)) {
-            manager.removePersistentLink(this.networkId, globalPos());
+        UUID oldNetworkId = this.networkId;
+        if (this.level instanceof ServerLevel serverLevel && oldNetworkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).unloadNetworkNode(oldNetworkId, globalPos());
         }
         this.networkId = networkId;
-        manager.loadLink(networkId, globalPos());
-        this.runtimeRegisteredLoaded = true;
+        if (this.level instanceof ServerLevel serverLevel && networkId != null) {
+            RadarNetworkManager.get(serverLevel.getServer()).loadNetworkNode(networkId, globalPos());
+            this.runtimeRegisteredLoaded = true;
+        } else {
+            this.runtimeRegisteredLoaded = false;
+        }
         this.needsRuntimeRegister = false;
+        RadarNetworkNodeClientCacheBridge.onNetworkChanged(
+                this.level, this.worldPosition, oldNetworkId, networkId);
         setChanged();
         sendData();
     }
@@ -565,10 +578,12 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         return this.networkId;
     }
 
+    @Override
+    public UUID radarNetworkId() {
+        return this.networkId;
+    }
+
     public UUID ensureNetworkId() {
-        if (this.networkId == null && this.level instanceof ServerLevel serverLevel) {
-            initializeNetwork(RadarNetworkManager.get(serverLevel.getServer()).createNetwork());
-        }
         return this.networkId;
     }
 
@@ -593,10 +608,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     }
 
     public void destroyNetworkMembership() {
-        if (this.level instanceof ServerLevel serverLevel && this.networkId != null) {
-            RadarNetworkManager.get(serverLevel.getServer()).removePersistentLink(this.networkId, globalPos());
-            this.runtimeRegisteredLoaded = false;
-        }
+        setRadarNetworkId(null);
     }
 
     // Выгрузка чанка снимает только runtime-регистрацию; постоянное членство удаляется при разрушении.
@@ -647,14 +659,14 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
     private void unloadNetworkRuntime() {
         if (this.level instanceof ServerLevel serverLevel && this.networkId != null
                 && this.runtimeRegisteredLoaded) {
-            RadarNetworkManager.get(serverLevel.getServer()).unloadLink(this.networkId, globalPos());
+            RadarNetworkManager.get(serverLevel.getServer()).unloadNetworkNode(this.networkId, globalPos());
             this.runtimeRegisteredLoaded = false;
         }
     }
 
     private void registerLoaded(ServerLevel level) {
         if (this.networkId != null) {
-            RadarNetworkManager.get(level.getServer()).loadLink(this.networkId, globalPos());
+            RadarNetworkManager.get(level.getServer()).loadNetworkNode(this.networkId, globalPos());
             this.runtimeRegisteredLoaded = true;
         }
     }
@@ -702,6 +714,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
         if (this.networkId != null) {
             tag.putUUID("PowerRadarNetworkId", this.networkId);
         }
+        tag.putInt("RadarNetworkFormat", 2);
         if (this.interceptionNetworkId != null) {
             tag.putUUID("InterceptionNetworkId", this.interceptionNetworkId);
         }
@@ -730,7 +743,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity implements IHaveGogg
                 tag.contains("ElectricalResistanceOhms")
                         ? tag.getDouble("ElectricalResistanceOhms")
                         : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS));
-        this.networkId = tag.hasUUID("PowerRadarNetworkId")
+        this.networkId = tag.getInt("RadarNetworkFormat") >= 2 && tag.hasUUID("PowerRadarNetworkId")
                 ? tag.getUUID("PowerRadarNetworkId") : null;
         this.interceptionNetworkId = tag.hasUUID("InterceptionNetworkId")
                 ? tag.getUUID("InterceptionNetworkId") : null;

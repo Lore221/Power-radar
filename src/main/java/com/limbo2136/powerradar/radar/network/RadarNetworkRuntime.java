@@ -16,8 +16,7 @@ public class RadarNetworkRuntime {
     private final Set<GlobalPos> loadedLinks = new HashSet<>();
     private final Map<GlobalPos, GlobalPos> monitorLinkToMonitorPos = new HashMap<>();
     private final SelectedTargetRuntimeState selectedTarget = new SelectedTargetRuntimeState();
-    @Nullable
-    private DisplaySnapshotCacheEntry displaySnapshot;
+    private final Map<Long, DisplaySnapshotCacheEntry> displaySnapshots = new HashMap<>();
     private long settingsRevision;
 
     public Set<GlobalPos> loadedLinks() {
@@ -56,16 +55,19 @@ public class RadarNetworkRuntime {
     }
 
     @Nullable
-    public DisplaySnapshotCacheEntry displaySnapshot() {
-        return this.displaySnapshot;
+    public DisplaySnapshotCacheEntry displaySnapshot(long revision) {
+        return this.displaySnapshots.get(revision);
     }
 
     public void putDisplaySnapshot(long revision, RadarMonitorDisplayData data) {
-        this.displaySnapshot = new DisplaySnapshotCacheEntry(revision, data);
+        if (this.displaySnapshots.size() >= 32) {
+            this.displaySnapshots.clear();
+        }
+        this.displaySnapshots.put(revision, new DisplaySnapshotCacheEntry(revision, data));
     }
 
     public void invalidateDisplaySnapshots() {
-        this.displaySnapshot = null;
+        this.displaySnapshots.clear();
     }
 
     public long selectedTargetScanFingerprint() {

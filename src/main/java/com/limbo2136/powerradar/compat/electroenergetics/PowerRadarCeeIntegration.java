@@ -26,7 +26,7 @@ public final class PowerRadarCeeIntegration {
 
     public static void configureMonitorLoad(ServerLevel level, BlockPos pos, boolean validStructure, int activeDisplayCount) {
         SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
-        if (device instanceof MonitorControllerCeeDevice monitorDevice) {
+        if (device instanceof RadarDisplayCeeDevice monitorDevice) {
             monitorDevice.configureLoad(validStructure, activeDisplayCount);
         }
     }
@@ -45,10 +45,4 @@ public final class PowerRadarCeeIntegration {
         }
     }
 
-    public static void configureOnboardComputerLoad(ServerLevel level, BlockPos pos) {
-        SimulatedDevice device = DevicesSavedData.load(level).getDevice(pos);
-        if (device instanceof MonitorControllerCeeDevice monitorDevice) {
-            monitorDevice.configureFixedLoad(true, PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts());
-        }
-    }
 }

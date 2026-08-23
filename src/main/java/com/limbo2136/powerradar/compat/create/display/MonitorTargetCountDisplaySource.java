@@ -1,7 +1,7 @@
 package com.limbo2136.powerradar.compat.create.display;
 
 import com.limbo2136.powerradar.RadarConstants;
-import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.AbstractRadarMonitorBlockEntity;
 import com.simibubi.create.content.redstone.displayLink.DisplayLinkContext;
 import com.simibubi.create.content.redstone.displayLink.source.NumericSingleLineDisplaySource;
 import com.simibubi.create.content.redstone.displayLink.target.DisplayTargetStats;
@@ -14,7 +14,7 @@ public final class MonitorTargetCountDisplaySource extends NumericSingleLineDisp
     @Override
     protected MutableComponent provideLine(DisplayLinkContext context, DisplayTargetStats stats) {
         BlockEntity source = context.getSourceBlockEntity();
-        int targets = source instanceof RadarMonitorControllerBlockEntity monitor
+        int targets = source instanceof AbstractRadarMonitorBlockEntity monitor
                 && context.level() instanceof ServerLevel serverLevel
                 ? monitor.displayLinkTargetCount(serverLevel)
                 : 0;

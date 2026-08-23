@@ -1,7 +1,7 @@
 package com.limbo2136.powerradar.item;
 
 import com.limbo2136.powerradar.PowerRadar;
-import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -21,11 +21,11 @@ public final class RadarCompassBindingHandler {
     }
 
     @SubscribeEvent
-    public static void bindToRadarLink(PlayerInteractEvent.RightClickBlock event) {
+    public static void bindToRadarController(PlayerInteractEvent.RightClickBlock event) {
         ItemStack held = event.getItemStack();
         if (!held.is(Items.COMPASS)
-                || !(event.getLevel().getBlockEntity(event.getPos()) instanceof RadarLinkBlockEntity link)
-                || link.networkId() == null) {
+                || !(event.getLevel().getBlockEntity(event.getPos()) instanceof RadarControllerBlockEntity controller)
+                || controller.radarNetworkId() == null) {
             return;
         }
 
@@ -33,7 +33,7 @@ public final class RadarCompassBindingHandler {
             event.getLevel().playSound(
                     null, event.getPos(), SoundEvents.LODESTONE_COMPASS_LOCK,
                     SoundSource.PLAYERS, 1.0F, 1.0F);
-            bindOneCompass(held, event.getEntity(), link.networkId());
+            bindOneCompass(held, event.getEntity(), controller.radarNetworkId());
         }
         event.setCancellationResult(InteractionResult.sidedSuccess(event.getLevel().isClientSide()));
         event.setCanceled(true);

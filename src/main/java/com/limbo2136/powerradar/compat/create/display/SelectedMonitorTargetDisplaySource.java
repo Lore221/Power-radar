@@ -3,7 +3,7 @@ package com.limbo2136.powerradar.compat.create.display;
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.target.TargetClassification;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
-import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.AbstractRadarMonitorBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.radar.network.SelectedTargetRuntimeSnapshot;
 import com.simibubi.create.api.behaviour.display.DisplayTarget;
@@ -26,7 +26,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Поля выбранной цели для Create Display Link. Источник читает общий runtime-снимок сети
- * контроллера монитора только во время пассивного обновления и не экстраполирует цель.
+ * корневого дисплея только во время пассивного обновления и не экстраполирует цель.
  */
 public final class SelectedMonitorTargetDisplaySource extends SingleLineDisplaySource {
     private static final String LAST_VALUE_KEY = "PowerRadarLastValue";
@@ -113,7 +113,7 @@ public final class SelectedMonitorTargetDisplaySource extends SingleLineDisplayS
 
     private static TrackedTargetView selectedTarget(DisplayLinkContext context) {
         BlockEntity source = context.getSourceBlockEntity();
-        if (!(source instanceof RadarMonitorControllerBlockEntity monitor)
+        if (!(source instanceof AbstractRadarMonitorBlockEntity monitor)
                 || !(context.level() instanceof ServerLevel serverLevel)) {
             return null;
         }

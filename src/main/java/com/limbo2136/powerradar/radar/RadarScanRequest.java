@@ -11,6 +11,7 @@ public record RadarScanRequest(
         @Nullable RadarScanProfile refreshProfile,
         RadarScanContext context,
         RadarTargetCache targetCache,
+        RadarSableCoverageAccumulator sableCoverage,
         List<AABB> slices,
         boolean publish,
         @Nullable Runnable publishCompletion

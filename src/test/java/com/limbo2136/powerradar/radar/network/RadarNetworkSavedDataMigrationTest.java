@@ -21,7 +21,7 @@ class RadarNetworkSavedDataMigrationTest {
     private static final String NETWORKS_KEY = "PowerRadarNetworks";
 
     @Test
-    void migratesUnversionedLegacyRecordAndMarksDataDirty() {
+    void discardsUnversionedLegacyRecordAndMarksDataDirty() {
         UUID id = UUID.fromString("2639734d-7211-4ad8-b419-2c925cfb0e12");
         CompoundTag legacy = new CompoundTag();
         legacy.putUUID("Id", id);
@@ -30,22 +30,11 @@ class RadarNetworkSavedDataMigrationTest {
 
         RadarNetworkSavedData data = RadarNetworkSavedData.load(rootWith(legacy), RegistryAccess.EMPTY);
 
-        RadarNetworkRecord record = data.get(id).orElseThrow();
-        assertEquals(RadarNetworkRecord.SCHEMA_VERSION, record.schemaVersion());
-        assertEquals(1, record.linkNodes().size());
-        assertEquals(List.of("Alice", "Bob"), List.copyOf(record.whitelistedPlayerNames()));
-        assertTrue(record.whitelistedSableNames().isEmpty());
-        assertEquals(0, record.autotargetFilterMask());
-        assertTrue(record.controlConsumersAllowed());
+        assertTrue(data.get(id).isEmpty());
         assertTrue(data.isDirty());
 
         CompoundTag saved = data.save(new CompoundTag(), RegistryAccess.EMPTY);
-        CompoundTag migrated = saved.getList(NETWORKS_KEY, Tag.TAG_COMPOUND).getCompound(0);
-        assertEquals(RadarNetworkRecord.SCHEMA_VERSION, migrated.getInt("SchemaVersion"));
-        assertTrue(migrated.contains("ControllerBindings", Tag.TAG_LIST));
-        assertTrue(migrated.contains("WhitelistedSable", Tag.TAG_LIST));
-        assertTrue(migrated.contains("AutotargetFilterMask", Tag.TAG_INT));
-        assertTrue(migrated.contains("ControlConsumersAllowed", Tag.TAG_BYTE));
+        assertTrue(saved.getList(NETWORKS_KEY, Tag.TAG_COMPOUND).isEmpty());
     }
 
     @Test
@@ -61,7 +50,7 @@ class RadarNetworkSavedDataMigrationTest {
         assertTrue(record.linkNodes().isEmpty());
         assertTrue(record.controllerBindings().isEmpty());
         assertNull(record.selectedTargetUuid());
-        assertTrue(record.controlConsumersAllowed());
+        assertTrue(record.targetControllersAllowed());
         assertTrue(data.isDirty());
     }
 
@@ -112,7 +101,7 @@ class RadarNetworkSavedDataMigrationTest {
         record.whitelistedSableNames().add("Sable Alpha");
         record.setSelectedTargetUuid(targetId);
         record.setAutotargetFilterMask(0x35);
-        record.setControlConsumersAllowed(false);
+        record.setTargetControllersAllowed(false);
 
         RadarNetworkSavedData restored = RadarNetworkSavedData.load(
                 original.save(new CompoundTag(), RegistryAccess.EMPTY),
@@ -126,8 +115,28 @@ class RadarNetworkSavedDataMigrationTest {
         assertEquals(record.whitelistedSableNames(), restoredRecord.whitelistedSableNames());
         assertEquals(targetId, restoredRecord.selectedTargetUuid());
         assertEquals(0x35, restoredRecord.autotargetFilterMask());
-        assertFalse(restoredRecord.controlConsumersAllowed());
+        assertFalse(restoredRecord.targetControllersAllowed());
         assertFalse(restored.isDirty());
+    }
+
+    @Test
+    void renamesLegacyControlConsumerFlagWithoutChangingItsValue() {
+        UUID id = UUID.fromString("3026b4ed-b76f-47ae-a66a-ac8b7e56c3b0");
+        CompoundTag legacyNamedCurrentRecord = new CompoundTag();
+        legacyNamedCurrentRecord.putUUID("Id", id);
+        legacyNamedCurrentRecord.putInt("SchemaVersion", RadarNetworkRecord.SCHEMA_VERSION);
+        legacyNamedCurrentRecord.putBoolean("ControlConsumersAllowed", false);
+
+        RadarNetworkSavedData data = RadarNetworkSavedData.load(
+                rootWith(legacyNamedCurrentRecord), RegistryAccess.EMPTY);
+
+        assertFalse(data.get(id).orElseThrow().targetControllersAllowed());
+        assertTrue(data.isDirty());
+        CompoundTag savedNetwork = data.save(new CompoundTag(), RegistryAccess.EMPTY)
+                .getList(NETWORKS_KEY, Tag.TAG_COMPOUND)
+                .getCompound(0);
+        assertFalse(savedNetwork.getBoolean("TargetControllersAllowed"));
+        assertFalse(savedNetwork.contains("ControlConsumersAllowed"));
     }
 
     private static CompoundTag rootWith(CompoundTag... networks) {

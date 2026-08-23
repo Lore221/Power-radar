@@ -4,12 +4,16 @@ import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
+import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
+import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
+import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.Objects;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -33,7 +37,7 @@ public final class LinkerItem extends Item {
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
-        if (player == null || player.isShiftKeyDown()) {
+        if (player == null) {
             return InteractionResult.PASS;
         }
 
@@ -43,7 +47,11 @@ public final class LinkerItem extends Item {
         }
 
         if (!context.getLevel().isClientSide()) {
-            configure(context.getItemInHand(), player, blockEntity);
+            if (player.isShiftKeyDown()) {
+                disconnect(context.getItemInHand(), player, blockEntity);
+            } else {
+                configure(context.getItemInHand(), player, blockEntity);
+            }
         }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide());
     }
@@ -87,7 +95,8 @@ public final class LinkerItem extends Item {
     }
 
     private static boolean isSupported(BlockEntity blockEntity) {
-        return blockEntity instanceof RadarLinkBlockEntity
+        return blockEntity instanceof RadarNetworkMember
+                || blockEntity instanceof RadarLinkBlockEntity
                 || blockEntity instanceof ShellAlarmBlockEntity
                 || blockEntity instanceof OnboardComputerBlockEntity
                 || blockEntity instanceof InterceptionControllerBlockEntity;
@@ -108,8 +117,12 @@ public final class LinkerItem extends Item {
         }
 
         UUID selectedRadarNetwork = linker.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
-        UUID blockRadarNetwork = ensureRadarNetwork(blockEntity);
+        UUID blockRadarNetwork = radarNetworkId(blockEntity);
         if (selectedRadarNetwork == null) {
+            if (blockRadarNetwork == null) {
+                message(player, "message.power_radar.linker.radar_missing");
+                return;
+            }
             linker.remove(ModDataComponents.INTERCEPTION_NETWORK_ID.get());
             linker.set(ModDataComponents.POWER_RADAR_NETWORK_ID.get(), blockRadarNetwork);
             message(player, "message.power_radar.linker.radar_copied");
@@ -119,6 +132,13 @@ public final class LinkerItem extends Item {
         if (!selectedRadarNetwork.equals(blockRadarNetwork)) {
             if (blockEntity instanceof OnboardComputerBlockEntity) {
                 message(player, "message.power_radar.linker.onboard_locked");
+                return;
+            }
+            if (blockEntity instanceof TargetControllerBlockEntity
+                    && blockEntity.getLevel() instanceof ServerLevel serverLevel
+                    && !RadarNetworkManager.get(serverLevel.getServer())
+                            .targetControllersAllowed(selectedRadarNetwork)) {
+                message(player, "message.power_radar.network.target_controller_forbidden");
                 return;
             }
             applyRadarNetwork(blockEntity, selectedRadarNetwork, player);
@@ -185,7 +205,10 @@ public final class LinkerItem extends Item {
         message(player, "message.power_radar.linker.interception_copied");
     }
 
-    private static UUID ensureRadarNetwork(BlockEntity blockEntity) {
+    private static UUID radarNetworkId(BlockEntity blockEntity) {
+        if (blockEntity instanceof RadarNetworkMember member) {
+            return member.radarNetworkId();
+        }
         if (blockEntity instanceof RadarLinkBlockEntity link) {
             return link.ensureNetworkId();
         }
@@ -196,12 +219,39 @@ public final class LinkerItem extends Item {
     }
 
     private static void applyRadarNetwork(BlockEntity blockEntity, UUID networkId, Player player) {
+        if (blockEntity instanceof RadarNetworkMember member) {
+            member.setRadarNetworkId(networkId);
+            return;
+        }
         if (blockEntity instanceof RadarLinkBlockEntity link) {
             link.initializeNetwork(networkId, player);
             return;
         }
         if (blockEntity instanceof ShellAlarmBlockEntity alarm) {
             alarm.initializeNetwork(networkId);
+        }
+    }
+
+    private static void disconnect(ItemStack linker, Player player, BlockEntity blockEntity) {
+        UUID selectedInterceptionNetwork = linker.get(ModDataComponents.INTERCEPTION_NETWORK_ID.get());
+        if (selectedInterceptionNetwork != null
+                && blockEntity instanceof InterceptionControllerBlockEntity controller) {
+            controller.setInterceptionNetworkId(null);
+            message(player, "message.power_radar.linker.interception_disconnected");
+            return;
+        }
+        if (blockEntity instanceof OnboardComputerBlockEntity) {
+            message(player, "message.power_radar.linker.onboard_locked");
+            return;
+        }
+        if (blockEntity instanceof RadarNetworkMember member) {
+            member.setRadarNetworkId(null);
+            message(player, "message.power_radar.linker.radar_disconnected");
+            return;
+        }
+        if (blockEntity instanceof RadarLinkBlockEntity link) {
+            link.initializeNetwork(java.util.UUID.randomUUID(), player);
+            message(player, "message.power_radar.linker.radar_disconnected");
         }
     }
 

@@ -7,7 +7,6 @@ import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.radar.network.RadarLinkEndpointRole;
 import com.limbo2136.powerradar.radar.network.RadarLinkReconcileResult;
-import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
@@ -149,31 +148,6 @@ public class RadarLinkBlockEntity extends BlockEntity {
                 PowerRadarAdvancementTriggers.RADAR_NETWORK_ONLINE.get().trigger(serverPlayer);
             }
             return result;
-        }
-
-        if (frontState.is(ModBlocks.RADAR_MONITOR_CONTROLLER.get())
-                && serverLevel.getBlockEntity(frontPos) instanceof RadarMonitorControllerBlockEntity) {
-            if (isCurrentEndpoint(RadarLinkEndpointRole.RADAR_MONITOR, newEndpointPos)
-                    && manager.isMonitorAttachedAt(this.networkId, linkGlobalPos, newEndpointPos)) {
-                if (manager.resolveControllersForConsumer(this.networkId, linkGlobalPos).status()
-                        == RadarNetworkConnectionStatus.OUT_OF_RANGE) {
-                    pulseClientOnly(LampPulse.RED);
-                    return RadarLinkReconcileResult.OUT_OF_RANGE;
-                }
-                pulseClientOnly(LampPulse.GREEN);
-                return RadarLinkReconcileResult.MONITOR_ATTACHED;
-            }
-            detachCurrentEndpoint(manager, linkGlobalPos);
-            manager.attachMonitorFromLink(this.networkId, linkGlobalPos, newEndpointPos);
-            this.endpointRole = RadarLinkEndpointRole.RADAR_MONITOR;
-            this.endpointPos = newEndpointPos;
-            if (manager.resolveControllersForConsumer(this.networkId, linkGlobalPos).status()
-                    == RadarNetworkConnectionStatus.OUT_OF_RANGE) {
-                pulseAndSync(LampPulse.RED);
-                return RadarLinkReconcileResult.OUT_OF_RANGE;
-            }
-            pulseAndSync(LampPulse.GREEN);
-            return RadarLinkReconcileResult.MONITOR_ATTACHED;
         }
 
         if (frontState.is(ModBlocks.LOGIC_DOCK.get())

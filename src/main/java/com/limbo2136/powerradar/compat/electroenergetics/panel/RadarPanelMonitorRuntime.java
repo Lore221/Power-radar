@@ -16,8 +16,6 @@ import com.limbo2136.powerradar.radar.RadarMonitorDisplayData;
 import com.limbo2136.powerradar.radar.OnlinePlayersSnapshotCache;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -30,10 +28,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Связывает панельные Link и Display без отдельного block entity.
- * Область Link — квадрат 3x3 в плоскости одинаково ориентированных щитков.
- */
+/** Общий серверный runtime устройств Power Radar, установленных в щиток CEE. */
 public final class RadarPanelMonitorRuntime {
     private RadarPanelMonitorRuntime() {
     }
@@ -57,7 +52,7 @@ public final class RadarPanelMonitorRuntime {
             return noLinkSnapshot(level, monitorPos, facing, display, RadarNetworkConnectionStatus.NO_LINK);
         }
 
-        if (resolution.networkId() == null || resolution.linkPos() == null) {
+        if (resolution.networkId() == null || resolution.consumerPos() == null) {
             return noLinkSnapshot(level, monitorPos, facing, display, resolution.status());
         }
         if (resolution.controllers().isEmpty()
@@ -72,7 +67,7 @@ public final class RadarPanelMonitorRuntime {
         RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
         RadarMonitorDisplayData data = manager.displayDataForConsumer(
                 resolution.networkId(),
-                GlobalPos.of(level.dimension(), resolution.linkPos()),
+                GlobalPos.of(level.dimension(), resolution.consumerPos()),
                 monitorPos,
                 facing,
                 resolution.controllers(),
@@ -149,64 +144,35 @@ public final class RadarPanelMonitorRuntime {
         return null;
     }
 
-    public static PanelNetworkResolution resolvePanelNetwork(ServerLevel level, BlockPos monitorPos) {
-        Direction facing = panelFacing(level, monitorPos);
-        Direction horizontal = facing.getClockWise();
-        RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
-        ArrayList<LinkCandidate> candidates = new ArrayList<>();
-
-        for (int horizontalOffset = -1; horizontalOffset <= 1; horizontalOffset++) {
-            for (int verticalOffset = -1; verticalOffset <= 1; verticalOffset++) {
-                BlockPos candidatePos = monitorPos.relative(horizontal, horizontalOffset)
-                        .offset(0, verticalOffset, 0);
-                if (!level.isLoaded(candidatePos)
-                        || panelFacing(level, candidatePos) != facing
-                        || !(level.getBlockEntity(candidatePos) instanceof ElectricalPanelBlockEntity panel)) {
-                    continue;
-                }
-                for (PanelAttachment attachment : panel.getAttachments()) {
-                    if (attachment instanceof RadarLinkPanelAttachment link
-                            && link.isElectricallyOperational()
-                            && link.networkId() != null
-                            && manager.networkExists(link.networkId())) {
-                        candidates.add(new LinkCandidate(
-                                link.networkId(),
-                                candidatePos.immutable(),
-                                link.installationOrder(),
-                                link.slot.ordinal()));
-                    }
-                }
-            }
+    /** Разрешает сеть, сохранённую непосредственно в установленном предмете Display. */
+    public static PanelNetworkResolution resolveBoundNetwork(
+            ServerLevel level,
+            BlockPos monitorPos,
+            @Nullable UUID networkId
+    ) {
+        if (networkId == null) {
+            return PanelNetworkResolution.empty(RadarNetworkConnectionStatus.NO_LINK);
         }
-
-        LinkCandidate selected = candidates.stream()
-                .min(Comparator.comparingLong(LinkCandidate::installationOrder)
-                        .thenComparing(candidate -> candidate.networkId().toString())
-                        .thenComparingLong(candidate -> candidate.panelPos().asLong())
-                        .thenComparingInt(LinkCandidate::slotIndex))
-                .orElse(null);
-        if (selected == null) {
+        RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
+        if (!manager.networkExists(networkId)) {
             return PanelNetworkResolution.empty(RadarNetworkConnectionStatus.NO_LINK);
         }
         RadarNetworkManager.ControllersResolution controllers = manager.resolveControllersForConsumer(
-                selected.networkId(),
-                GlobalPos.of(level.dimension(), selected.panelPos()));
+                networkId,
+                GlobalPos.of(level.dimension(), monitorPos));
         return new PanelNetworkResolution(
-                selected.networkId(),
-                selected.panelPos(),
+                networkId,
+                monitorPos.immutable(),
                 controllers.status(),
                 controllers.controllers());
     }
 
-    /**
-     * Обновляет контроллеры сети без повторного обхода щитков.
-     * Сам Link и его питание проверяются отдельным редким обновлением кэша монитора.
-     */
+    /** Обновляет доступные контроллеры без повторного чтения состояния attachment. */
     public static PanelNetworkResolution refreshCachedControllers(
             ServerLevel level,
             PanelNetworkResolution cached
     ) {
-        if (cached.networkId() == null || cached.linkPos() == null) {
+        if (cached.networkId() == null || cached.consumerPos() == null) {
             return cached;
         }
         RadarNetworkManager manager = RadarNetworkManager.get(level.getServer());
@@ -215,10 +181,10 @@ public final class RadarPanelMonitorRuntime {
         }
         RadarNetworkManager.ControllersResolution controllers = manager.resolveControllersForConsumer(
                 cached.networkId(),
-                GlobalPos.of(level.dimension(), cached.linkPos()));
+                GlobalPos.of(level.dimension(), cached.consumerPos()));
         return new PanelNetworkResolution(
                 cached.networkId(),
-                cached.linkPos(),
+                cached.consumerPos(),
                 controllers.status(),
                 controllers.controllers());
     }
@@ -256,7 +222,7 @@ public final class RadarPanelMonitorRuntime {
     ) {
         long revision = 17L;
         revision = 31L * revision + Objects.hashCode(resolution.networkId());
-        revision = 31L * revision + Objects.hashCode(resolution.linkPos());
+        revision = 31L * revision + Objects.hashCode(resolution.consumerPos());
         revision = 31L * revision + Objects.hashCode(resolution.status());
         revision = 31L * revision + Objects.hashCode(display.electricalState());
         revision = 31L * revision + Math.round(display.voltageVolts() * 10.0D);
@@ -278,17 +244,9 @@ public final class RadarPanelMonitorRuntime {
                 : Direction.NORTH;
     }
 
-    private record LinkCandidate(
-            UUID networkId,
-            BlockPos panelPos,
-            long installationOrder,
-            int slotIndex
-    ) {
-    }
-
     public record PanelNetworkResolution(
             @Nullable UUID networkId,
-            @Nullable BlockPos linkPos,
+            @Nullable BlockPos consumerPos,
             RadarNetworkConnectionStatus status,
             List<RadarControllerBlockEntity> controllers
     ) {

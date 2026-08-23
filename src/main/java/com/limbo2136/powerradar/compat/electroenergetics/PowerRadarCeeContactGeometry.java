@@ -16,6 +16,11 @@ public final class PowerRadarCeeContactGeometry {
     // вправо.
     private static final HorizontalPair RADAR_CONTROLLER = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
     private static final HorizontalPair RADAR_MONITOR = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
+    // X/Y совпадают с центрами контактов. По глубине узлы вынесены на 0.01 пикселя
+    // за границу блока, чтобы CEE брал освещение провода от воздуха за БП.
+    private static final ModelPair RADAR_DISPLAY = new ModelPair(
+            new Vec3(5.75, 11.75, 16.01),
+            new Vec3(5.75, 3.75, 16.01));
     private static final HorizontalPair LOGIC_DOCK = new HorizontalPair(3.0, 3.0, 9.0, -9.0);
     private static final HorizontalPair SHELL_ALARM = new HorizontalPair(4.0, 7.0, 4.0, -4.0);
     private static final HorizontalPair ONBOARD_COMPUTER = new HorizontalPair(9.0, 4.0, 9.0, -9.0);
@@ -36,6 +41,10 @@ public final class PowerRadarCeeContactGeometry {
 
     public static PowerRadarCeeTerminalPair radarMonitor(Direction facing) {
         return RADAR_MONITOR.resolve(facing);
+    }
+
+    public static PowerRadarCeeTerminalPair radarDisplay(Direction facing) {
+        return RADAR_DISPLAY.resolve(facing);
     }
 
     public static PowerRadarCeeTerminalPair logicDock(Direction facing) {
@@ -81,6 +90,24 @@ public final class PowerRadarCeeContactGeometry {
             return new PowerRadarCeeTerminalPair(
                     center.add(scale(right, pixels(this.positiveRightPixels))),
                     center.add(scale(right, pixels(this.negativeRightPixels))));
+        }
+    }
+
+    /** Преобразует две произвольные точки модели с базовой ориентацией NORTH. */
+    private record ModelPair(Vec3 positivePixels, Vec3 negativePixels) {
+        private PowerRadarCeeTerminalPair resolve(Direction facing) {
+            return new PowerRadarCeeTerminalPair(
+                    resolvePoint(this.positivePixels, facing),
+                    resolvePoint(this.negativePixels, facing));
+        }
+
+        private static Vec3 resolvePoint(Vec3 point, Direction facing) {
+            Direction modelX = facing.getClockWise();
+            Direction rear = facing.getOpposite();
+            return new Vec3(0.5, 0.5, 0.5)
+                    .add(scale(modelX, pixels(point.x - 8.0)))
+                    .add(0.0, pixels(point.y - 8.0), 0.0)
+                    .add(scale(rear, pixels(point.z - 8.0)));
         }
     }
 

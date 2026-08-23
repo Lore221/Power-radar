@@ -1,10 +1,11 @@
 {
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
-	"texture_size": [32, 32],
 	"ambientocclusion": false,
+	"texture_size": [32, 32],
 	"textures": {
 		"0": "power_radar:block/target_controller",
+		"1": "power_radar:block/radar_link",
 		"particle": "power_radar:block/target_controller"
 	},
 	"elements": [
@@ -241,29 +242,40 @@
 				"up": {"uv": [11, 0, 12.00001, 7.5], "rotation": 180, "texture": "#0"},
 				"down": {"uv": [11.99999, 8, 13, 0.5], "texture": "#0"}
 			}
+		},
+		{
+			"from": [3.5, 8.5, 16],
+			"to": [12.5, 12.5, 19],
+			"rotation": {"angle": 0, "axis": "y", "origin": [13, 13, 16]},
+			"faces": {
+				"east": {"uv": [0, 9.66667, 1.33, 10.66667], "rotation": 270, "texture": "#1"},
+				"south": {"uv": [0, 10.66667, 1.33, 13.66667], "rotation": 90, "texture": "#1"},
+				"west": {"uv": [0, 9.66667, 1.33333, 10.66667], "rotation": 90, "texture": "#1"},
+				"up": {"uv": [1.33333, 10.66667, 2.33333, 13.66667], "rotation": 270, "texture": "#1"},
+				"down": {"uv": [0, 10.66667, 1.33, 13.66667], "rotation": 90, "texture": "#1"}
+			}
 		}
 	],
 	"display": {
-      "thirdperson_righthand": {
-        "rotation": [75, 45, 0],
-        "translation": [0, 2.5, 0],
-        "scale": [0.375, 0.375, 0.375]
-      },
-      "firstperson_righthand": {
-        "rotation": [0, 45, 0],
-        "scale": [0.4, 0.4, 0.4]
-      },
-      "firstperson_lefthand": {
-        "rotation": [0, -135, 0],
-        "scale": [0.4, 0.4, 0.4]
-      },
-
-      "ground": {
-        "scale": [0.25, 0.25, 0.25]
-      },
-      "fixed": {
-        "scale": [0.5, 0.5, 0.5]
-      }
+		"thirdperson_righthand": {
+			"rotation": [75, 45, 0],
+			"translation": [0, 2.5, 0],
+			"scale": [0.375, 0.375, 0.375]
+		},
+		"firstperson_righthand": {
+			"rotation": [0, 45, 0],
+			"scale": [0.4, 0.4, 0.4]
+		},
+		"firstperson_lefthand": {
+			"rotation": [0, -135, 0],
+			"scale": [0.4, 0.4, 0.4]
+		},
+		"ground": {
+			"scale": [0.25, 0.25, 0.25]
+		},
+		"fixed": {
+			"scale": [0.5, 0.5, 0.5]
+		}
 	},
 	"groups": [
 		0,
@@ -294,6 +306,7 @@
 			"scope": 0,
 			"color": 0,
 			"children": [14, 15, 16, 17, 18, 19]
-		}
+		},
+		20
 	]
 }

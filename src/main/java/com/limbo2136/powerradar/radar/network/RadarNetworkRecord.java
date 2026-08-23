@@ -10,7 +10,7 @@ import net.minecraft.core.GlobalPos;
  * вычисленная во время выполнения политика карт сюда не переносится.
  */
 public class RadarNetworkRecord {
-    public static final int SCHEMA_VERSION = 4;
+    public static final int SCHEMA_VERSION = 5;
 
     private final UUID id;
     private final int schemaVersion;
@@ -20,7 +20,7 @@ public class RadarNetworkRecord {
     private final Set<String> whitelistedSableNames = new LinkedHashSet<>();
     private UUID selectedTargetUuid;
     private int autotargetFilterMask;
-    private boolean controlConsumersAllowed = true;
+    private boolean targetControllersAllowed = true;
 
     public RadarNetworkRecord(UUID id) {
         this(id, SCHEMA_VERSION);
@@ -71,11 +71,11 @@ public class RadarNetworkRecord {
         this.autotargetFilterMask = autotargetFilterMask;
     }
 
-    public boolean controlConsumersAllowed() {
-        return this.controlConsumersAllowed;
+    public boolean targetControllersAllowed() {
+        return this.targetControllersAllowed;
     }
 
-    public void setControlConsumersAllowed(boolean controlConsumersAllowed) {
-        this.controlConsumersAllowed = controlConsumersAllowed;
+    public void setTargetControllersAllowed(boolean targetControllersAllowed) {
+        this.targetControllersAllowed = targetControllersAllowed;
     }
 }

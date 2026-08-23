@@ -2,7 +2,9 @@ package com.limbo2136.powerradar.network;
 
 import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.PowerRadar;
-import com.limbo2136.powerradar.block.entity.RadarMonitorControllerBlockEntity;
+import com.limbo2136.powerradar.PowerRadarDebugOptions;
+import com.limbo2136.powerradar.block.entity.AbstractRadarMonitorBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarDisplayBlockEntity;
 import com.limbo2136.powerradar.bridge.ClientPayloadBridge;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
@@ -15,7 +17,7 @@ import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.function.Consumer;
-import net.minecraft.core.GlobalPos;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.bus.api.IEventBus;
@@ -182,7 +184,7 @@ public final class ModNetwork {
             return;
         }
         context.enqueueWork(() -> {
-            RadarMonitorSnapshotPayload snapshot = RadarMonitorControllerBlockEntity.getOrCreateSnapshotPayload(
+            RadarMonitorSnapshotPayload snapshot = AbstractRadarMonitorBlockEntity.getOrCreateSnapshotPayload(
                     player.serverLevel(),
                     payload.monitorPos());
             if (snapshot.revision() != payload.knownRevision()) {
@@ -199,7 +201,7 @@ public final class ModNetwork {
             return;
         }
         context.enqueueWork(() -> {
-            RadarMonitorSnapshotPayload monitor = RadarMonitorControllerBlockEntity.getOrCreateSnapshotPayload(
+            RadarMonitorSnapshotPayload monitor = AbstractRadarMonitorBlockEntity.getOrCreateSnapshotPayload(
                     player.serverLevel(), payload.monitorPos());
             RadarDisplayTarget target = monitor.targets().stream()
                     .filter(candidate -> candidate.category() == RadarTargetCategory.SABLE_STRUCTURE)
@@ -236,48 +238,64 @@ public final class ModNetwork {
             return;
         }
         context.enqueueWork(() -> {
-            RadarLinkConnectionResolver.Resolution linkResolution =
-                    RadarLinkConnectionResolver.findSingleLinkFacingEndpoint(player.serverLevel(), payload.monitorPos());
             RadarNetworkManager manager = RadarNetworkManager.get(player.server);
             java.util.UUID networkId;
-            GlobalPos consumerLinkPos;
-            RadarNetworkManager.ControllersResolution controllerResolution;
-            if (linkResolution.status() == RadarLinkConnectionResolver.Status.SINGLE
-                    && linkResolution.link().networkId() != null) {
-                networkId = linkResolution.link().networkId();
-                consumerLinkPos = GlobalPos.of(
-                        player.serverLevel().dimension(), linkResolution.link().getBlockPos());
-                controllerResolution = manager.resolveControllersForConsumer(networkId, consumerLinkPos);
+            AbstractRadarMonitorBlockEntity monitor = loadedMonitorOwner(player, payload.monitorPos());
+            if (monitor != null && monitor.radarNetworkId() != null) {
+                networkId = monitor.radarNetworkId();
             } else {
                 var panelDisplay = RadarPanelMonitorRuntime.findDisplay(
                         player.serverLevel(), payload.monitorPos());
                 if (panelDisplay == null || !panelDisplay.isElectricallyOperational()) {
+                    logTargetSelection(player, payload, null, "rejected-monitor-not-found-or-unpowered");
                     return;
                 }
                 RadarPanelMonitorRuntime.PanelNetworkResolution panelResolution =
                         panelDisplay.currentNetworkResolution(player.serverLevel());
-                if (panelResolution.networkId() == null || panelResolution.linkPos() == null) {
+                if (panelResolution.networkId() == null || panelResolution.consumerPos() == null) {
+                    logTargetSelection(player, payload, null, "rejected-panel-network-unresolved");
                     return;
                 }
                 networkId = panelResolution.networkId();
-                consumerLinkPos = GlobalPos.of(
-                        player.serverLevel().dimension(), panelResolution.linkPos());
-                controllerResolution = new RadarNetworkManager.ControllersResolution(
-                        panelResolution.status(), panelResolution.controllers());
             }
-            if (!manager.controlConsumersAllowed(networkId)) {
-                return;
-            }
-            if (payload.targetUuid() != null
-                    && controllerResolution.controllers().stream()
-                    .noneMatch(controller -> controller.findTargetTrack(payload.targetUuid()) != null)) {
-                return;
-            }
+            // UUID фиксирует выбор игрока. Актуальность track и возможность наведения
+            // независимо подтверждаются радарами и Target Controller на сервере.
             manager.setSelectedTargetUuid(networkId, payload.targetUuid());
+            logTargetSelection(player, payload, networkId, "accepted");
             if (payload.targetUuid() != null) {
                 PowerRadarAdvancementTriggers.TARGET_SELECTED.get().trigger(player);
             }
         });
+    }
+
+    private static void logTargetSelection(
+            ServerPlayer player,
+            RadarMonitorTargetSelectionPayload payload,
+            java.util.UUID networkId,
+            String result
+    ) {
+        if (!PowerRadarDebugOptions.targetSystemBugReportLogging()) {
+            return;
+        }
+        PowerRadar.LOGGER.info(
+                "[PowerRadar BugReport][TargetSelection] player={} dimension={} monitor={} network={} target={} result={}",
+                player.getGameProfile().getName(),
+                player.serverLevel().dimension().location(),
+                payload.monitorPos(),
+                networkId,
+                payload.targetUuid(),
+                result);
+    }
+
+    private static AbstractRadarMonitorBlockEntity loadedMonitorOwner(ServerPlayer player, BlockPos monitorPos) {
+        if (!(player.serverLevel().getBlockEntity(monitorPos)
+                instanceof AbstractRadarMonitorBlockEntity monitor)) {
+            return null;
+        }
+        if (monitor instanceof RadarDisplayBlockEntity display && !display.isRoot()) {
+            return display.loadedRoot();
+        }
+        return monitor;
     }
 
 }

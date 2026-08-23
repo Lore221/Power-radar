@@ -7,7 +7,11 @@ import com.george_vi.electroenergetics.simulation.SimulationResults;
 import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.network.RadarMonitorSnapshotPayload;
+import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.mojang.blaze3d.vertex.PoseStack;
+import java.util.List;
+import java.util.UUID;
+import javax.annotation.Nullable;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -24,11 +28,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Полноразмерный панельный монитор использует нижнюю пару узлов режима FULL_DOUBLE. */
 public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttachment {
-    private static final long LINK_CACHE_VALIDATION_INTERVAL_TICKS = 20L;
+    private static final long NETWORK_CACHE_VALIDATION_INTERVAL_TICKS = 20L;
 
+    @Nullable
+    private UUID networkId;
     private long lastPublishedRevision = Long.MIN_VALUE;
     private long lastPublishCheckGameTime = Long.MIN_VALUE;
-    private long lastLinkCacheValidationGameTime = Long.MIN_VALUE;
+    private long lastNetworkCacheValidationGameTime = Long.MIN_VALUE;
     private boolean movingPosePublished;
     private RadarPanelMonitorRuntime.PanelNetworkResolution cachedNetworkResolution;
 
@@ -43,12 +49,28 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
 
     @Override
     protected PowerRadarElectricalParameters.LoadVoltageRange voltageRange() {
-        return PowerRadarElectricalParameters.Voltages.panelRadarDisplay();
+        return PowerRadarElectricalParameters.Voltages.radarDisplay();
+    }
+
+    @Nullable
+    public UUID networkId() {
+        return this.networkId;
     }
 
     @Override
     public void onInserted(ItemStack stack, Player player, InteractionHand hand, BlockHitResult hitResult) {
         retainBottomTerminalPair();
+        this.networkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+        invalidateNetworkCache();
+    }
+
+    @Override
+    public List<ItemStack> getDrops() {
+        ItemStack stack = defaultDroppedStack();
+        if (this.networkId != null) {
+            stack.set(ModDataComponents.POWER_RADAR_NETWORK_ID.get(), this.networkId);
+        }
+        return List.of(stack);
     }
 
     @Override
@@ -96,10 +118,7 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
         return ItemInteractionResult.SUCCESS;
     }
 
-    /**
-     * Возвращает выбранный Link без постоянного поиска по 3x3.
-     * Раз в секунду полный обход одновременно проверяет питание и приоритет старейшей сети.
-     */
+    /** Возвращает сеть, сохранённую в самом Display, без поиска отдельного Link. */
     public RadarPanelMonitorRuntime.PanelNetworkResolution currentNetworkResolution(ServerLevel level) {
         refreshNetworkCacheIfDue(level, level.getGameTime());
         return this.cachedNetworkResolution;
@@ -107,12 +126,18 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
 
     private void refreshNetworkCacheIfDue(ServerLevel level, long gameTime) {
         if (this.cachedNetworkResolution != null
-                && gameTime - this.lastLinkCacheValidationGameTime
-                < LINK_CACHE_VALIDATION_INTERVAL_TICKS) {
+                && gameTime - this.lastNetworkCacheValidationGameTime
+                < NETWORK_CACHE_VALIDATION_INTERVAL_TICKS) {
             return;
         }
-        this.cachedNetworkResolution = RadarPanelMonitorRuntime.resolvePanelNetwork(level, this.pos);
-        this.lastLinkCacheValidationGameTime = gameTime;
+        this.cachedNetworkResolution = RadarPanelMonitorRuntime.resolveBoundNetwork(
+                level, this.pos, this.networkId);
+        this.lastNetworkCacheValidationGameTime = gameTime;
+    }
+
+    private void invalidateNetworkCache() {
+        this.cachedNetworkResolution = null;
+        this.lastNetworkCacheValidationGameTime = Long.MIN_VALUE;
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -132,7 +157,17 @@ public final class RadarDisplayPanelAttachment extends AbstractPoweredPanelAttac
     @Override
     public void read(CompoundTag tag, boolean clientPacket, HolderLookup.Provider registries) {
         super.read(tag, clientPacket, registries);
+        this.networkId = tag.hasUUID("RadarNetworkId") ? tag.getUUID("RadarNetworkId") : null;
+        invalidateNetworkCache();
         retainBottomTerminalPair();
+    }
+
+    @Override
+    public void write(CompoundTag tag, boolean clientPacket, HolderLookup.Provider registries) {
+        super.write(tag, clientPacket, registries);
+        if (this.networkId != null) {
+            tag.putUUID("RadarNetworkId", this.networkId);
+        }
     }
 
     // CEE создаёт четыре узла FULL_DOUBLE; модель использует только нижние левый и правый.

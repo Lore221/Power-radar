@@ -17,18 +17,16 @@ class PowerRadarElectricalParametersTest {
                         defaultDouble("voltages.radar.maximum")),
                 PowerRadarElectricalParameters.Voltages.radar());
         assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
-                        defaultDouble("voltages.monitor_controller.nominal"),
-                        defaultDouble("voltages.monitor_controller.minimum"),
-                        defaultDouble("voltages.monitor_controller.maximum")),
-                PowerRadarElectricalParameters.Voltages.monitorController());
+                        defaultDouble("voltages.radar_display.nominal"),
+                        defaultDouble("voltages.radar_display.minimum"),
+                        defaultDouble("voltages.radar_display.maximum")),
+                PowerRadarElectricalParameters.Voltages.radarDisplay());
         assertEquals(new PowerRadarElectricalParameters.LoadVoltageRange(
                         defaultDouble("voltages.shell_alarm.nominal"),
                         defaultDouble("voltages.shell_alarm.minimum"),
                         defaultDouble("voltages.shell_alarm.maximum")),
                 PowerRadarElectricalParameters.Voltages.shellAlarm());
         assertLoadDefaults("logic_dock", PowerRadarElectricalParameters.Voltages.logicDock());
-        assertLoadDefaults("panel_radar_display", PowerRadarElectricalParameters.Voltages.panelRadarDisplay());
-        assertLoadDefaults("panel_radar_link", PowerRadarElectricalParameters.Voltages.panelRadarLink());
         assertLoadDefaults("onboard_computer", PowerRadarElectricalParameters.Voltages.onboardComputer());
         assertEquals(new PowerRadarElectricalParameters.DriveVoltageRange(
                         defaultDouble("voltages.target_controller.minimum"),
@@ -51,14 +49,12 @@ class PowerRadarElectricalParametersTest {
                 PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts());
         assertEquals(defaultDouble("ratings.overview_module_power_watts"),
                 PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts());
-        assertEquals(defaultDouble("ratings.monitor_controller_power_watts"),
-                PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts());
+        assertEquals(defaultDouble("ratings.radar_display_base_power_watts"),
+                PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts());
         assertEquals(defaultDouble("ratings.radar_display_power_watts"),
                 PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts());
         assertEquals(defaultDouble("ratings.panel_radar_display_power_watts"),
                 PowerRadarElectricalParameters.Ratings.panelRadarDisplayPowerWatts());
-        assertEquals(defaultDouble("ratings.panel_radar_link_power_watts"),
-                PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts());
         assertEquals(defaultDouble("ratings.logic_dock_power_watts"),
                 PowerRadarElectricalParameters.Ratings.logicDockPowerWatts());
         assertEquals(defaultDouble("ratings.onboard_computer_power_watts"),
@@ -70,11 +66,9 @@ class PowerRadarElectricalParametersTest {
     @Test
     void electricalCatalogValuesStayPhysicallyValid() {
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.radar());
-        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.monitorController());
+        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.radarDisplay());
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.shellAlarm());
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.logicDock());
-        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.panelRadarDisplay());
-        assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.panelRadarLink());
         assertLoadRangeValid(PowerRadarElectricalParameters.Voltages.onboardComputer());
         assertDriveRangeValid(PowerRadarElectricalParameters.Voltages.targetController());
         assertDriveRangeValid(PowerRadarElectricalParameters.Voltages.interceptionController());
@@ -101,6 +95,18 @@ class PowerRadarElectricalParametersTest {
         ModConfigSpec.ConfigValue<?> value = PowerRadarServerConfig.SPEC.getValues().get(path);
         assertTrue(value != null, () -> "Missing server config path: " + path);
         return ((Number) value.getDefault()).doubleValue();
+    }
+
+    @Test
+    void rootDisplayUsesBasePowerAndOnlyAdditionalBlocksAddPanelPower() {
+        double basePower = PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts();
+        double additionalPower = PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts();
+
+        assertEquals(0.0D, PowerRadarCeeConstants.monitorNominalPowerWatts(0));
+        assertEquals(basePower, PowerRadarCeeConstants.monitorNominalPowerWatts(1));
+        assertEquals(basePower + additionalPower, PowerRadarCeeConstants.monitorNominalPowerWatts(2));
+        assertEquals(basePower + 8.0D * additionalPower,
+                PowerRadarCeeConstants.monitorNominalPowerWatts(9));
     }
 
     private static void assertLoadDefaults(
@@ -131,10 +137,9 @@ class PowerRadarElectricalParametersTest {
                 PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts(),
-                PowerRadarElectricalParameters.Ratings.monitorControllerPowerWatts(),
+                PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts(),
                 PowerRadarElectricalParameters.Ratings.radarDisplayPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.panelRadarDisplayPowerWatts(),
-                PowerRadarElectricalParameters.Ratings.panelRadarLinkPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.logicDockPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.onboardComputerPowerWatts(),
                 PowerRadarElectricalParameters.Ratings.shellAlarmPowerWatts());

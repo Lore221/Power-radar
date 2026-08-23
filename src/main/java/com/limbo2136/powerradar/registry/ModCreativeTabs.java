@@ -30,7 +30,6 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.RADAR_LINK.get());
                         output.accept(ModItems.LINKER.get());
 
-                        output.accept(ModItems.RADAR_MONITOR_CONTROLLER.get());
                         output.accept(ModItems.RADAR_DISPLAY.get());
 
                         output.accept(ModItems.LOGIC_DOCK.get());

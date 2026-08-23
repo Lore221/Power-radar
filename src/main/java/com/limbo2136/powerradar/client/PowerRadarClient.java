@@ -18,6 +18,7 @@ import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.registry.ModItems;
 import com.simibubi.create.foundation.item.KineticStats;
 import com.simibubi.create.foundation.item.TooltipModifier;
+import com.simibubi.create.foundation.data.CreateRegistrate;
 import com.simibubi.create.content.equipment.goggles.GogglesItem;
 import java.util.function.Supplier;
 import net.createmod.catnip.config.ui.BaseConfigScreen;
@@ -83,7 +84,7 @@ public final class PowerRadarClient {
                                 packedOverlay));
         RadarLinkClientRuntime.init();
         MechanicalSirenClientAudioRuntime.init();
-        event.registerBlockEntityRenderer(ModBlockEntities.RADAR_MONITOR_CONTROLLER.get(), RadarMonitorControllerBlockEntityRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.RADAR_DISPLAY.get(), RadarMonitorRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_LINK.get(), RadarLinkRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.LOGIC_DOCK.get(), LogicDockRenderer::new);
@@ -96,9 +97,12 @@ public final class PowerRadarClient {
         RadarLinkRenderer.registerAdditionalModels(event);
         LogicDockRenderer.registerAdditionalModels(event);
         PowerRadarPanelAttachmentRenderer.registerAdditionalModels(event);
+        RadarMonitorRenderer.registerAdditionalModels(event);
     }
 
     public static void registerPonder(FMLClientSetupEvent event) {
+        CreateRegistrate.connectedTextures(RadarPanelCTBehaviour::new).accept(ModBlocks.RADAR_PANEL.get());
+        CreateRegistrate.connectedTextures(RadarDisplayCTBehaviour::new).accept(ModBlocks.RADAR_DISPLAY.get());
         PonderIndex.addPlugin(new PowerRadarPonderPlugin());
         event.enqueueWork(() -> {
             RadarCompassItemProperties.register();

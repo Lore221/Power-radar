@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.client.onboard;
 
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
-import com.limbo2136.powerradar.client.RadarMonitorControllerBlockEntityRenderer;
+import com.limbo2136.powerradar.client.RadarMonitorRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -19,11 +19,11 @@ public final class OnboardComputerRenderer implements BlockEntityRenderer<Onboar
     private static final float MONITOR_TOP_ROTATION_DEGREES = 67.5F;
     private static final double SCREEN_FACE_TRANSLATION = 0.496D;
 
-    private final RadarMonitorControllerBlockEntityRenderer monitorRenderer;
+    private final RadarMonitorRenderer monitorRenderer;
     private final OnboardPanelModuleRenderer moduleRenderer;
 
     public OnboardComputerRenderer(BlockEntityRendererProvider.Context context) {
-        this.monitorRenderer = new RadarMonitorControllerBlockEntityRenderer(context);
+        this.monitorRenderer = new RadarMonitorRenderer(context);
         this.moduleRenderer = new OnboardPanelModuleRenderer(context);
     }
 
