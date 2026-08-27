@@ -16,12 +16,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.createmod.ponder.api.level.PonderLevel;
+import net.createmod.ponder.api.scene.Selection;
 import net.createmod.ponder.foundation.element.AnimatedSceneElementBase;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import java.util.Random;
 
-public class RadarMonitorElement extends AnimatedSceneElementBase {
+public class RadarDisplayElement extends AnimatedSceneElementBase {
     private static final ResourceLocation OVERVIEW_TEXTURE =
             PowerRadar.id("textures/gui/radar_monitor/radar_overview_octagon.png");
     private static final ResourceLocation ICONS_TEXTURE = PowerRadar.id("textures/gui/radar_ui/icons.png");
@@ -30,7 +31,8 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
     private static final float PANEL_MIN_V = 113.0F / 256.0F;
     private static final float PANEL_MAX_V = 175.0F / 256.0F;
     private static final float PANEL_ASPECT_RATIO = 62.0F / 110.0F;
-    private static final float DISPLAY_FACE_PLANE = 8.0F / 16.0F;
+    private static final float DISPLAY_FACE_INSET = 5.0F / 16.0F;
+    private static final float ONBOARD_DISPLAY_FACE_PLANE = 8.0F / 16.0F;
     private static final float DISPLAY_OFFSET = 0.002F;
     private static final int COVERAGE_ALPHA = 145;
     private static final float ONBOARD_PANEL_HEIGHT = 11.0F / 16.0F;
@@ -38,7 +40,8 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
     private static final float ONBOARD_TOP_ROTATION_DEGREES = 67.5F;
     private static final double ONBOARD_SCREEN_FACE_TRANSLATION = 0.496D;
 
-    final BlockPos firstPos, secondPos;
+    final BlockPos monitorOrigin;
+    final int monitorWidth, monitorHeight;
     final Direction facing;
     final float size;
     final ResourceLocation texture;
@@ -50,9 +53,8 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
     RadarStructureType blipRadarType;
     int blipCount;
 
-    private RadarMonitorElement(
-            BlockPos firstPos,
-            BlockPos secondPos,
+    private RadarDisplayElement(
+            MonitorBounds bounds,
             Direction facing,
             float size,
             ResourceLocation texture,
@@ -63,13 +65,14 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             float heightScale,
             float rotationDegrees
     ) {
-        this(firstPos, secondPos, facing, size, texture, minU, maxU, minV, maxV,
-                heightScale, rotationDegrees, false);
+        this(bounds.origin(), bounds.width(), bounds.height(), facing, size,
+                texture, minU, maxU, minV, maxV, heightScale, rotationDegrees, false);
     }
 
-    private RadarMonitorElement(
-            BlockPos firstPos,
-            BlockPos secondPos,
+    private RadarDisplayElement(
+            BlockPos monitorOrigin,
+            int monitorWidth,
+            int monitorHeight,
             Direction facing,
             float size,
             ResourceLocation texture,
@@ -81,8 +84,9 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             float rotationDegrees,
             boolean onboard
     ) {
-        this.firstPos = firstPos;
-        this.secondPos = secondPos;
+        this.monitorOrigin = monitorOrigin;
+        this.monitorWidth = Math.max(0, monitorWidth);
+        this.monitorHeight = Math.max(0, monitorHeight);
         this.facing = facing;
         this.size = Math.max(0.0F, Math.min(1.0F, size));
         this.texture = texture;
@@ -98,34 +102,31 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         this.blipCount = 0;
     }
 
-    public static RadarMonitorElement overview(
-            BlockPos firstPos,
-            BlockPos secondPos,
+    public static RadarDisplayElement overview(
+            Selection monitor,
             Direction facing,
             float size
     ) {
-        return new RadarMonitorElement(
-                firstPos, secondPos, facing, size,
+        return new RadarDisplayElement(
+                MonitorBounds.from(monitor, facing), facing, size,
                 OVERVIEW_TEXTURE, 0.0F, 1.0F, 0.0F, 1.0F,
                 1.0F, 0.0F);
     }
 
-    public static RadarMonitorElement radarPanel(
-            BlockPos firstPos,
-            BlockPos secondPos,
+    public static RadarDisplayElement radarPanel(
+            Selection monitor,
             Direction facing,
             float size,
             float rotationDegrees
     ) {
-        return new RadarMonitorElement(
-                firstPos, secondPos, facing, size,
+        return new RadarDisplayElement(
+                MonitorBounds.from(monitor, facing), facing, size,
                 ICONS_TEXTURE, PANEL_MIN_U, PANEL_MAX_U, PANEL_MIN_V, PANEL_MAX_V,
                 PANEL_ASPECT_RATIO, rotationDegrees);
     }
 
-    public static RadarMonitorElement blips(
-            BlockPos firstPos,
-            BlockPos secondPos,
+    public static RadarDisplayElement blips(
+            Selection monitor,
             Direction facing,
             int count,
             RadarTargetCategory category,
@@ -133,8 +134,8 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             float areaSize,
             float rotationDegrees
     ) {
-        RadarMonitorElement element = new RadarMonitorElement(
-                firstPos, secondPos, facing, areaSize,
+        RadarDisplayElement element = new RadarDisplayElement(
+                MonitorBounds.from(monitor, facing), facing, areaSize,
                 ICONS_TEXTURE, 0.0F, 0.0F, 0.0F, 0.0F,
                 1.0F, rotationDegrees);
         element.blipCategory = category;
@@ -143,20 +144,20 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         return element;
     }
 
-    public static RadarMonitorElement onboardOverview(BlockPos computerPos, Direction facing, float size) {
-        return new RadarMonitorElement(computerPos, computerPos, facing, size,
+    public static RadarDisplayElement onboardOverview(BlockPos computerPos, Direction facing, float size) {
+        return new RadarDisplayElement(computerPos, 1, 1, facing, size,
                 OVERVIEW_TEXTURE, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 0.0F, true);
     }
 
-    public static RadarMonitorElement onboardRadarPanel(
+    public static RadarDisplayElement onboardRadarPanel(
             BlockPos computerPos, Direction facing, float size, float rotationDegrees
     ) {
-        return new RadarMonitorElement(computerPos, computerPos, facing, size,
+        return new RadarDisplayElement(computerPos, 1, 1, facing, size,
                 ICONS_TEXTURE, PANEL_MIN_U, PANEL_MAX_U, PANEL_MIN_V, PANEL_MAX_V,
                 PANEL_ASPECT_RATIO, rotationDegrees, true);
     }
 
-    public static RadarMonitorElement onboardBlips(
+    public static RadarDisplayElement onboardBlips(
             BlockPos computerPos,
             Direction facing,
             int count,
@@ -165,7 +166,7 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             float areaSize,
             float rotationDegrees
     ) {
-        RadarMonitorElement element = new RadarMonitorElement(computerPos, computerPos, facing, areaSize,
+        RadarDisplayElement element = new RadarDisplayElement(computerPos, 1, 1, facing, areaSize,
                 ICONS_TEXTURE, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, rotationDegrees, true);
         element.blipCategory = category;
         element.blipRadarType = radarType;
@@ -184,15 +185,18 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             return;
         }
 
-        BlockPos lowerRight = this.firstPos.getY() <= this.secondPos.getY() ? this.firstPos : this.secondPos;
-        BlockPos upperLeft = lowerRight == this.firstPos ? this.secondPos : this.firstPos;
         Direction right = RadarDisplayStructureResolver.right(this.facing);
-        int monitorSize = this.facing.getAxis() == Direction.Axis.Z
-                ? Math.abs(upperLeft.getX() - lowerRight.getX()) + 1
-                : Math.abs(upperLeft.getZ() - lowerRight.getZ()) + 1;
-        BlockPos origin = lowerRight.relative(right.getOpposite(), monitorSize - 1);
+        int monitorSize = Math.min(this.monitorWidth, this.monitorHeight);
+        if (monitorSize <= 0) {
+            return;
+        }
+        double horizontalOffset = (this.monitorWidth - monitorSize) * 0.5D;
+        double verticalOffset = (this.monitorHeight - monitorSize) * 0.5D;
+        double originX = this.monitorOrigin.getX() + right.getStepX() * horizontalOffset;
+        double originY = this.monitorOrigin.getY() + verticalOffset;
+        double originZ = this.monitorOrigin.getZ() + right.getStepZ() * horizontalOffset;
         if (this.blipCategory != null) {
-            renderBlips(buffer, graphics, fade, origin, monitorSize);
+            renderBlips(buffer, graphics, fade, originX, originY, originZ, monitorSize);
             return;
         }
         float areaWidth = monitorSize * this.size;
@@ -212,13 +216,13 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         int green = color >> 8 & 0xFF;
         int blue = color & 0xFF;
 
-        addVertex(vertexConsumer, matrix, origin, monitorSize,
+        addVertex(vertexConsumer, matrix, originX, originY, originZ, monitorSize,
                 -halfWidth, -halfHeight, this.minU, this.maxV, sin, cos, alpha, red, green, blue);
-        addVertex(vertexConsumer, matrix, origin, monitorSize,
+        addVertex(vertexConsumer, matrix, originX, originY, originZ, monitorSize,
                 halfWidth, -halfHeight, this.maxU, this.maxV, sin, cos, alpha, red, green, blue);
-        addVertex(vertexConsumer, matrix, origin, monitorSize,
+        addVertex(vertexConsumer, matrix, originX, originY, originZ, monitorSize,
                 halfWidth, halfHeight, this.maxU, this.minV, sin, cos, alpha, red, green, blue);
-        addVertex(vertexConsumer, matrix, origin, monitorSize,
+        addVertex(vertexConsumer, matrix, originX, originY, originZ, monitorSize,
                 -halfWidth, halfHeight, this.minU, this.minV, sin, cos, alpha, red, green, blue);
     }
 
@@ -229,7 +233,7 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         float pivotZ = 0.5F + this.facing.getStepZ() * 0.5F;
 
         poseStack.pushPose();
-        poseStack.translate(this.firstPos.getX(), this.firstPos.getY(), this.firstPos.getZ());
+        poseStack.translate(this.monitorOrigin.getX(), this.monitorOrigin.getY(), this.monitorOrigin.getZ());
         poseStack.translate(pivotX, ONBOARD_PANEL_HEIGHT, pivotZ);
         poseStack.mulPose(new Quaternionf().rotateAxis(
                 (float) Math.toRadians(ONBOARD_TOP_ROTATION_DEGREES),
@@ -304,7 +308,8 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
     ) {
         float horizontal = localHorizontal * cos - localVertical * sin;
         float vertical = localHorizontal * sin + localVertical * cos;
-        consumer.addVertex(matrix, 0.5F + horizontal, 0.5F - vertical, DISPLAY_FACE_PLANE - DISPLAY_OFFSET)
+        consumer.addVertex(matrix, 0.5F + horizontal, 0.5F - vertical,
+                ONBOARD_DISPLAY_FACE_PLANE - DISPLAY_OFFSET)
                 .setColor(color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF, alpha)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
@@ -316,7 +321,9 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             MultiBufferSource buffer,
             GuiGraphics graphics,
             float fade,
-            BlockPos origin,
+            double originX,
+            double originY,
+            double originZ,
             int monitorSize
     ) {
         PoseStack poseStack = graphics.pose();
@@ -336,23 +343,25 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
             float horizontal = (float) Math.sin(radians) * radius;
             float vertical = (float) Math.cos(radians) * radius;
             float half = iconSize / 2.0F;
-            addVertex(consumer, matrix, origin, monitorSize, horizontal - half, vertical - half,
+            addVertex(consumer, matrix, originX, originY, originZ, monitorSize, horizontal - half, vertical - half,
                     uv[0], uv[3], 0.0F, 1.0F, alpha,
                     color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF);
-            addVertex(consumer, matrix, origin, monitorSize, horizontal + half, vertical - half,
+            addVertex(consumer, matrix, originX, originY, originZ, monitorSize, horizontal + half, vertical - half,
                     uv[2], uv[3], 0.0F, 1.0F, alpha,
                     color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF);
-            addVertex(consumer, matrix, origin, monitorSize, horizontal + half, vertical + half,
+            addVertex(consumer, matrix, originX, originY, originZ, monitorSize, horizontal + half, vertical + half,
                     uv[2], uv[1], 0.0F, 1.0F, alpha,
                     color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF);
-            addVertex(consumer, matrix, origin, monitorSize, horizontal - half, vertical + half,
+            addVertex(consumer, matrix, originX, originY, originZ, monitorSize, horizontal - half, vertical + half,
                     uv[0], uv[1], 0.0F, 1.0F, alpha,
                     color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF);
         }
     }
 
     private long seed() {
-        return 31L * this.firstPos.asLong() + 17L * this.secondPos.asLong()
+        return 31L * this.monitorOrigin.asLong()
+                + 17L * this.monitorWidth
+                + 13L * this.monitorHeight
                 + this.blipCategory.ordinal() * 7L + this.blipCount;
     }
 
@@ -372,7 +381,9 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
     private void addVertex(
             VertexConsumer consumer,
             Matrix4f matrix,
-            BlockPos origin,
+            double originX,
+            double originY,
+            double originZ,
             int monitorSize,
             float localHorizontal,
             float localVertical,
@@ -392,9 +403,9 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         float screenDistanceU = screenU * monitorSize;
         float screenDistanceV = (1.0F - screenV) * monitorSize;
         Direction right = RadarDisplayStructureResolver.right(this.facing);
-        float x = origin.getX();
-        float y = origin.getY() + screenDistanceV;
-        float z = origin.getZ();
+        double x = originX;
+        double y = originY + screenDistanceV;
+        double z = originZ;
 
         if (right.getStepX() > 0) {
             x += screenDistanceU;
@@ -407,21 +418,54 @@ public class RadarMonitorElement extends AnimatedSceneElementBase {
         }
 
         switch (this.facing) {
-            // Экранная поверхность Blockbench-модели лежит ровно на глубине 8/16 блока.
-            case NORTH -> z += DISPLAY_FACE_PLANE - DISPLAY_OFFSET;
-            case SOUTH -> z += DISPLAY_FACE_PLANE + DISPLAY_OFFSET;
-            case WEST -> x += DISPLAY_FACE_PLANE - DISPLAY_OFFSET;
-            case EAST -> x += DISPLAY_FACE_PLANE + DISPLAY_OFFSET;
+            // Экранная поверхность модели находится на глубине 5/16 блока.
+            case NORTH -> z += DISPLAY_FACE_INSET - DISPLAY_OFFSET;
+            case SOUTH -> z += 1.0F - DISPLAY_FACE_INSET + DISPLAY_OFFSET;
+            case WEST -> x += DISPLAY_FACE_INSET - DISPLAY_OFFSET;
+            case EAST -> x += 1.0F - DISPLAY_FACE_INSET + DISPLAY_OFFSET;
             default -> {
                 return;
             }
         }
 
-        consumer.addVertex(matrix, x, y, z)
+        consumer.addVertex(matrix, (float) x, (float) y, (float) z)
                 .setColor(red, green, blue, alpha)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(LightTexture.FULL_BRIGHT)
                 .setNormal(this.facing.getStepX(), 0.0F, this.facing.getStepZ());
+    }
+
+    private record MonitorBounds(BlockPos origin, int width, int height) {
+        private static MonitorBounds from(Selection selection, Direction facing) {
+            Direction right = RadarDisplayStructureResolver.right(facing);
+            BlockPos anchor = null;
+            int minU = 0;
+            int maxU = 0;
+            int minV = 0;
+            int maxV = 0;
+
+            for (BlockPos pos : selection) {
+                if (anchor == null) {
+                    anchor = pos.immutable();
+                    continue;
+                }
+                int dx = pos.getX() - anchor.getX();
+                int dz = pos.getZ() - anchor.getZ();
+                int u = dx * right.getStepX() + dz * right.getStepZ();
+                int v = pos.getY() - anchor.getY();
+                minU = Math.min(minU, u);
+                maxU = Math.max(maxU, u);
+                minV = Math.min(minV, v);
+                maxV = Math.max(maxV, v);
+            }
+
+            if (anchor == null) {
+                return new MonitorBounds(BlockPos.ZERO, 0, 0);
+            }
+
+            BlockPos origin = anchor.relative(right, minU).relative(Direction.UP, minV);
+            return new MonitorBounds(origin, maxU - minU + 1, maxV - minV + 1);
+        }
     }
 }
