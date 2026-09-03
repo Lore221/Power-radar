@@ -1,0 +1,28 @@
+{
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": true,
+  "key": {
+    "A": {
+        "tag": "c:plates/copper"
+    },
+    "B": {
+        "item": "minecraft:glass"
+    },
+    "C": {
+        "item": "create:electron_tube"
+    }
+  },
+
+  "pattern": [
+    "ABA",
+    " B ",
+    "ABA",
+    " C "
+  ],
+  
+  "result": {
+    "id": "power_radar:klystron",
+    "count": 1
+  },
+  "show_notification": false
+}

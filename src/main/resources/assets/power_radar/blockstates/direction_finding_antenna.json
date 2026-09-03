@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "connected_up=false": {
+      "model": "power_radar:block/direction_finding_antenna"
+    },
+    "connected_up=true": {
+      "model": "power_radar:block/direction_finding_antenna_mast"
+    }
+  }
+}

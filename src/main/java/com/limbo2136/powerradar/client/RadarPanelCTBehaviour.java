@@ -14,12 +14,42 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 public final class RadarPanelCTBehaviour extends ConnectedTextureBehaviour.Base {
-    private static final CTSpriteShiftEntry FRONT = omnidirectional("radar_panel_front");
-    private static final CTSpriteShiftEntry BACK = omnidirectional("radar_panel_back");
-    private static final CTSpriteShiftEntry SIDE = CTSpriteShifter.getCT(
+    private static final CTSpriteShiftEntry FRONT = omnidirectional("radar_panel/radar_panel_front");
+    private static final CTSpriteShiftEntry BACK_SURFACE = omnidirectional(
+            "radar_panel/radar_panel_back", "radar_panel/radar_panel_back_connected");
+    private static final CTSpriteShiftEntry BACK_BASED = omnidirectional(
+            "radar_panel/radar_panel_back", "radar_panel/radar_panel_back_connected_based");
+    private static final CTSpriteShiftEntry BACK_AIR = omnidirectional(
+            "radar_panel/radar_panel_back", "radar_panel/radar_panel_back_air");
+    private static final CTSpriteShiftEntry SIDE_SURFACE = rectangle(
+            "radar_panel/radar_panel_side", "radar_panel/radar_panel_side_connected");
+    private static final CTSpriteShiftEntry SIDE_BASED = rectangle(
+            "radar_panel/radar_panel_side", "radar_panel/radar_panel_side_connected_based");
+    private static final CTSpriteShiftEntry SIDE_AIR = rectangle(
+            "radar_panel/radar_panel_side", "radar_panel/radar_panel_side_connected_air");
+
+    private static CTSpriteShiftEntry side(RadarPanelBlock.ControllerType controllerType) {
+        return switch (controllerType) {
+            case BASED -> SIDE_BASED;
+            case AIR -> SIDE_AIR;
+            case SURFACE -> SIDE_SURFACE;
+        };
+    }
+
+    private static CTSpriteShiftEntry back(RadarPanelBlock.ControllerType controllerType) {
+        return switch (controllerType) {
+            case BASED -> BACK_BASED;
+            case AIR -> BACK_AIR;
+            case SURFACE -> BACK_SURFACE;
+        };
+    }
+
+    private static CTSpriteShiftEntry rectangle(String original, String connected) {
+        return CTSpriteShifter.getCT(
             AllCTTypes.RECTANGLE,
-            PowerRadar.id("block/radar_panel_side"),
-            PowerRadar.id("block/radar_panel_side_connected"));
+            PowerRadar.id("block/" + original),
+            PowerRadar.id("block/" + connected));
+    }
 
     @Override
     @Nullable
@@ -33,9 +63,12 @@ public final class RadarPanelCTBehaviour extends ConnectedTextureBehaviour.Base 
         }
 
         Direction facing = state.getValue(RadarPanelBlock.FACING);
+        RadarPanelBlock.ControllerType controllerType = state.hasProperty(RadarPanelBlock.CONTROLLER_TYPE)
+                ? state.getValue(RadarPanelBlock.CONTROLLER_TYPE)
+                : RadarPanelBlock.ControllerType.SURFACE;
         CTSpriteShiftEntry shift = direction == facing
                 ? FRONT
-                : direction == facing.getOpposite() ? BACK : SIDE;
+                : direction == facing.getOpposite() ? back(controllerType) : side(controllerType);
         return sprite == null || shift.getOriginal() == sprite ? shift : null;
     }
 
@@ -83,6 +116,13 @@ public final class RadarPanelCTBehaviour extends ConnectedTextureBehaviour.Base 
             return false;
         }
 
+        if (state.hasProperty(RadarPanelBlock.CONTROLLER_TYPE)
+                && other.hasProperty(RadarPanelBlock.CONTROLLER_TYPE)
+                && state.getValue(RadarPanelBlock.CONTROLLER_TYPE)
+                        != other.getValue(RadarPanelBlock.CONTROLLER_TYPE)) {
+            return false;
+        }
+
         Direction facing = state.getValue(RadarPanelBlock.FACING);
         if (face == facing || face == facing.getOpposite()) {
             return true;
@@ -109,7 +149,11 @@ public final class RadarPanelCTBehaviour extends ConnectedTextureBehaviour.Base 
         return !outwardState.is(panelState.getBlock())
                 || !outwardState.hasProperty(RadarPanelBlock.FACING)
                 || outwardState.getValue(RadarPanelBlock.FACING)
-                        != panelState.getValue(RadarPanelBlock.FACING);
+                        != panelState.getValue(RadarPanelBlock.FACING)
+                || outwardState.hasProperty(RadarPanelBlock.CONTROLLER_TYPE)
+                        && panelState.hasProperty(RadarPanelBlock.CONTROLLER_TYPE)
+                        && outwardState.getValue(RadarPanelBlock.CONTROLLER_TYPE)
+                                != panelState.getValue(RadarPanelBlock.CONTROLLER_TYPE);
     }
 
     @Nullable
@@ -123,9 +167,13 @@ public final class RadarPanelCTBehaviour extends ConnectedTextureBehaviour.Base 
     }
 
     private static CTSpriteShiftEntry omnidirectional(String texture) {
+        return omnidirectional(texture, texture + "_connected");
+    }
+
+    private static CTSpriteShiftEntry omnidirectional(String original, String connected) {
         return CTSpriteShifter.getCT(
                 AllCTTypes.OMNIDIRECTIONAL,
-                PowerRadar.id("block/" + texture),
-                PowerRadar.id("block/" + texture + "_connected"));
+                PowerRadar.id("block/" + original),
+                PowerRadar.id("block/" + connected));
     }
 }

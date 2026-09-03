@@ -17,12 +17,14 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 public final class RadarDisplayCTBehaviour extends ConnectedTextureBehaviour.Base {
-    private static final CTSpriteShiftEntry FRONT = shift("radar_display_front", "radar_display_front_connected");
-    private static final CTSpriteShiftEntry BACK = shift("radar_display_back", "radar_display_back_connectted");
+    private static final CTSpriteShiftEntry FRONT = shift(
+            "radar_display/radar_display_front", "radar_display/radar_display_front_connected");
+    private static final CTSpriteShiftEntry BACK = shift(
+            "radar_display/radar_display_back", "radar_display/radar_display_back_connectted");
     private static final CTSpriteShiftEntry SIDE_HORIZONTAL =
-            shift("radar_display_side_horizontal", "radar_display_side_horizontal_connected");
+            shift("radar_display/radar_display_side_horizontal", "radar_display/radar_display_side_horizontal_connected");
     private static final CTSpriteShiftEntry SIDE_VERTICAL =
-            shift("radar_display_side_vertical", "radar_display_side_vertical_connected");
+            shift("radar_display/radar_display_side_vertical", "radar_display/radar_display_side_vertical_connected");
 
     @Override
     @Nullable

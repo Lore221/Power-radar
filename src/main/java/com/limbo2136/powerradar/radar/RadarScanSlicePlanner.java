@@ -75,7 +75,8 @@ public final class RadarScanSlicePlanner {
 
     private static HorizontalBounds horizontalSearchBounds(RadarScanProfile profile, float yawDegrees) {
         double range = profile.range();
-        if (!profile.useFovCheck() || profile.sectorAngle() >= 360) {
+        if (profile.scanMode() == RadarScanMode.AIRCRAFT
+                || !profile.useFovCheck() || profile.sectorAngle() >= 360) {
             return new HorizontalBounds(-range, -range, range, range);
         }
 
@@ -125,7 +126,7 @@ public final class RadarScanSlicePlanner {
     ) {
         private static HorizontalSliceFilter from(RadarScanProfile profile, float yawDegrees) {
             double range = profile.range();
-            if (!profile.useFovCheck()) {
+            if (!profile.useFovCheck() || profile.scanMode() == RadarScanMode.AIRCRAFT) {
                 return new HorizontalSliceFilter(
                         profile.structureType() == RadarStructureType.OVERVIEW,
                         range * range,

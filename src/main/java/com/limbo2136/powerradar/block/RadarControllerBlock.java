@@ -2,6 +2,7 @@ package com.limbo2136.powerradar.block;
 
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.radar.RadarScanMode;
+import com.limbo2136.powerradar.radar.network.RadarNetworkKind;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.george_vi.electroenergetics.foundation.device.ElectricalDeviceBlock;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeBlockLifecycle;
@@ -16,9 +17,9 @@ import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -33,6 +34,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 public class RadarControllerBlock extends BaseEntityBlock
@@ -61,10 +63,40 @@ public class RadarControllerBlock extends BaseEntityBlock
         return RadarScanMode.GROUND;
     }
 
+    /** Класс сети, создаваемой этим источником. */
+    public RadarNetworkKind networkKind() {
+        return RadarNetworkKind.STANDARD;
+    }
+
     @Override
     protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
         scheduleNodeRefresh(level, pos);
+    }
+
+    /**
+     * Radar panels are assembled explicitly, like a stationary Create
+     * structure.  Only the controller's front face accepts the empty-hand
+     * toggle; side and rear clicks remain available for wiring and normal
+     * block interaction.
+     */
+    @Override
+    protected InteractionResult useWithoutItem(
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            BlockHitResult hitResult
+    ) {
+        if (!player.getMainHandItem().isEmpty()
+                || hitResult.getDirection() != state.getValue(FACING)) {
+            return InteractionResult.PASS;
+        }
+        if (level.getBlockEntity(pos) instanceof RadarControllerBlockEntity controller
+                && !level.isClientSide()) {
+            controller.toggleAssembly(player);
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide());
     }
 
     @Override
@@ -73,6 +105,9 @@ public class RadarControllerBlock extends BaseEntityBlock
                 && !level.isClientSide
                 && level.getBlockEntity(pos) instanceof RadarControllerBlockEntity controller) {
             controller.deactivateRadarStructureEntity();
+        }
+        if (!state.is(newState.getBlock())) {
+            RadarPanelBlock.refreshControllerType(level, pos, RadarPanelBlock.ControllerType.SURFACE);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -115,7 +150,9 @@ public class RadarControllerBlock extends BaseEntityBlock
     }
 
     private static PowerRadarCeeTerminalPair terminals(BlockState state) {
-        return PowerRadarCeeContactGeometry.radarController(state.getValue(FACING));
+        return state.getBlock() instanceof AircraftRadarBlock
+                ? PowerRadarCeeContactGeometry.aircraftRadar(state.getValue(FACING))
+                : PowerRadarCeeContactGeometry.radarController(state.getValue(FACING));
     }
 
     @Override

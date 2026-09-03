@@ -39,6 +39,7 @@ public final class PowerRadarElectricalParameters {
         // Номинальная мощность задаётся при номинальном напряжении и определяет
         // постоянное сопротивление.
         private static final double DEFAULT_RADAR_CONTROLLER_POWER_WATTS = 1_000.0D;
+        private static final double DEFAULT_AIRCRAFT_RADAR_POWER_WATTS = 5_000.0D;
         private static final double DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS = 250.0D;
         private static final double DEFAULT_OVERVIEW_MODULE_POWER_WATTS = 1500.0D;
         private static final double DEFAULT_RADAR_DISPLAY_BASE_POWER_WATTS = 250.0D;
@@ -64,6 +65,7 @@ public final class PowerRadarElectricalParameters {
         private static ModConfigSpec.DoubleValue targetControllerResistanceOhms;
         private static ModConfigSpec.DoubleValue interceptionControllerResistanceOhms;
         private static ModConfigSpec.DoubleValue radarControllerPowerWatts;
+        private static ModConfigSpec.DoubleValue aircraftRadarPowerWatts;
         private static ModConfigSpec.DoubleValue phasedArrayPanelPowerWatts;
         private static ModConfigSpec.DoubleValue overviewModulePowerWatts;
         private static ModConfigSpec.DoubleValue radarDisplayBasePowerWatts;
@@ -174,6 +176,9 @@ public final class PowerRadarElectricalParameters {
                 builder.comment("Power consumed at the device's nominal voltage, in watts.").push("ratings");
                 radarControllerPowerWatts = power(builder, "radar_controller_power_watts",
                                 DEFAULT_RADAR_CONTROLLER_POWER_WATTS, "Nominal base power of one radar controller.");
+                aircraftRadarPowerWatts = power(builder, "aircraft_radar_power_watts",
+                                DEFAULT_AIRCRAFT_RADAR_POWER_WATTS,
+                                "Nominal power of the integrated Aircraft Radar.");
                 phasedArrayPanelPowerWatts = power(builder, "phased_array_panel_power_watts",
                                 DEFAULT_PHASED_ARRAY_PANEL_POWER_WATTS,
                                 "Nominal power added by each phased-array panel.");
@@ -288,6 +293,11 @@ public final class PowerRadarElectricalParameters {
                         return value(radarControllerPowerWatts);
                 }
 
+                public static double aircraftRadarPowerWatts() {
+                        ensureConfigDefined();
+                        return value(aircraftRadarPowerWatts);
+                }
+
                 public static double phasedArrayPanelPowerWatts() {
                         ensureConfigDefined();
                         return value(phasedArrayPanelPowerWatts);
@@ -334,11 +344,10 @@ public final class PowerRadarElectricalParameters {
                 }
         }
 
-        // При раннем обращении электрического блока принудительно строим общий SPEC до
-        // чтения его полей.
+        // При раннем обращении электрического блока принудительно завершаем инициализацию общего конфига.
         private static void ensureConfigDefined() {
                 if (radarVoltageConfig == null) {
-                        ModConfigSpec ignored = PowerRadarServerConfig.SPEC;
+                        PowerRadarServerConfig.ensureInitialized();
                 }
         }
 

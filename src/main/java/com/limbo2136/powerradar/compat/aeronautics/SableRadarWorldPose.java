@@ -36,7 +36,11 @@ final class SableRadarWorldPose {
         float worldYaw = RadarGeometry.normalizeDegrees((float) Math.toDegrees(
                 Math.atan2(-worldForward.x(), worldForward.z())
         ));
-        return new RadarWorldPose(worldOrigin, worldYaw, true);
+        // Sable's local pose helper returns the opposite normal for the model's
+        // rear-facing convention. Negating it produces the same forward direction
+        // used by ordinary radar yaw, while retaining the full pitch and roll.
+        Vec3 worldRadarForward = new Vec3(-worldForward.x(), -worldForward.y(), -worldForward.z()).normalize();
+        return new RadarWorldPose(worldOrigin, worldYaw, true, worldRadarForward);
     }
 
     static Vec3 worldPosition(Level level, BlockPos containingPos, Vec3 localPosition) {

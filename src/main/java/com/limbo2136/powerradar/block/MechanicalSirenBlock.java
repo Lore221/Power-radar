@@ -1,7 +1,6 @@
 package com.limbo2136.powerradar.block;
 
 import com.limbo2136.powerradar.block.entity.MechanicalSirenBlockEntity;
-import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import com.simibubi.create.content.kinetics.base.HorizontalKineticBlock;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -22,7 +21,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-public class MechanicalSirenBlock extends HorizontalKineticBlock implements EntityBlock, IWrenchable {
+public class MechanicalSirenBlock extends HorizontalKineticBlock implements EntityBlock {
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
 
     private static final VoxelShape NORTH_SHAPE = Shapes.or(

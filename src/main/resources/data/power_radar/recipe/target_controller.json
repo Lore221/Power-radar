@@ -10,13 +10,13 @@
   "pattern": [
     "A   A",
     "A B A",
-    "AACAA",
+    "ACRCA",
     "ADEDA",
     "AFGFA"
   ],
   "key": {
     "A": {
-      "tag": "c:plates/brass"
+      "tag": "c:plates/obsidian"
     },
     "B": {
       "tag": "c:plates/gold"
@@ -35,6 +35,9 @@
     },
     "G": {
       "item": "electroenergetics:transformer"
+    },
+    "R": {
+      "item": "create:transmitter"
     }
   },
   "result": {

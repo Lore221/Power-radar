@@ -11,8 +11,11 @@ import com.limbo2136.powerradar.block.entity.InterceptionControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
 import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.block.entity.EwSystemBlockEntity;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -25,9 +28,7 @@ public final class ModBlockEntities {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarControllerBlockEntity>> RADAR_CONTROLLER =
             BLOCK_ENTITIES.register("radar_controller", () -> BlockEntityType.Builder
                     .of(RadarControllerBlockEntity::new,
-                            ModBlocks.RADAR_CONTROLLER.get(),
-                            ModBlocks.AIR_RADAR_CONTROLLER.get(),
-                            ModBlocks.SURFACE_RADAR_CONTROLLER.get())
+                            radarControllerBlocks())
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarDisplayBlockEntity>> RADAR_DISPLAY =
@@ -41,17 +42,20 @@ public final class ModBlockEntities {
                     .build(null));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<OnboardComputerBlockEntity>> ONBOARD_COMPUTER =
-            BLOCK_ENTITIES.register("onboard_computer", () -> BlockEntityType.Builder
-                    .of(OnboardComputerBlockEntity::new, ModBlocks.ONBOARD_COMPUTER.get()).build(null));
+            SableRadarIntegration.isAeronauticsLoaded()
+                    ? BLOCK_ENTITIES.register("onboard_computer", () -> BlockEntityType.Builder
+                            .of(OnboardComputerBlockEntity::new, ModBlocks.ONBOARD_COMPUTER.get()).build(null))
+                    : null;
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EwSystemBlockEntity>> EW_SYSTEM =
-            BLOCK_ENTITIES.register("ew_system", () -> BlockEntityType.Builder
-                    .of(EwSystemBlockEntity::new, ModBlocks.EW_SYSTEM.get()).build(null));
+            SableRadarIntegration.isAeronauticsLoaded()
+                    ? BLOCK_ENTITIES.register("ew_system", () -> BlockEntityType.Builder
+                            .of(EwSystemBlockEntity::new, ModBlocks.EW_SYSTEM.get()).build(null))
+                    : null;
 
+    /** Dormant holder for Radar Link; intentionally not registered with the game. */
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<RadarLinkBlockEntity>> RADAR_LINK =
-            BLOCK_ENTITIES.register("radar_link", () -> BlockEntityType.Builder
-                    .of(RadarLinkBlockEntity::new, ModBlocks.RADAR_LINK.get())
-                    .build(null));
+            DeferredHolder.create(Registries.BLOCK_ENTITY_TYPE, PowerRadar.id("radar_link"));
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<TargetControllerBlockEntity>> TARGET_CONTROLLER =
             CreateBigCannonsIntegration.isLoaded() ? BLOCK_ENTITIES.register("target_controller", () -> BlockEntityType.Builder
@@ -78,5 +82,20 @@ public final class ModBlockEntities {
 
     public static void register(IEventBus eventBus) {
         BLOCK_ENTITIES.register(eventBus);
+    }
+
+    private static Block[] radarControllerBlocks() {
+        if (!SableRadarIntegration.isAeronauticsLoaded()) {
+            return new Block[] {
+                    ModBlocks.RADAR_CONTROLLER.get(),
+                    ModBlocks.AIR_RADAR_CONTROLLER.get()
+            };
+        }
+        return new Block[] {
+                ModBlocks.RADAR_CONTROLLER.get(),
+                ModBlocks.AIR_RADAR_CONTROLLER.get(),
+                ModBlocks.SURFACE_RADAR_CONTROLLER.get(),
+                ModBlocks.AIRCRAFT_RADAR.get()
+        };
     }
 }

@@ -15,6 +15,12 @@ public final class PowerRadarCeeContactGeometry {
     // Горизонтальные блоки: Y, смещение к задней стороне, смещения плюса и минуса
     // вправо.
     private static final HorizontalPair RADAR_CONTROLLER = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
+    // Модель Aircraft Radar вытянута вдоль локальной оси Z. В мире модель
+    // рисуется от среднего companion-блока, а BlockEntity находится в заднем
+    // блоке, поэтому контакты используют локальную координату z=14.
+    private static final ModelPair AIRCRAFT_RADAR = new ModelPair(
+            new Vec3(5.0, 5.0, 14.0),
+            new Vec3(11.0, 5.0, 14.0));
     private static final HorizontalPair RADAR_MONITOR = new HorizontalPair(4.0, 9.0, 3.0, -3.0);
     // X/Y совпадают с центрами контактов. По глубине узлы вынесены на 0.01 пикселя
     // за границу блока, чтобы CEE брал освещение провода от воздуха за БП.
@@ -37,6 +43,10 @@ public final class PowerRadarCeeContactGeometry {
 
     public static PowerRadarCeeTerminalPair radarController(Direction facing) {
         return RADAR_CONTROLLER.resolve(facing);
+    }
+
+    public static PowerRadarCeeTerminalPair aircraftRadar(Direction facing) {
+        return AIRCRAFT_RADAR.resolve(facing);
     }
 
     public static PowerRadarCeeTerminalPair radarMonitor(Direction facing) {

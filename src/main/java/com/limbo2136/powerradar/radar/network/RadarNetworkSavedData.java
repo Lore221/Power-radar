@@ -37,6 +37,7 @@ public class RadarNetworkSavedData extends SavedData {
     private static final String SELECTED_TARGET_UUID_KEY = "SelectedTargetUuid";
     private static final String AUTOTARGET_FILTER_MASK_KEY = "AutotargetFilterMask";
     private static final String TARGET_CONTROLLERS_ALLOWED_KEY = "TargetControllersAllowed";
+    private static final String NETWORK_KIND_KEY = "NetworkKind";
     private static final String LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY = "ControlConsumersAllowed";
 
     private final Map<UUID, RadarNetworkRecord> networks = new LinkedHashMap<>();
@@ -86,6 +87,7 @@ public class RadarNetworkSavedData extends SavedData {
             }
             record.setAutotargetFilterMask(networkTag.getInt(AUTOTARGET_FILTER_MASK_KEY));
             record.setTargetControllersAllowed(networkTag.getBoolean(TARGET_CONTROLLERS_ALLOWED_KEY));
+            record.setNetworkKind(RadarNetworkKind.byName(networkTag.getString(NETWORK_KIND_KEY)));
             if (data.networks.putIfAbsent(id, record) != null) {
                 needsResave = true;
                 PowerRadar.LOGGER.warn("[PowerRadar] Skipping duplicate radar network record {}", id);
@@ -123,6 +125,7 @@ public class RadarNetworkSavedData extends SavedData {
             }
             networkTag.putInt(AUTOTARGET_FILTER_MASK_KEY, record.autotargetFilterMask());
             networkTag.putBoolean(TARGET_CONTROLLERS_ALLOWED_KEY, record.targetControllersAllowed());
+            networkTag.putString(NETWORK_KIND_KEY, record.networkKind().name());
             networksTag.add(networkTag);
         }
         for (CompoundTag futureNetworkTag : this.preservedFutureNetworkTags) {
@@ -203,6 +206,10 @@ public class RadarNetworkSavedData extends SavedData {
             boolean allowed = !tag.contains(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY, Tag.TAG_BYTE)
                     || tag.getBoolean(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY);
             tag.putBoolean(TARGET_CONTROLLERS_ALLOWED_KEY, allowed);
+            changed = true;
+        }
+        if (!tag.contains(NETWORK_KIND_KEY, Tag.TAG_STRING)) {
+            tag.putString(NETWORK_KIND_KEY, RadarNetworkKind.STANDARD.name());
             changed = true;
         }
         if (tag.contains(LEGACY_CONTROL_CONSUMERS_ALLOWED_KEY)) {

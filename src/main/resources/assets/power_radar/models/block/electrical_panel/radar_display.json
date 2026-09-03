@@ -3,11 +3,11 @@
 	"credit": "Made with Blockbench",
 	"texture_size": [32, 32],
 	"textures": {
-		"1": "power_radar:block/radar_display_front",
-		"2": "power_radar:block/radar_display_side_horizontal",
-		"3": "power_radar:block/radar_display_back",
+		"1": "power_radar:block/radar_display/radar_display_front",
+		"2": "power_radar:block/radar_display/radar_display_side_horizontal",
+		"3": "power_radar:block/radar_display/radar_display_back",
 		"4": "power_radar:block/connects",
-		"particle": "power_radar:block/radar_display_side_horizontal"
+		"particle": "power_radar:block/radar_display/radar_display_side_horizontal"
 	},
 	"elements": [
 		{

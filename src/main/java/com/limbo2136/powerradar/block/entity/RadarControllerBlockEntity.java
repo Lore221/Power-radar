@@ -9,6 +9,7 @@ import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
+import com.limbo2136.powerradar.compat.create.RadarPanelContraption;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeFormatter;
@@ -30,18 +31,25 @@ import com.limbo2136.powerradar.radar.RadarScanSlicePlan;
 import com.limbo2136.powerradar.radar.RadarScanMode;
 import com.limbo2136.powerradar.radar.RadarScanProfile;
 import com.limbo2136.powerradar.radar.RadarScanSlicePlanner;
-import com.limbo2136.powerradar.radar.RadarScanner;
 import com.limbo2136.powerradar.radar.RadarStructure;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCache;
 import com.limbo2136.powerradar.radar.RadarTargetTrack;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
+import com.limbo2136.powerradar.radar.network.RadarNetworkKind;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
+import com.limbo2136.powerradar.network.RadarContraptionAnglePayload;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModEntities;
 import com.limbo2136.powerradar.block.RadarControllerBlock;
+import com.limbo2136.powerradar.block.RadarPanelBlock;
 import com.simibubi.create.api.equipment.goggles.IHaveGoggleInformation;
+import com.simibubi.create.AllSoundEvents;
+import com.simibubi.create.content.contraptions.AssemblyException;
+import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
+import com.simibubi.create.content.contraptions.ControlledContraptionEntity;
+import com.simibubi.create.content.contraptions.IControlContraption;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -54,24 +62,30 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 public class RadarControllerBlockEntity extends SmartBlockEntity
-        implements IHaveGoggleInformation, RadarTargetingDataSource, RadarNetworkMember {
+        implements IHaveGoggleInformation, RadarTargetingDataSource, RadarNetworkMember, IControlContraption {
     private static final int REGULAR_DISCOVERY_WINDOW_MULTIPLIER = 5;
+    private static final float ASSEMBLY_TILT_STEP_DEGREES = 1.0F;
+    private static final float ASSEMBLY_TILT_DEGREES = 15.0F;
+    private static final int MAX_MISSING_CONTRAPTION_VALIDATION_WINDOWS = 5;
 
     // Синхронизируемое состояние конструкции и последнего опубликованного сканирования.
     private RadarScanMode scanMode = RadarScanMode.GROUND;
     private boolean assembled;
+    /** True after the player explicitly assembled this stationary radar. */
+    private boolean assemblyConfirmed;
     private int validPanelCount;
     private int basicPanelCount;
     private int overviewModuleCount;
@@ -112,6 +126,11 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
     private long displayRevision;
     private UUID radarStructureEntityUuid;
     private boolean radarStructureEntitySyncPending = true;
+    private ControlledContraptionEntity panelContraption;
+    private UUID panelContraptionUuid;
+    private float panelContraptionTargetAngle;
+    private boolean panelContraptionAnimating;
+    private int missingPanelContraptionValidationWindows;
 
     public RadarControllerBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.RADAR_CONTROLLER.get(), pos, blockState);
@@ -136,6 +155,12 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
                 RadarNetworkManager.get(serverLevel.getServer()).loadRadarSource(
                         this.networkId, GlobalPos.of(serverLevel.dimension(), this.worldPosition));
             }
+            RadarPanelBlock.refreshControllerType(
+                    serverLevel,
+                    this.worldPosition,
+                    this.assemblyConfirmed
+                            ? RadarPanelBlock.fromScanMode(fixedScanMode())
+                            : RadarPanelBlock.ControllerType.SURFACE);
             serverLevel.scheduleTick(this.worldPosition, this.getBlockState().getBlock(), 1);
         }
         RadarNetworkNodeClientCacheBridge.onLoaded(this.level, this.worldPosition, this.networkId);
@@ -164,9 +189,26 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
 
     public UUID ensureRadarNetworkId() {
         if (this.networkId == null && this.level instanceof ServerLevel serverLevel) {
-            setRadarNetworkId(RadarNetworkManager.get(serverLevel.getServer()).createNetwork());
+            setRadarNetworkId(RadarNetworkManager.get(serverLevel.getServer()).createNetwork(radarNetworkKind()));
         }
         return this.networkId;
+    }
+
+    public RadarNetworkKind radarNetworkKind() {
+        return this.getBlockState().getBlock() instanceof RadarControllerBlock controller
+                ? controller.networkKind()
+                : RadarNetworkKind.STANDARD;
+    }
+
+    public boolean canJoinRadarNetwork(UUID networkId) {
+        if (!(this.level instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+        return RadarNetworkManager.get(serverLevel.getServer())
+                .canRadarSourceJoinNetwork(
+                        networkId,
+                        radarNetworkKind(),
+                        GlobalPos.of(serverLevel.dimension(), this.worldPosition));
     }
 
     @Override
@@ -178,7 +220,15 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
     public void setRadarNetworkId(UUID networkId) {
         UUID replacement = networkId;
         if (replacement == null && this.level instanceof ServerLevel serverLevel) {
-            replacement = RadarNetworkManager.get(serverLevel.getServer()).createNetwork();
+            replacement = RadarNetworkManager.get(serverLevel.getServer()).createNetwork(radarNetworkKind());
+        }
+        if (replacement != null && this.level instanceof ServerLevel serverLevel
+                && !RadarNetworkManager.get(serverLevel.getServer())
+                        .canRadarSourceJoinNetwork(
+                                replacement,
+                                radarNetworkKind(),
+                                GlobalPos.of(serverLevel.dimension(), this.worldPosition))) {
+            return;
         }
         if (java.util.Objects.equals(this.networkId, replacement)) {
             return;
@@ -216,6 +266,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
 
         blockEntity.ensureRadarNetworkId();
         blockEntity.tick();
+        blockEntity.tickPanelContraptionAnimation(serverLevel);
         if (blockEntity.radarStructureEntitySyncPending) {
             blockEntity.radarStructureEntitySyncPending = false;
             blockEntity.syncRadarStructureEntity(serverLevel);
@@ -337,6 +388,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
                 worldPose.origin().z,
                 this.activeScanContext.assemblyFacing(),
                 worldPose.yawDegrees(),
+                worldPose.forward(),
                 gameTime
         );
     }
@@ -374,8 +426,34 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         long structureValidationInterval = RadarConstants.structureValidationIntervalTicks();
         if (this.cachedStructure == null
                 || this.ticksSinceStructureValidation >= structureValidationInterval) {
-            // Полная проверка многоблока выполняется редко; между проверками используется снимок структуры.
-            this.cachedStructure = RadarAssemblyValidator.validate(level, this.worldPosition);
+            // Полная проверка многоблока выполняется редко. Обычный радар
+            // начинает работать только после явной сборки; между проверками
+            // используется сохранённый снимок структуры.
+            if (blockMode == RadarScanMode.AIRCRAFT) {
+                // Бортовой радар — уже готовый многоблочный блок и не имеет
+                // отдельных панелей, которые нужно собирать вручную.
+                this.assemblyConfirmed = true;
+                this.cachedStructure = RadarAssemblyValidator.validate(level, this.worldPosition);
+            } else if (this.assemblyConfirmed && this.cachedStructure != null
+                    && this.cachedStructure.assembled()) {
+                if (findPanelContraption(level) != null) {
+                    // После сборки панели больше не являются блоками мира. Их
+                    // неизменяемый снимок хранится в контроллере, а Create
+                    // ContraptionEntity отвечает за рендер и столкновения.
+                    this.missingPanelContraptionValidationWindows = 0;
+                } else if (this.panelContraptionUuid != null
+                        && this.missingPanelContraptionValidationWindows++
+                                < MAX_MISSING_CONTRAPTION_VALIDATION_WINDOWS) {
+                    // Entity loading can lag one or two ticks behind the block
+                    // entity when a saved chunk is reopened. Keep the cached
+                    // assembly for a few validation windows before declaring it
+                    // lost.
+                } else {
+                    clearConfirmedAssembly(level);
+                }
+            } else {
+                this.cachedStructure = RadarStructure.invalid(this.worldPosition);
+            }
             this.ticksSinceStructureValidation = 0L;
         }
 
@@ -387,7 +465,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         int nextBasicPanelCount = this.cachedStructure.phasedArrayPanelCount();
         int nextOverviewModuleCount = this.cachedStructure.overviewModuleCount();
         int nextPanelCount = nextBasicPanelCount + nextOverviewModuleCount;
-        boolean structureValid = this.cachedStructure.assembled() && nextPanelCount > 0;
+        boolean structureValid = this.assemblyConfirmed
+                && this.cachedStructure.assembled()
+                && nextPanelCount > 0;
         if (structureValid) {
             PowerRadarCeeIntegration.configureRadarLoad(level, this.worldPosition, true, nextStructureType,
                     nextBasicPanelCount, nextOverviewModuleCount);
@@ -453,7 +533,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         }
 
         boolean wasRadarActive = this.assembled && this.currentRange > 0;
-        boolean changed = this.assembled != this.cachedStructure.assembled()
+        boolean changed = this.assembled != structureValid
                 || this.validPanelCount != nextPanelCount
                 || this.basicPanelCount != nextBasicPanelCount
                 || this.overviewModuleCount != nextOverviewModuleCount
@@ -464,7 +544,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
                 || this.orientationState.referenceYawDegrees() != nextOrientationState.referenceYawDegrees()
                 || this.orientationState.rotationSpeedDegreesPerTick() != nextOrientationState.rotationSpeedDegreesPerTick()
                 || this.electricalState != nextElectricalState;
-        this.assembled = this.cachedStructure.assembled();
+        this.assembled = structureValid;
         this.validPanelCount = nextPanelCount;
         this.basicPanelCount = nextBasicPanelCount;
         this.overviewModuleCount = nextOverviewModuleCount;
@@ -481,6 +561,187 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
             this.displayRevision++;
             syncChanged();
         }
+    }
+
+    /** Переключает явную сборку стационарной радарной конструкции. */
+    public void toggleAssembly(Player player) {
+        if (!(this.level instanceof ServerLevel serverLevel)
+                || fixedScanMode() == RadarScanMode.AIRCRAFT) {
+            return;
+        }
+
+        if (this.assemblyConfirmed) {
+            disassemble(serverLevel);
+            player.displayClientMessage(
+                    Component.translatable("message.power_radar.radar_controller.disassembled"),
+                    true);
+            return;
+        }
+
+        RadarAssemblyValidator.Discovery discovery = RadarAssemblyValidator.discover(serverLevel, this.worldPosition);
+        RadarStructure detectedStructure = discovery.structure();
+        if (!detectedStructure.assembled()) {
+            failAssembly(serverLevel, player);
+            return;
+        }
+
+        List<BlockPos> assemblyPositions = discovery.capturedPositions();
+        if (assemblyPositions.isEmpty()) {
+            failAssembly(serverLevel, player);
+            return;
+        }
+
+        RadarPanelBlock.applyControllerType(
+                serverLevel,
+                assemblyPositions,
+                RadarPanelBlock.fromScanMode(fixedScanMode()));
+
+        RadarPanelContraption contraption = new RadarPanelContraption(detectedStructure.facing());
+        try {
+            if (!contraption.assembleRadar(serverLevel, this.worldPosition, assemblyPositions)) {
+                failAssembly(serverLevel, player);
+                return;
+            }
+        } catch (AssemblyException | RuntimeException exception) {
+            PowerRadar.LOGGER.error(
+                    "[PowerRadar] Failed to assemble radar panel contraption at {}",
+                    this.worldPosition,
+                    exception);
+            failAssembly(serverLevel, player);
+            return;
+        }
+
+        // Remove the captured blocks first, exactly as Create's bearing
+        // assembly does.  The controller remains in the world as the CEE and
+        // radar-network anchor.
+        contraption.removeBlocksFromWorld(serverLevel, BlockPos.ZERO);
+        BlockPos anchor = this.worldPosition.above();
+        ControlledContraptionEntity entity = ControlledContraptionEntity.create(serverLevel, this, contraption);
+        entity.setPos(anchor.getX(), anchor.getY(), anchor.getZ());
+        entity.setRotationAxis(detectedStructure.facing().getClockWise().getAxis());
+        entity.setAngle(0.0F);
+        if (!serverLevel.addFreshEntity(entity)) {
+            contraption.addBlocksToWorld(
+                    serverLevel,
+                    new com.simibubi.create.content.contraptions.StructureTransform(BlockPos.ZERO, 0, 0, 0));
+            failAssembly(serverLevel, player);
+            return;
+        }
+
+        this.cachedStructure = detectedStructure;
+        this.assemblyConfirmed = true;
+        this.panelContraption = entity;
+        this.panelContraptionUuid = entity.getUUID();
+        this.panelContraptionTargetAngle = targetAssemblyAngle(
+                detectedStructure.facing(),
+                fixedScanMode());
+        this.panelContraptionAnimating = this.panelContraptionTargetAngle != 0.0F;
+        AllSoundEvents.CONTRAPTION_ASSEMBLE.playOnServer(serverLevel, this.worldPosition);
+        this.ticksSinceStructureValidation = 0L;
+        this.targetCache.clear();
+        refreshScanWindow(serverLevel);
+        this.radarStructureEntitySyncPending = true;
+        syncChanged();
+        player.displayClientMessage(
+                Component.translatable("message.power_radar.radar_controller.assembled"),
+                true);
+    }
+
+    private void failAssembly(ServerLevel level, Player player) {
+        clearConfirmedAssembly(level);
+        this.targetCache.clear();
+        refreshScanWindow(level);
+        player.displayClientMessage(
+                Component.translatable("message.power_radar.radar_controller.assembly_failed"), true);
+    }
+
+    private void clearConfirmedAssembly(ServerLevel level) {
+        this.assemblyConfirmed = false;
+        this.cachedStructure = RadarStructure.invalid(this.worldPosition);
+        this.panelContraption = null;
+        this.panelContraptionUuid = null;
+        this.panelContraptionTargetAngle = 0.0F;
+        this.panelContraptionAnimating = false;
+        this.missingPanelContraptionValidationWindows = 0;
+        this.targetCache.clear();
+        RadarPanelBlock.refreshControllerType(level, this.worldPosition, RadarPanelBlock.ControllerType.SURFACE);
+    }
+
+    private void disassemble(ServerLevel level) {
+        disassemblePanelContraption(level);
+        this.assemblyConfirmed = false;
+        this.cachedStructure = RadarStructure.invalid(this.worldPosition);
+        this.ticksSinceStructureValidation = 0L;
+        this.missingPanelContraptionValidationWindows = 0;
+        this.targetCache.clear();
+        RadarPanelBlock.refreshControllerType(
+                level,
+                this.worldPosition,
+                RadarPanelBlock.ControllerType.SURFACE);
+        refreshScanWindow(level);
+        this.radarStructureEntitySyncPending = true;
+        syncChanged();
+    }
+
+    private void disassemblePanelContraption(ServerLevel level) {
+        ControlledContraptionEntity entity = findPanelContraption(level);
+        this.panelContraption = null;
+        this.panelContraptionUuid = null;
+        this.panelContraptionAnimating = false;
+        this.panelContraptionTargetAngle = 0.0F;
+        this.missingPanelContraptionValidationWindows = 0;
+        if (entity != null && entity.isAlive()) {
+            entity.disassemble();
+        }
+    }
+
+    private ControlledContraptionEntity findPanelContraption(ServerLevel level) {
+        if (this.panelContraption != null && this.panelContraption.isAlive()) {
+            return this.panelContraption;
+        }
+        if (this.panelContraptionUuid != null
+                && level.getEntity(this.panelContraptionUuid) instanceof ControlledContraptionEntity entity
+                && entity.isAlive()) {
+            this.panelContraption = entity;
+            return entity;
+        }
+        return null;
+    }
+
+    private void tickPanelContraptionAnimation(ServerLevel level) {
+        ControlledContraptionEntity entity = findPanelContraption(level);
+        if (entity == null || !this.panelContraptionAnimating) {
+            return;
+        }
+
+        float currentAngle = entity.getAngle(1.0F);
+        float difference = this.panelContraptionTargetAngle - currentAngle;
+        float nextAngle = Math.abs(difference) <= ASSEMBLY_TILT_STEP_DEGREES
+                ? this.panelContraptionTargetAngle
+                : currentAngle + Math.copySign(ASSEMBLY_TILT_STEP_DEGREES, difference);
+        entity.setAngle(nextAngle);
+        PacketDistributor.sendToPlayersTrackingEntity(
+                entity,
+                new RadarContraptionAnglePayload(entity.getId(), nextAngle));
+        if (nextAngle == this.panelContraptionTargetAngle) {
+            this.panelContraptionAnimating = false;
+        }
+    }
+
+    private static float targetAssemblyAngle(Direction facing, RadarScanMode scanMode) {
+        if (scanMode != RadarScanMode.SKY && scanMode != RadarScanMode.SURFACE_SCANNER) {
+            return 0.0F;
+        }
+        // ControlledContraptionEntity stores only the axis (not its direction).
+        // Compensate for that here so positive air-radar tilt always rotates
+        // the panel normal toward +Y, regardless of its horizontal facing.
+        float upwardSign = switch (facing) {
+            case NORTH, EAST -> 1.0F;
+            case SOUTH, WEST -> -1.0F;
+            default -> 1.0F;
+        };
+        float directionSign = scanMode == RadarScanMode.SKY ? 1.0F : -1.0F;
+        return directionSign * upwardSign * ASSEMBLY_TILT_DEGREES;
     }
 
     private void syncRadarStructureEntity(ServerLevel level) {
@@ -531,13 +792,50 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         }
     }
 
+    @Override
+    public boolean isAttachedTo(AbstractContraptionEntity contraption) {
+        return this.panelContraption == contraption;
+    }
+
+    @Override
+    public void attach(ControlledContraptionEntity contraption) {
+        this.panelContraption = contraption;
+        this.panelContraptionUuid = contraption.getUUID();
+    }
+
+    @Override
+    public void onStall() {
+        // Radar apertures do not have kinetic actors that can stall.
+    }
+
+    @Override
+    public boolean isValid() {
+        return !this.isRemoved();
+    }
+
+    @Override
+    public BlockPos getBlockPosition() {
+        return this.worldPosition;
+    }
+
     public void deactivateRadarStructureEntity() {
-        this.assembled = false;
-        this.currentRange = 0;
-        this.radarStructureEntitySyncPending = false;
         if (this.level instanceof ServerLevel serverLevel) {
+            disassemblePanelContraption(serverLevel);
             removeRadarStructureEntity(serverLevel);
         }
+        this.assemblyConfirmed = false;
+        this.assembled = false;
+        this.cachedStructure = RadarStructure.invalid(this.worldPosition);
+        this.validPanelCount = 0;
+        this.basicPanelCount = 0;
+        this.overviewModuleCount = 0;
+        this.baseStructureRange = 0;
+        this.currentRange = 0;
+        this.panelContraptionAnimating = false;
+        this.panelContraptionTargetAngle = 0.0F;
+        this.missingPanelContraptionValidationWindows = 0;
+        this.targetCache.clear();
+        this.radarStructureEntitySyncPending = false;
     }
 
     private RadarScanProfile buildScanProfile(int range, ServerLevel level) {
@@ -550,7 +848,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
     private RadarScanProfile buildScanProfile(int range) {
         RadarScanProfile profile = this.orientationState.structureType() == RadarStructureType.OVERVIEW
                 ? RadarScanProfile.overviewController(this.scanMode, range)
-                : RadarScanProfile.sectorController(this.scanMode, range);
+                : this.orientationState.structureType() == RadarStructureType.AIRCRAFT
+                        ? RadarScanProfile.aircraftController(range)
+                        : RadarScanProfile.sectorController(this.scanMode, range);
         return profile.withDetectionFilter(this.detectionFilterMask);
     }
 
@@ -574,6 +874,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
                 worldPose.origin().z,
                 assemblyFacing,
                 worldPose.yawDegrees(),
+                worldPose.forward(),
                 level.getGameTime()
         );
     }
@@ -874,6 +1175,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
             case GROUND -> "goggles.power_radar.radar_controller.scan_mode.ground";
             case SKY -> "goggles.power_radar.radar_controller.scan_mode.sky";
             case SURFACE_SCANNER -> "goggles.power_radar.radar_controller.scan_mode.surface_scanner";
+            case AIRCRAFT -> "goggles.power_radar.radar_controller.scan_mode.aircraft";
         };
     }
 
@@ -884,6 +1186,7 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
             tag.putUUID("PowerRadarNetworkId", this.networkId);
         }
         tag.putString("ScanMode", this.scanMode.name());
+        tag.putBoolean("AssemblyConfirmed", this.assemblyConfirmed);
         tag.putBoolean("Assembled", this.assembled);
         tag.putInt("ValidPanelCount", this.validPanelCount);
         tag.putInt("BasicPanelCount", this.basicPanelCount);
@@ -905,6 +1208,11 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         if (this.radarStructureEntityUuid != null) {
             tag.putUUID("RadarStructureEntity", this.radarStructureEntityUuid);
         }
+        if (this.panelContraptionUuid != null) {
+            tag.putUUID("PanelContraptionEntity", this.panelContraptionUuid);
+        }
+        tag.putFloat("PanelContraptionTargetAngle", this.panelContraptionTargetAngle);
+        tag.putBoolean("PanelContraptionAnimating", this.panelContraptionAnimating);
     }
 
     @Override
@@ -917,6 +1225,9 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         RadarNetworkNodeClientCacheBridge.onNetworkChanged(
                 this.level, this.worldPosition, oldNetworkId, this.networkId);
         this.scanMode = RadarScanMode.byName(tag.getString("ScanMode"));
+        // Older saves only stored the automatically detected state. That
+        // state is intentionally not treated as an explicit assembly.
+        this.assemblyConfirmed = tag.getBoolean("AssemblyConfirmed");
         this.assembled = tag.getBoolean("Assembled");
         this.validPanelCount = tag.getInt("ValidPanelCount");
         this.basicPanelCount = tag.contains("BasicPanelCount") ? tag.getInt("BasicPanelCount") : this.validPanelCount;
@@ -942,6 +1253,32 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
             structureType = RadarStructureType.PHASED_ARRAY;
         }
         this.orientationState = new RadarOrientationState(structureType, yaw, speed, referenceGameTime);
+        this.panelContraptionUuid = tag.hasUUID("PanelContraptionEntity")
+                ? tag.getUUID("PanelContraptionEntity")
+                : null;
+        float savedPanelContraptionTargetAngle = tag.contains("PanelContraptionTargetAngle")
+                ? tag.getFloat("PanelContraptionTargetAngle")
+                : 0.0F;
+        // The tilt is a code-defined presentation setting. Recalculate it so
+        // an already saved radar also picks up a changed angle (for example,
+        // the 10° -> 15° adjustment) instead of keeping the old NBT value.
+        this.panelContraptionTargetAngle = targetAssemblyAngle(this.radarFacing, this.scanMode);
+        this.panelContraptionAnimating = this.assemblyConfirmed
+                && this.assembled
+                && (tag.getBoolean("PanelContraptionAnimating")
+                        || Float.compare(savedPanelContraptionTargetAngle, this.panelContraptionTargetAngle) != 0);
+        if (this.assemblyConfirmed && this.assembled && this.validPanelCount > 0) {
+            this.cachedStructure = new RadarStructure(
+                    true,
+                    this.worldPosition,
+                    this.worldPosition,
+                    this.worldPosition.above(),
+                    this.radarFacing,
+                    this.basicPanelCount,
+                    this.overviewModuleCount,
+                    structureType,
+                    this.orientationState);
+        }
         this.lastScanGameTime = tag.getLong("LastScanGameTime");
         try {
             this.electricalState = PowerRadarCeeState.valueOf(tag.getString("ElectricalState"));

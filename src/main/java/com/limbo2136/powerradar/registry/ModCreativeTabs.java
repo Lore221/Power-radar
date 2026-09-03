@@ -23,24 +23,18 @@ public final class ModCreativeTabs {
                     .displayItems((parameters, output) -> {
                         output.accept(ModItems.RADAR_CONTROLLER.get());
                         output.accept(ModItems.AIR_RADAR_CONTROLLER.get());
-                        output.accept(ModItems.SURFACE_RADAR_CONTROLLER.get());
+                        if (SableRadarIntegration.isAeronauticsLoaded()) {
+                            output.accept(ModItems.SURFACE_RADAR_CONTROLLER.get());
+                            output.accept(ModItems.AIRCRAFT_RADAR.get());
+                        }
                         output.accept(ModItems.RADAR_PANEL.get());
                         output.accept(ModItems.OVERVIEW_MODULE.get());
-
-                        output.accept(ModItems.RADAR_LINK.get());
-                        output.accept(ModItems.LINKER.get());
-
                         output.accept(ModItems.RADAR_DISPLAY.get());
-
                         output.accept(ModItems.LOGIC_DOCK.get());
-                        output.accept(ModItems.DISPLAY_CARD.get());
                         if (CreateBigCannonsIntegration.isLoaded()) {
-                            output.accept(ModItems.TARGETING_CARD.get());
-                            output.accept(ModItems.ALLOWLIST_CARD.get());
                             output.accept(ModItems.TARGET_CONTROLLER.get());
                             output.accept(ModItems.SHELL_ALARM.get());
                             output.accept(ModItems.INTERCEPTION_CONTROLLER.get());
-                            output.accept(ModItems.INTERCEPTION_FUZE.get());
                         }
                         if (SableRadarIntegration.isAeronauticsLoaded()) {
                             output.accept(ModItems.ONBOARD_COMPUTER.get());
@@ -48,6 +42,15 @@ public final class ModCreativeTabs {
                         }
                         output.accept(ModItems.MECHANICAL_SIREN.get());
                         output.accept(ModItems.MICROWAVE_EMITTER.get());
+                        output.accept(ModItems.KLYSTRON.get());
+                        output.accept(ModItems.DISPLAY_CARD.get());
+
+                        if (CreateBigCannonsIntegration.isLoaded()) {
+                            output.accept(ModItems.TARGETING_CARD.get());
+                            output.accept(ModItems.ALLOWLIST_CARD.get());
+                            output.accept(ModItems.INTERCEPTION_FUZE.get());
+                        }
+                        output.accept(ModItems.LINKER.get());
 
                     })
                     .build());

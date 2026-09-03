@@ -1,13 +1,4 @@
 {
-  "neoforge:conditions": [
-    {
-      "type": "neoforge:not",
-      "value": {
-        "type": "neoforge:tag_empty",
-        "tag": "c:ingots/steel"
-      }
-    }
-  ],
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "   ",
@@ -16,7 +7,7 @@
   ],
   "key": {
     "A": {
-      "tag": "c:ingots/steel"
+      "tag": "c:plates/obsidian"
     },
     "B": {
       "item": "electroenergetics:connector"

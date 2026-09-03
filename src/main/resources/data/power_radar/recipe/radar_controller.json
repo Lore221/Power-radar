@@ -1,44 +1,40 @@
 {
-  "neoforge:conditions": [
-    {
-      "type": "neoforge:not",
-      "value": {
-        "type": "neoforge:tag_empty",
-        "tag": "c:ingots/steel"
-      }
-    }
-  ],
   "type": "create:mechanical_crafting",
   "accept_mirrored": true,
-  "pattern": [
-    " ABA ",
-    "ABGBA",
-    "ADEDA",
-    "AFCFA"
-  ],
   "key": {
     "A": {
-        "tag": "c:ingots/steel"
+        "tag": "c:plates/obsidian"
     },
     "B": {
         "tag": "c:plates/copper"
     },
     "C": {
-        "item": "electroenergetics:transformer_core"
+        "item": "electroenergetics:connector"
     },
     "D": {
         "item": "create:electron_tube"
     },
     "E": {
-        "item": "electroenergetics:high_voltage_capacitor"
+        "item": "create:polished_rose_quartz"
     },
     "F": {
-        "item": "electroenergetics:connector"
+        "item": "create:precision_mechanism"
     },
     "G": {
-        "item": "electroenergetics:magnet"
+        "item": "create:transmitter"
+    },
+    "H": {
+        "item": "power_radar:klystron"
     }
   },
+
+  "pattern": [
+    " ABA ",
+    "AFHFA",
+    "ADEDA",
+    "ACGCA"
+  ],
+
   "result": {
     "id": "power_radar:radar_controller",
     "count": 1

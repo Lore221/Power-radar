@@ -3,7 +3,6 @@ package com.limbo2136.powerradar.registry;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.item.PowerRadarElectricalBlockItem;
 import com.limbo2136.powerradar.item.PowerRadarDescriptionBlockItem;
-import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.RadarNetworkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.InterceptionFuzeItem;
@@ -12,6 +11,7 @@ import com.limbo2136.powerradar.item.IncompleteOverviewModuleItem;
 import com.limbo2136.powerradar.item.LinkerItem;
 import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.tooltip.PowerRadarTooltipSettings.Target;
 import java.util.function.Supplier;
@@ -30,15 +30,18 @@ public final class ModItems {
             "radar_controller", ModBlocks.RADAR_CONTROLLER, Target.RADAR_CONTROLLER);
     public static final DeferredItem<BlockItem> AIR_RADAR_CONTROLLER = registerRadarNetworkBlock(
             "air_radar_controller", ModBlocks.AIR_RADAR_CONTROLLER, Target.AIR_RADAR_CONTROLLER);
-    public static final DeferredItem<BlockItem> SURFACE_RADAR_CONTROLLER = registerRadarNetworkBlock(
-            "surface_radar_controller", ModBlocks.SURFACE_RADAR_CONTROLLER, Target.SURFACE_RADAR_CONTROLLER);
+    public static final DeferredItem<BlockItem> SURFACE_RADAR_CONTROLLER = registerAeronauticsItem(() ->
+            registerRadarNetworkBlock(
+                    "surface_radar_controller", ModBlocks.SURFACE_RADAR_CONTROLLER, Target.SURFACE_RADAR_CONTROLLER));
+    public static final DeferredItem<BlockItem> AIRCRAFT_RADAR = registerAeronauticsItem(() ->
+            registerRadarNetworkBlock("aircraft_radar", ModBlocks.AIRCRAFT_RADAR, Target.AIRCRAFT_RADAR));
     public static final DeferredItem<BlockItem> LOGIC_DOCK = registerRadarNetworkBlock(
             "logic_dock", ModBlocks.LOGIC_DOCK, Target.LOGIC_DOCK);
-    public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = ITEMS.register(
+    public static final DeferredItem<BlockItem> ONBOARD_COMPUTER = registerAeronauticsItem(() -> ITEMS.register(
             "onboard_computer",
-            () -> new OnboardComputerBlockItem(ModBlocks.ONBOARD_COMPUTER.get(), new Item.Properties()));
-    public static final DeferredItem<BlockItem> EW_SYSTEM = registerElectricalBlock(
-            "ew_system", ModBlocks.EW_SYSTEM, Target.EW_SYSTEM);
+            () -> new OnboardComputerBlockItem(ModBlocks.ONBOARD_COMPUTER.get(), new Item.Properties())));
+    public static final DeferredItem<BlockItem> EW_SYSTEM = registerAeronauticsItem(() -> registerElectricalBlock(
+            "ew_system", ModBlocks.EW_SYSTEM, Target.EW_SYSTEM));
     public static final DeferredItem<RadarFilterCardItem> TARGETING_CARD = registerCbcItem(() ->
             ITEMS.register(
                     "targeting_card",
@@ -61,8 +64,6 @@ public final class ModItems {
             "incomplete_overview_module", () -> new IncompleteOverviewModuleItem(new Item.Properties()));
     public static final DeferredItem<BlockItem> RADAR_DISPLAY = registerRadarNetworkBlock(
             "radar_display", ModBlocks.RADAR_DISPLAY, Target.RADAR_DISPLAY);
-    public static final DeferredItem<RadarLinkBlockItem> RADAR_LINK = ITEMS.register(
-            "radar_link", () -> new RadarLinkBlockItem(ModBlocks.RADAR_LINK.get(), new Item.Properties()));
     public static final DeferredItem<BlockItem> TARGET_CONTROLLER = registerCbcItem(() ->
             ITEMS.register(
                     "target_controller",
@@ -89,6 +90,8 @@ public final class ModItems {
             "linker", () -> new LinkerItem(new Item.Properties().stacksTo(1)));
     public static final DeferredItem<Item> MICROWAVE_EMITTER = ITEMS.register(
             "microwave_emitter", () -> new Item(new Item.Properties()));
+    public static final DeferredItem<Item> KLYSTRON = ITEMS.register(
+            "klystron", () -> new Item(new Item.Properties()));
 
     private ModItems() {
     }
@@ -120,5 +123,12 @@ public final class ModItems {
             Supplier<DeferredItem<T>> registration
     ) {
         return CreateBigCannonsIntegration.isLoaded() ? registration.get() : null;
+    }
+
+    @Nullable
+    private static <T extends Item> DeferredItem<T> registerAeronauticsItem(
+            Supplier<DeferredItem<T>> registration
+    ) {
+        return SableRadarIntegration.isAeronauticsLoaded() ? registration.get() : null;
     }
 }

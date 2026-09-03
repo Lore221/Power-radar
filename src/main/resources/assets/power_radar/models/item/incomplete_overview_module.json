@@ -5,8 +5,8 @@
   "flip_v": true,
   "model": "power_radar:models/item/incomplete/incomplete_1.obj",
   "textures": {
-    "0": "power_radar:block/overview_module",
-    "particle": "power_radar:block/overview_module"
+    "0": "power_radar:block/overview_module/overview_module",
+    "particle": "power_radar:block/overview_module/overview_module"
   },
   "overrides": [
     {

@@ -6,7 +6,6 @@ import com.george_vi.electroenergetics.content.electrical_panel.attachments.Pane
 import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.network.RadarMonitorBlockSnapshotPayload;
 import com.limbo2136.powerradar.network.RadarMonitorBlockPosePayload;
 import com.limbo2136.powerradar.network.RadarMonitorPosePayloadFactory;

@@ -2,6 +2,8 @@ package com.limbo2136.powerradar.item;
 
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
+import com.limbo2136.powerradar.block.RadarControllerBlock;
+import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
 import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.registry.ModDataComponents;
@@ -46,6 +48,13 @@ public class RadarNetworkBlockItem extends PowerRadarElectricalBlockItem {
                         level, context.getClickedPos());
                 UUID currentNetworkId = stack.get(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
                 if (sourceNetworkId != null
+                        && getBlock() instanceof RadarControllerBlock sourceBlock
+                        && level instanceof ServerLevel serverLevel
+                        && !RadarNetworkManager.get(serverLevel.getServer())
+                                .canRadarSourceJoinNetwork(sourceNetworkId, sourceBlock.networkKind())) {
+                    player.displayClientMessage(Component.translatable(
+                            "message.power_radar.network.radar_type_mismatch").withStyle(ChatFormatting.RED), true);
+                } else if (sourceNetworkId != null
                         && getBlock() instanceof TargetControllerBlock
                         && !RadarNetworkManager.get(((ServerLevel) level).getServer())
                                 .targetControllersAllowed(sourceNetworkId)) {
@@ -104,8 +113,23 @@ public class RadarNetworkBlockItem extends PowerRadarElectricalBlockItem {
                         "message.power_radar.network.target_controller_forbidden").withStyle(ChatFormatting.RED), true);
             }
         }
+        if (networkId != null
+                && member instanceof RadarControllerBlockEntity controller
+                && !controller.canJoinRadarNetwork(networkId)) {
+            // A source item can outlive its network or be copied from a different
+            // radar class. Do not let setRadarNetworkId silently ignore the stale
+            // binding; clear it so placement creates a network of the source's kind.
+            stack.remove(ModDataComponents.POWER_RADAR_NETWORK_ID.get());
+            networkId = null;
+            if (player != null) {
+                player.displayClientMessage(Component.translatable(
+                        "message.power_radar.network.radar_type_mismatch").withStyle(ChatFormatting.RED), true);
+            }
+        }
         if (networkId == null && member.createsRadarNetworkWhenUntuned()) {
-            networkId = RadarNetworkManager.get(serverLevel.getServer()).createNetwork();
+            networkId = member instanceof RadarControllerBlockEntity controller
+                    ? RadarNetworkManager.get(serverLevel.getServer()).createNetwork(controller.radarNetworkKind())
+                    : RadarNetworkManager.get(serverLevel.getServer()).createNetwork();
         }
         member.setRadarNetworkId(networkId);
         if (player != null) {

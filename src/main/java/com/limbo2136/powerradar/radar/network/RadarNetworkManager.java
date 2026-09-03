@@ -7,9 +7,8 @@ import com.limbo2136.powerradar.RadarConstants;
 import com.limbo2136.powerradar.api.target.TargetSourceType;
 import com.limbo2136.powerradar.api.target.TrackedTargetView;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
+import com.limbo2136.powerradar.block.AircraftRadarBlock;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
-import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
-import com.limbo2136.powerradar.block.entity.AbstractRadarMonitorBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPoseResolver;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
@@ -93,8 +92,14 @@ public class RadarNetworkManager {
     }
 
     public UUID createNetwork() {
+        return createNetwork(RadarNetworkKind.STANDARD);
+    }
+
+    public UUID createNetwork(RadarNetworkKind networkKind) {
         UUID id = UUID.randomUUID();
-        this.ensureNetwork(id);
+        RadarNetworkRecord record = this.ensureNetwork(id);
+        record.setNetworkKind(networkKind);
+        this.savedData.setDirty();
         return id;
     }
 
@@ -102,6 +107,45 @@ public class RadarNetworkManager {
         UUID id = createNetwork();
         setTargetControllersAllowed(id, false);
         return id;
+    }
+
+    public RadarNetworkKind networkKind(UUID id) {
+        return this.savedData.get(id)
+                .map(RadarNetworkRecord::networkKind)
+                .orElse(RadarNetworkKind.STANDARD);
+    }
+
+    /**
+     * Источники разных классов не объединяются в одной сети. Потребители не
+     * используют этот метод и потому могут работать с любым классом сети.
+     */
+    public boolean canRadarSourceJoinNetwork(UUID id, RadarNetworkKind sourceKind) {
+        return canRadarSourceJoinNetwork(id, sourceKind, null);
+    }
+
+    /**
+     * Проверяет совместимость источника с сетью. Для одиночных сетей повторно
+     * проверяемый тот же контроллер разрешён, но второй источник — нет.
+     */
+    public boolean canRadarSourceJoinNetwork(
+            UUID id,
+            RadarNetworkKind sourceKind,
+            GlobalPos sourcePos
+    ) {
+        return this.savedData.get(id)
+                .map(record -> {
+                    if (record.networkKind() != sourceKind) {
+                        return false;
+                    }
+                    if (!sourceKind.isSingleSource()) {
+                        return true;
+                    }
+                    Set<GlobalPos> sources = this.loadedRadarSources.get(id);
+                    return sources == null
+                            || sources.isEmpty()
+                            || (sourcePos != null && sources.size() == 1 && sources.contains(sourcePos));
+                })
+                .orElse(false);
     }
 
     public boolean networkExists(UUID id) {
@@ -174,10 +218,29 @@ public class RadarNetworkManager {
 
     public RadarLinkReconcileResult attachControllerFromLink(UUID id, GlobalPos linkPos, GlobalPos controllerPos) {
         this.addPersistentLink(id, linkPos);
-        if (controllerOwnedByAnotherLink(id, linkPos, controllerPos)) {
+        ServerLevel controllerLevel = this.server.getLevel(controllerPos.dimension());
+        RadarControllerBlockEntity controller = controllerLevel == null
+                ? null
+                : controllerLevel.getBlockEntity(controllerPos.pos())
+                        instanceof RadarControllerBlockEntity directController
+                        ? directController
+                        : AircraftRadarBlock.findController(controllerLevel, controllerPos.pos())
+                                instanceof RadarControllerBlockEntity aircraftController
+                                ? aircraftController
+                                : null;
+        if (controllerLevel == null
+                || controller == null
+                || !canRadarSourceJoinNetwork(
+                        id,
+                        controller.radarNetworkKind(),
+                        GlobalPos.of(controllerLevel.dimension(), controller.getBlockPos()))) {
             return RadarLinkReconcileResult.CONTROLLER_ALREADY_BOUND;
         }
-        this.upsertControllerBinding(id, linkPos, controllerPos);
+        GlobalPos resolvedControllerPos = GlobalPos.of(controllerLevel.dimension(), controller.getBlockPos());
+        if (controllerOwnedByAnotherLink(id, linkPos, resolvedControllerPos)) {
+            return RadarLinkReconcileResult.CONTROLLER_ALREADY_BOUND;
+        }
+        this.upsertControllerBinding(id, linkPos, resolvedControllerPos);
         return RadarLinkReconcileResult.CONTROLLER_ATTACHED;
     }
 
@@ -192,6 +255,10 @@ public class RadarNetworkManager {
     /** Регистрирует загруженный Radar Controller как локальный источник снимков сети. */
     public void loadRadarSource(UUID id, GlobalPos sourcePos) {
         ensureNetwork(id);
+        RadarNetworkKind sourceKind = networkKind(id);
+        if (!canRadarSourceJoinNetwork(id, sourceKind, sourcePos)) {
+            return;
+        }
         this.loadedRadarSources.computeIfAbsent(id, ignored -> new HashSet<>()).add(sourcePos);
         this.runtime(id).invalidateDisplaySnapshots();
     }

@@ -84,7 +84,7 @@ public final class RadarLinkConnectionResolver {
             return null;
         }
         if (!state.hasProperty(RadarLinkBlock.FACING)
-                || !state.is(com.limbo2136.powerradar.registry.ModBlocks.RADAR_LINK.get())
+                || !(state.getBlock() instanceof RadarLinkBlock)
                 || !linkPos.relative(state.getValue(RadarLinkBlock.FACING)).equals(endpointPos)) {
             return null;
         }

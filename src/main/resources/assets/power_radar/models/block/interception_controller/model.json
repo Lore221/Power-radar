@@ -8,7 +8,7 @@
 		"1": "power_radar:block/radar_link",
 		"2": "power_radar:block/connects",
 		"3": "power_radar:block/intercept_controller",
-		"particle": "power_radar:block/connects"
+		"particle": "power_radar:block/intercept_controller"
 	},
 	"elements": [
 		{
@@ -116,11 +116,11 @@
 			"to": [0, 9, 4],
 			"rotation": {"angle": 0, "axis": "y", "origin": [-1, 7, 3]},
 			"faces": {
-				"north": {"uv": [8.5, 3, 8.75, 4], "texture": "#3"},
-				"south": {"uv": [8.5, 3, 8.75, 4], "texture": "#3"},
-				"west": {"uv": [8.5, 3, 9, 4], "texture": "#3"},
-				"up": {"uv": [8.5, 3, 8.75, 3.5], "texture": "#3"},
-				"down": {"uv": [8.5, 3, 8.75, 3.5], "texture": "#3"}
+				"north": {"uv": [8, 3, 8.25, 4], "texture": "#3"},
+				"south": {"uv": [8, 3, 8.25, 4], "texture": "#3"},
+				"west": {"uv": [8, 3, 8.5, 4], "texture": "#3"},
+				"up": {"uv": [8, 3, 8.25, 3.5], "texture": "#3"},
+				"down": {"uv": [8, 3, 8.25, 3.5], "texture": "#3"}
 			}
 		},
 		{

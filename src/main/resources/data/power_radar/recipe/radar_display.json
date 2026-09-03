@@ -1,22 +1,13 @@
 {
-  "neoforge:conditions": [
-    {
-      "type": "neoforge:not",
-      "value": {
-        "type": "neoforge:tag_empty",
-        "tag": "c:ingots/steel"
-      }
-    }
-  ],
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "CCC",
     "ABA",
-    "ADA"
+    "EDE"
   ],
   "key": {
     "A": {
-      "tag": "c:ingots/steel"
+      "tag": "c:plates/obsidian"
     },
     "B": {
       "item": "electroenergetics:indicator_bulb"
@@ -25,7 +16,10 @@
       "item": "minecraft:tinted_glass"
     },
      "D": {
-      "tag": "c:plates/copper"
+      "item": "create:transmitter"
+    },
+    "E": {
+        "item": "electroenergetics:connector"
     }
   },
   "result": {

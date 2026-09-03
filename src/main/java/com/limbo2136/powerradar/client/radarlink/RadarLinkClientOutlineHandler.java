@@ -1,6 +1,7 @@
 package com.limbo2136.powerradar.client.radarlink;
 
 import com.limbo2136.powerradar.RadarConstants;
+import com.limbo2136.powerradar.block.AircraftRadarBlock;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.block.RadarDisplayStructure;
 import com.limbo2136.powerradar.block.entity.RadarDisplayBlockEntity;
@@ -14,6 +15,8 @@ import com.limbo2136.powerradar.item.RadarLinkBlockItem;
 import com.limbo2136.powerradar.item.RadarNetworkBlockItem;
 import com.limbo2136.powerradar.item.ShellAlarmBlockItem;
 import com.limbo2136.powerradar.item.OnboardComputerBlockItem;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
@@ -199,7 +202,11 @@ public final class RadarLinkClientOutlineHandler {
         AABB outline;
         if (state.is(ModBlocks.AIR_RADAR_CONTROLLER.get())) {
             outline = new AABB(pos).inflate(AIR_RADAR_OUTLINE_INFLATION);
-        } else if (state.is(ModBlocks.TARGET_CONTROLLER.get())) {
+        } else if (SableRadarIntegration.isAeronauticsLoaded()
+                && state.is(ModBlocks.AIRCRAFT_RADAR.get())) {
+            outline = aircraftRadarOutline(pos, state.getValue(AircraftRadarBlock.FACING));
+        } else if (CreateBigCannonsIntegration.isLoaded()
+                && state.is(ModBlocks.TARGET_CONTROLLER.get())) {
             outline = new AABB(pos).inflate(TARGET_CONTROLLER_OUTLINE_INFLATION);
         } else if (state.is(ModBlocks.LOGIC_DOCK.get())) {
             AABB bodyBounds = state.getShape(level, pos).bounds().move(pos);
@@ -220,6 +227,12 @@ public final class RadarLinkClientOutlineHandler {
                 outline,
                 color
         );
+    }
+
+    /** The Aircraft Radar is a three-block-long multiblock with its core at the rear. */
+    private static AABB aircraftRadarOutline(BlockPos core, Direction facing) {
+        BlockPos front = core.relative(facing, 2);
+        return new AABB(core).minmax(new AABB(front));
     }
 
     private static void outlineRadarDisplay(RadarDisplayBlockEntity display, UUID networkId, int color) {

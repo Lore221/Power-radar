@@ -29,6 +29,13 @@ public final class PowerRadarRadarParameters {
     private static final int DEFAULT_AIR_MIN_Y_OFFSET = 40;
     private static final int DEFAULT_AIR_MAX_Y_OFFSET = 1_500;
 
+    // Бортовой радар имеет фиксированную геометрию: конус 90° с радиусом 200
+    // блоков и симметричным вертикальным диапазоном.
+    private static final int AIRCRAFT_RANGE_BLOCKS = 200;
+    private static final int AIRCRAFT_FOV_DEGREES = 90;
+    private static final int AIRCRAFT_MIN_Y_OFFSET = -200;
+    private static final int AIRCRAFT_MAX_Y_OFFSET = 200;
+
     private static ModConfigSpec.IntValue maxPhasedArrayPanels;
     private static ModConfigSpec.IntValue maxOverviewModules;
     private static ModConfigSpec.IntValue baseRangeBlocks;
@@ -174,11 +181,27 @@ public final class PowerRadarRadarParameters {
         return Math.max(airMinYOffset(), value(airMaxYOffset));
     }
 
-    // Ранний вызов из блока сначала заставляет общий серверный SPEC зарегистрировать этот каталог.
+    // При раннем вызове из блока принудительно завершаем инициализацию общего серверного конфига.
     private static void ensureConfigDefined() {
         if (baseRangeBlocks == null) {
-            ModConfigSpec ignored = PowerRadarServerConfig.SPEC;
+            PowerRadarServerConfig.ensureInitialized();
         }
+    }
+
+    public static int aircraftRangeBlocks() {
+        return AIRCRAFT_RANGE_BLOCKS;
+    }
+
+    public static int aircraftFovDegrees() {
+        return AIRCRAFT_FOV_DEGREES;
+    }
+
+    public static int aircraftMinYOffset() {
+        return AIRCRAFT_MIN_Y_OFFSET;
+    }
+
+    public static int aircraftMaxYOffset() {
+        return AIRCRAFT_MAX_Y_OFFSET;
     }
 
     private static int value(ModConfigSpec.IntValue configValue) {

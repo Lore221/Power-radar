@@ -6,6 +6,7 @@ import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.block.entity.AbstractRadarMonitorBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarDisplayBlockEntity;
 import com.limbo2136.powerradar.bridge.ClientPayloadBridge;
+import com.limbo2136.powerradar.bridge.RadarContraptionClientBridge;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableSilhouetteSnapshot;
 import com.limbo2136.powerradar.compat.electroenergetics.panel.RadarPanelMonitorRuntime;
@@ -13,7 +14,6 @@ import com.limbo2136.powerradar.item.RadarFilterCardItem;
 import com.limbo2136.powerradar.radar.RadarDetectionFilters;
 import com.limbo2136.powerradar.radar.RadarDisplayTarget;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
-import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModDataComponents;
 import java.util.function.Consumer;
@@ -60,6 +60,8 @@ public final class ModNetwork {
         registrar.playToClient(AllowlistCardOpenPayload.TYPE, AllowlistCardOpenPayload.STREAM_CODEC, ModNetwork::handleAllowlistCardOpen);
         registrar.playToServer(AllowlistCardSavePayload.TYPE, AllowlistCardSavePayload.STREAM_CODEC, ModNetwork::handleAllowlistCardSave);
         registrar.playToClient(RadarCompassTargetPayload.TYPE, RadarCompassTargetPayload.STREAM_CODEC, ModNetwork::handleRadarCompassTarget);
+        registrar.playToClient(RadarContraptionAnglePayload.TYPE, RadarContraptionAnglePayload.STREAM_CODEC,
+                ModNetwork::handleContraptionAngle);
         registrar.playToServer(RadarCompassSubscriptionPayload.TYPE, RadarCompassSubscriptionPayload.STREAM_CODEC, ModNetwork::handleRadarCompassSubscription);
     }
 
@@ -109,6 +111,15 @@ public final class ModNetwork {
         enqueueClientHandler(
                 payload, context, ClientPayloadBridge::handle,
                 "[PowerRadar] Failed to update radar compass target");
+    }
+
+    private static void handleContraptionAngle(
+            RadarContraptionAnglePayload payload,
+            IPayloadContext context
+    ) {
+        enqueueClientHandler(
+                payload, context, RadarContraptionClientBridge::handle,
+                "[PowerRadar] Failed to update radar contraption angle");
     }
 
     private static void handleRadarCompassSubscription(

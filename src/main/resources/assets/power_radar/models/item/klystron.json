@@ -1,0 +1,21 @@
+{
+	"format_version": "1.9.0",
+	"credit": "Power Radar render composite",
+	"loader": "neoforge:composite",
+	"parent": "power_radar:item/klystron/klystron_for_editing",
+	"textures": {
+		"particle": "power_radar:item/klystron"
+	},
+	"children": {
+		"body": {
+			"parent": "power_radar:item/klystron/klystron_body"
+		},
+		"internals": {
+			"parent": "power_radar:item/klystron/klystron_internals"
+		},
+		"bulb": {
+			"parent": "power_radar:item/klystron/klystron_bulb"
+		}
+	},
+	"item_render_order": ["body", "internals", "bulb"]
+}

@@ -37,7 +37,6 @@ import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueBoxTransform;
-import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBehaviour.ValueSettings;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsBoard;
 import com.simibubi.create.foundation.blockEntity.behaviour.ValueSettingsFormatter;
 import com.simibubi.create.foundation.blockEntity.behaviour.scrollValue.INamedIconOptions;
@@ -118,7 +117,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
     }
 
     public static void serverTick(Level level, BlockPos pos, BlockState state,
-                                  ShellAlarmBlockEntity alarm) {
+            ShellAlarmBlockEntity alarm) {
         if (level instanceof ServerLevel serverLevel) {
             alarm.tick();
             alarm.tickServer(serverLevel, state);
@@ -127,8 +126,10 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
 
     private void tickServer(ServerLevel level, BlockState state) {
         removeLegacyRadarMarker(level);
-        // Геометрию и принадлежность Sable инициализируем лениво: поиск структуры выполняется
-        // один раз на экземпляр BE, а последующие снимки переиспользуют сохранённую привязку.
+        // Геометрию и принадлежность Sable инициализируем лениво: поиск структуры
+        // выполняется
+        // один раз на экземпляр BE, а последующие снимки переиспользуют сохранённую
+        // привязку.
         if (this.protectedZone == null) {
             this.protectedZone = this.protectedZoneTracker.broadPhaseZone(
                     level,
@@ -156,16 +157,18 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         this.networkConnected = false;
         Set<UUID> present = new HashSet<>();
         int shellCount = 0;
-        long gameTime = level.getGameTime();
         UUID connectedNetworkId = null;
         RadarDataSource controller = null;
 
-        // Радарная сеть остаётся источником снимков, а независимый interception UUID — каналом
-        // публикации угроз. Электропитание и наличие обоих контрактов проверяются отдельно.
+        // Радарная сеть остаётся источником снимков, а независимый interception UUID —
+        // каналом
+        // публикации угроз. Электропитание и наличие обоих контрактов проверяются
+        // отдельно.
         if (powered && this.networkId != null) {
             RadarNetworkManager.ControllersResolution resolution = RadarNetworkManager.get(level.getServer())
                     .resolveControllersForConsumer(this.networkId, globalPos());
-            controller = resolution.controllers().isEmpty() ? null : new CombinedRadarDataSource(resolution.controllers());
+            controller = resolution.controllers().isEmpty() ? null
+                    : new CombinedRadarDataSource(resolution.controllers());
             this.networkConnected = controller != null;
             connectedNetworkId = this.networkId;
         }
@@ -177,7 +180,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         }
         long radarScanGameTime = controller.lastScanGameTime();
         long previousRadarScanGameTime = this.lastProcessedRadarScanGameTime;
-        // Оценка угроз привязана к публикациям радара, поэтому один снимок нельзя считать повторно
+        // Оценка угроз привязана к публикациям радара, поэтому один снимок нельзя
+        // считать повторно
         // на каждом серверном тике.
         if (radarScanGameTime == previousRadarScanGameTime) {
             return;
@@ -204,7 +208,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         });
         shellCount = tracks.size();
         MovingProtectedZone zone = this.protectedZone;
-        // Дорогие геометрия и кинематика Sable обновляются поэтапно только для снарядов,
+        // Дорогие геометрия и кинематика Sable обновляются поэтапно только для
+        // снарядов,
         // прошедших дешёвую широкую фазу на текущем снимке радара.
         List<TrackedTargetView> candidateTracks = ProtectedZoneThreatEvaluator.initialBroadPhaseCandidates(
                 projectileLevel,
@@ -327,8 +332,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             ServerLevel level,
             boolean powered,
             UUID connectedNetworkId,
-            RadarDataSource controller
-    ) {
+            RadarDataSource controller) {
         if (!PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
             return;
         }
@@ -354,7 +358,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
     }
 
     private void clearInactiveState(ServerLevel level, BlockState state) {
-        // При потере любого обязательного источника сразу снимаем локальный сигнал и оценки.
+        // При потере любого обязательного источника сразу снимаем локальный сигнал и
+        // оценки.
         boolean changed = !this.evaluations.isEmpty() || this.trackedShellCount != 0 || this.alarmActive;
         this.evaluations.clear();
         this.trackedShellCount = 0;
@@ -370,12 +375,12 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         }
     }
 
-    // Делегирует единственную физическую модель общему evaluator и сохраняет диагностический снимок.
+    // Делегирует единственную физическую модель общему evaluator и сохраняет
+    // диагностический снимок.
     private ThreatEvaluation trajectoryThreatens(
             ServerLevel level,
             TrackedTargetView track,
-            MovingProtectedZone zone
-    ) {
+            MovingProtectedZone zone) {
         ProtectedZoneThreatEvaluator.Evaluation evaluation = ProtectedZoneThreatEvaluator.evaluate(
                 level,
                 zone,
@@ -415,8 +420,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             Vec3 simulatedPosition,
             Vec3 simulatedVelocity,
             String reason,
-            ProtectedZoneThreatEvaluator.Evaluation evaluation
-    ) {
+            ProtectedZoneThreatEvaluator.Evaluation evaluation) {
         if (PowerRadarDebugOptions.shellAlarmBugReportLogging()) {
             PowerRadar.LOGGER.info(
                     "[PowerRadar BugReport][ShellAlarm][Trajectory] alarm={} target={} entityType={} source={} trackTick={} trackPos={} trackVelocity={} simulatedPos={} simulatedVelocity={} width={} height={} depth={} result={} dangerous={}",
@@ -445,7 +449,6 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
     private static double round(double value) {
         return Double.isFinite(value) ? Math.round(value * 1000.0) / 1000.0 : value;
     }
-
 
     private void notifyRedstone(ServerLevel level, BlockState state) {
         Block block = state.getBlock();
@@ -510,7 +513,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         MovingProtectedZone zone = this.protectedZoneTracker.broadPhaseZone(
                 level, this.worldPosition, configuredGroundBounds(), sableProtectionMarginPercent());
         if (zone != null && zone.onSable()) {
-            // Монитору нужны актуальные мировые X/Z-габариты Sable даже при отсутствии снарядов.
+            // Монитору нужны актуальные мировые X/Z-габариты Sable даже при отсутствии
+            // снарядов.
             zone = this.protectedZoneTracker.refreshGeometryIfDue(
                     level, zone, sableProtectionMarginPercent());
         }
@@ -546,7 +550,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         }
     }
 
-    // Логическая радарная сеть и interception-сеть намеренно имеют разные UUID и жизненные циклы.
+    // Логическая радарная сеть и interception-сеть намеренно имеют разные UUID и
+    // жизненные циклы.
     public void initializeNetwork(UUID networkId) {
         setRadarNetworkId(networkId);
     }
@@ -611,7 +616,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         setRadarNetworkId(null);
     }
 
-    // Выгрузка чанка снимает только runtime-регистрацию; постоянное членство удаляется при разрушении.
+    // Выгрузка чанка снимает только runtime-регистрацию; постоянное членство
+    // удаляется при разрушении.
     @Override
     public void clearRemoved() {
         super.clearRemoved();
@@ -744,9 +750,11 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                         ? tag.getDouble("ElectricalResistanceOhms")
                         : PowerRadarElectricalParameters.OFF_RESISTANCE_OHMS));
         this.networkId = tag.getInt("RadarNetworkFormat") >= 2 && tag.hasUUID("PowerRadarNetworkId")
-                ? tag.getUUID("PowerRadarNetworkId") : null;
+                ? tag.getUUID("PowerRadarNetworkId")
+                : null;
         this.interceptionNetworkId = tag.hasUUID("InterceptionNetworkId")
-                ? tag.getUUID("InterceptionNetworkId") : null;
+                ? tag.getUUID("InterceptionNetworkId")
+                : null;
         if (clientPacket) {
             this.sableProtectionMode = tag.getBoolean("SableProtectionMode");
         }
@@ -761,7 +769,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         }
     }
 
-    // Старое квадратное поле ProtectionRadius мигрирует в ширину/глубину, не меняя высоту по умолчанию.
+    // Старое квадратное поле ProtectionRadius мигрирует в ширину/глубину, не меняя
+    // высоту по умолчанию.
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
@@ -812,38 +821,38 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             switch (field) {
                 case TITLE -> PowerRadarTooltipSettings.appendElectricalStatisticsTitle(tooltip);
                 case ELECTRICAL_STATE -> tooltip.add(Component.translatable("power_radar.electrical.state",
-                                Component.translatable(this.electrical.electricalState().translationKey()))
+                        Component.translatable(this.electrical.electricalState().translationKey()))
                         .withStyle(ChatFormatting.DARK_GRAY));
                 case VOLTAGE -> tooltip.add(Component.translatable("power_radar.electrical.voltage",
-                                PowerRadarCeeFormatter.voltageComponent(this.electrical.voltageVolts()))
+                        PowerRadarCeeFormatter.voltageComponent(this.electrical.voltageVolts()))
                         .withStyle(ChatFormatting.DARK_GRAY));
                 case POWER -> tooltip.add(Component.translatable("power_radar.electrical.power",
-                                PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts()))
+                        PowerRadarCeeFormatter.powerComponent(this.electrical.powerWatts()))
                         .withStyle(ChatFormatting.DARK_GRAY));
                 case PROTECTION_ZONE -> {
                     if (this.sableProtectionMode) {
                         tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.sable_margin",
-                                        sableProtectionMarginPercent())
+                                sableProtectionMarginPercent())
                                 .withStyle(ChatFormatting.DARK_GRAY));
                     } else {
                         tooltip.add(Component.translatable("goggles.power_radar.shell_alarm.zone",
-                                        protectionWidthBlocks(), protectionHeightBlocks(), protectionDepthBlocks())
+                                protectionWidthBlocks(), protectionHeightBlocks(), protectionDepthBlocks())
                                 .withStyle(ChatFormatting.DARK_GRAY));
                     }
                 }
                 case ALARM_STATE -> tooltip.add(Component.translatable(this.alarmActive
-                                ? "goggles.power_radar.shell_alarm.danger"
-                                : "goggles.power_radar.shell_alarm.clear")
+                        ? "goggles.power_radar.shell_alarm.danger"
+                        : "goggles.power_radar.shell_alarm.clear")
                         .withStyle(this.alarmActive ? ChatFormatting.RED : ChatFormatting.GREEN));
-                default -> { }
+                default -> {
+                }
             }
         }
         return PowerRadarTooltipSettings.finishGoggleTooltip(tooltip, firstNewLine);
     }
 
     private record ThreatEvaluation(
-            ProtectedZoneThreatEvaluator.Evaluation evaluation
-    ) {
+            ProtectedZoneThreatEvaluator.Evaluation evaluation) {
         boolean dangerous() {
             return this.evaluation.dangerous();
         }
@@ -861,7 +870,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         }
     }
 
-    // Один Create-behaviour хранит обе формы настройки, но показывает только режим текущего носителя.
+    // Один Create-behaviour хранит обе формы настройки, но показывает только режим
+    // текущего носителя.
     private static class ShellAlarmDimensionsBehaviour extends ScrollOptionBehaviour<ShellAlarmSettingsOption> {
         private int width = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_WIDTH_BLOCKS;
         private int depth = PowerRadarCeeConstants.SHELL_ALARM_DEFAULT_DEPTH_BLOCKS;
@@ -871,8 +881,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         private ShellAlarmDimensionsBehaviour(
                 Component label,
                 SmartBlockEntity blockEntity,
-                ValueBoxTransform transform
-        ) {
+                ValueBoxTransform transform) {
             super(ShellAlarmSettingsOption.class, label, blockEntity, transform);
         }
 
@@ -914,8 +923,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                         10,
                         ImmutableList.of(Component.translatable(
                                 "message.power_radar.shell_alarm.sable_margin")),
-                        new ValueSettingsFormatter(settings ->
-                                Component.translatable("power_radar.unit.percent", settings.value())));
+                        new ValueSettingsFormatter(
+                                settings -> Component.translatable("power_radar.unit.percent", settings.value())));
             }
             return new ValueSettingsBoard(
                     this.label,
@@ -925,8 +934,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                             Component.translatable("message.power_radar.shell_alarm.width"),
                             Component.translatable("message.power_radar.shell_alarm.depth"),
                             Component.translatable("message.power_radar.shell_alarm.height")),
-                    new ValueSettingsFormatter(settings ->
-                            Component.translatable("power_radar.unit.blocks", settings.value())));
+                    new ValueSettingsFormatter(
+                            settings -> Component.translatable("power_radar.unit.blocks", settings.value())));
         }
 
         @Override
@@ -1009,7 +1018,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
     }
 
     private static class ShellAlarmDimensionsTransform extends ValueBoxTransform {
-        // Координаты повторяют верхнюю грань элемента 2,13,0 -> 14,14,12 из shell_alarm.json.
+        // Координаты повторяют верхнюю грань элемента 2,13,0 -> 14,14,12 из
+        // shell_alarm.json.
         // При изменении модели синхронно обнови точку, pivot и угол ниже.
         private static final Vec3 PANEL_POINT = voxel(8.0D, 14.0D, 6.0D);
         private static final Vec3 PANEL_PIVOT = voxel(8.0D, 15.0D, 0.0D);
@@ -1021,10 +1031,9 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             Vec3 panelPosition = rotateAroundX(PANEL_POINT, PANEL_PIVOT, PANEL_MODEL_TILT_DEGREES);
             Direction facing = state.getValue(ShellAlarmBlock.FACING);
             return VecHelper.rotateCentered(
-                panelPosition,
-                AngleHelper.horizontalAngle(facing) + 180.0F,
-                Direction.Axis.Y
-            );
+                    panelPosition,
+                    AngleHelper.horizontalAngle(facing) + 180.0F,
+                    Direction.Axis.Y);
         }
 
         @Override
@@ -1040,7 +1049,8 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             return 0.55F;
         }
 
-        // Применяет к точке тот же локальный X-поворот вокруг pivot, что задан элементу модели.
+        // Применяет к точке тот же локальный X-поворот вокруг pivot, что задан элементу
+        // модели.
         private static Vec3 rotateAroundX(Vec3 point, Vec3 pivot, float angleDegrees) {
             double radians = Math.toRadians(angleDegrees);
             double cosine = Math.cos(radians);

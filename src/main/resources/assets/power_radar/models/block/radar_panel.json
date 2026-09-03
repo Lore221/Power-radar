@@ -1,14 +1,16 @@
 {
 	"format_version": "1.9.0",
 	"credit": "Made with Blockbench",
+	"ambientocclusion": false,
 	"textures": {
-		"2": "power_radar:block/radar_panel_back",
-		"3": "power_radar:block/radar_panel_side",
-		"front": "power_radar:block/radar_panel_front",
-		"particle": "power_radar:block/radar_panel_side"
+		"2": "power_radar:block/radar_panel/radar_panel_back",
+		"3": "power_radar:block/radar_panel/radar_panel_side",
+		"front": "power_radar:block/radar_panel/radar_panel_front",
+		"particle": "power_radar:block/radar_panel/radar_panel_front"
 	},
 	"elements": [
 		{
+			"shade": false,
 			"from": [0, 0, 0],
 			"to": [16, 16, 13],
 			"faces": {

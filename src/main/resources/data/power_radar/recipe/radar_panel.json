@@ -1,13 +1,4 @@
 {
-  "neoforge:conditions": [
-    {
-      "type": "neoforge:not",
-      "value": {
-        "type": "neoforge:tag_empty",
-        "tag": "c:ingots/steel"
-      }
-    }
-  ],
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "AAA",
@@ -19,7 +10,7 @@
       "item": "power_radar:microwave_emitter"
     },
     "B": {
-      "tag": "c:ingots/steel"
+      "tag": "c:plates/obsidian"
     },
     "C": {
       "item": "electroenergetics:inductor"

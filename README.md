@@ -51,7 +51,7 @@ Create Big Cannons and Ritchie's Projectile Library are optional. The related co
 
 ### Create: Aeronautics
 
-When [Create: Aeronautics](https://www.curseforge.com/minecraft/mc-mods/create-aeronautics) is installed, Power Radar adds onboard radar support for moving structures, powered EW systems that conceal a structure's exact silhouette, and physical mass values for its blocks. Aviator's Goggles display those properties using the native Aeronautics tooltip style.
+When [Create: Aeronautics](https://www.curseforge.com/minecraft/mc-mods/create-aeronautics) and Sable are installed, Power Radar registers the Surface Radar Controller, Aircraft Radar, Onboard Computer, and EW System. It also adds onboard radar support for moving structures, powered EW systems that conceal a structure's exact silhouette, and physical mass values for its blocks. Aviator's Goggles display those properties using the native Aeronautics tooltip style.
 
 Create: Aeronautics and Sable are optional.
 

@@ -1,19 +1,16 @@
 {
   "variants": {
-    "facing=north": {
-      "model": "power_radar:block/radar_panel"
-    },
-    "facing=east": {
-      "model": "power_radar:block/radar_panel",
-      "y": 90
-    },
-    "facing=south": {
-      "model": "power_radar:block/radar_panel",
-      "y": 180
-    },
-    "facing=west": {
-      "model": "power_radar:block/radar_panel",
-      "y": 270
-    }
+    "facing=north,controller_type=surface": { "model": "power_radar:block/radar_panel" },
+    "facing=east,controller_type=surface": { "model": "power_radar:block/radar_panel", "y": 90 },
+    "facing=south,controller_type=surface": { "model": "power_radar:block/radar_panel", "y": 180 },
+    "facing=west,controller_type=surface": { "model": "power_radar:block/radar_panel", "y": 270 },
+    "facing=north,controller_type=based": { "model": "power_radar:block/radar_panel" },
+    "facing=east,controller_type=based": { "model": "power_radar:block/radar_panel", "y": 90 },
+    "facing=south,controller_type=based": { "model": "power_radar:block/radar_panel", "y": 180 },
+    "facing=west,controller_type=based": { "model": "power_radar:block/radar_panel", "y": 270 },
+    "facing=north,controller_type=air": { "model": "power_radar:block/radar_panel" },
+    "facing=east,controller_type=air": { "model": "power_radar:block/radar_panel", "y": 90 },
+    "facing=south,controller_type=air": { "model": "power_radar:block/radar_panel", "y": 180 },
+    "facing=west,controller_type=air": { "model": "power_radar:block/radar_panel", "y": 270 }
   }
 }

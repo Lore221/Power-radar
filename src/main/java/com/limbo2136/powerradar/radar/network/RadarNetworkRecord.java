@@ -21,6 +21,7 @@ public class RadarNetworkRecord {
     private UUID selectedTargetUuid;
     private int autotargetFilterMask;
     private boolean targetControllersAllowed = true;
+    private RadarNetworkKind networkKind = RadarNetworkKind.STANDARD;
 
     public RadarNetworkRecord(UUID id) {
         this(id, SCHEMA_VERSION);
@@ -77,5 +78,13 @@ public class RadarNetworkRecord {
 
     public void setTargetControllersAllowed(boolean targetControllersAllowed) {
         this.targetControllersAllowed = targetControllersAllowed;
+    }
+
+    public RadarNetworkKind networkKind() {
+        return this.networkKind;
+    }
+
+    public void setNetworkKind(RadarNetworkKind networkKind) {
+        this.networkKind = networkKind == null ? RadarNetworkKind.STANDARD : networkKind;
     }
 }

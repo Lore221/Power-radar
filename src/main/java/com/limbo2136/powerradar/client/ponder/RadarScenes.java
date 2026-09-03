@@ -5,6 +5,7 @@ import com.george_vi.electroenergetics.ponder.WireConnectionInstructions;
 import com.limbo2136.powerradar.block.RadarDisplayBlock;
 import com.limbo2136.powerradar.block.RadarDisplayFrameShape;
 import com.limbo2136.powerradar.block.entity.LogicDockBlockEntity;
+import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import com.limbo2136.powerradar.radar.RadarStructureType;
 import com.limbo2136.powerradar.radar.RadarTargetCategory;
 import com.limbo2136.powerradar.registry.ModItems;
@@ -290,40 +291,42 @@ public class RadarScenes {
                 new InWorldNode(0, util.grid().at(2, 1, 3)));
         scene.idle(255);
 
-        scene.addKeyframe();
-        scene.idle(10);
-        scene.overlay()
-                .showControls(
-                        util.vector().topOf(2, 1, 1),
-                        Pointing.DOWN,
-                        100)
-                .rightClick()
-                .withItem(ModItems.TARGETING_CARD.get().asItem().getDefaultInstance());
-        scene.idle(10);
-        scene.world().modifyBlockEntityNBT(
-                util.select().position(2, 1, 1),
-                LogicDockBlockEntity.class,
-                nbt -> {
-                    CompoundTag card = new CompoundTag();
-                    card.putString("id", "power_radar:targeting_card");
-                    card.putInt("count", 1);
-                    nbt.put("Card0", card);
-                    nbt.putByte("CardPresenceMask", (byte) 1);
-                });
-        scene.overlay()
-                .showText(100)
-                .pointAt(util.vector().topOf(2, 1, 1))
-                .placeNearTarget()
-                .text("The Targeting Card selects which target categories connected cannons can automatically engage.");
-        scene.idle(100);
-        scene.world().modifyBlockEntityNBT(
-                util.select().position(2, 1, 1),
-                LogicDockBlockEntity.class,
-                nbt -> {
-                    nbt.remove("Card0");
-                    nbt.putByte("CardPresenceMask", (byte) 0);
-                });
-        scene.idle(10);
+        if (CreateBigCannonsIntegration.isLoaded()) {
+            scene.addKeyframe();
+            scene.idle(10);
+            scene.overlay()
+                    .showControls(
+                            util.vector().topOf(2, 1, 1),
+                            Pointing.DOWN,
+                            100)
+                    .rightClick()
+                    .withItem(ModItems.TARGETING_CARD.get().asItem().getDefaultInstance());
+            scene.idle(10);
+            scene.world().modifyBlockEntityNBT(
+                    util.select().position(2, 1, 1),
+                    LogicDockBlockEntity.class,
+                    nbt -> {
+                        CompoundTag card = new CompoundTag();
+                        card.putString("id", "power_radar:targeting_card");
+                        card.putInt("count", 1);
+                        nbt.put("Card0", card);
+                        nbt.putByte("CardPresenceMask", (byte) 1);
+                    });
+            scene.overlay()
+                    .showText(100)
+                    .pointAt(util.vector().topOf(2, 1, 1))
+                    .placeNearTarget()
+                    .text("The Targeting Card selects which target categories connected cannons can automatically engage.");
+            scene.idle(100);
+            scene.world().modifyBlockEntityNBT(
+                    util.select().position(2, 1, 1),
+                    LogicDockBlockEntity.class,
+                    nbt -> {
+                        nbt.remove("Card0");
+                        nbt.putByte("CardPresenceMask", (byte) 0);
+                    });
+            scene.idle(10);
+        }
 
         scene.addKeyframe();
         scene.idle(10);
@@ -360,31 +363,33 @@ public class RadarScenes {
                 });
         scene.idle(10);
 
-        scene.addKeyframe();
-        scene.idle(10);
-        scene.overlay()
-                .showControls(
-                        util.vector().topOf(2, 1, 1),
-                        Pointing.DOWN,
-                        100)
-                .rightClick()
-                .withItem(ModItems.ALLOWLIST_CARD.get().asItem().getDefaultInstance());
-        scene.idle(10);
-        scene.world().modifyBlockEntityNBT(
-                util.select().position(2, 1, 1),
-                LogicDockBlockEntity.class,
-                nbt -> {
-                    CompoundTag card = new CompoundTag();
-                    card.putString("id", "power_radar:allowlist_card");
-                    card.putInt("count", 1);
-                    nbt.put("Card2", card);
-                    nbt.putByte("CardPresenceMask", (byte) 4);
-                });
-        scene.overlay()
-                .showText(100)
-                .pointAt(util.vector().topOf(2, 1, 1))
-                .placeNearTarget()
-                .text("The Allowlist Card lets you add players and Sable structures to an allowlist or blacklist.");
-        scene.idle(110);
+        if (CreateBigCannonsIntegration.isLoaded()) {
+            scene.addKeyframe();
+            scene.idle(10);
+            scene.overlay()
+                    .showControls(
+                            util.vector().topOf(2, 1, 1),
+                            Pointing.DOWN,
+                            100)
+                    .rightClick()
+                    .withItem(ModItems.ALLOWLIST_CARD.get().asItem().getDefaultInstance());
+            scene.idle(10);
+            scene.world().modifyBlockEntityNBT(
+                    util.select().position(2, 1, 1),
+                    LogicDockBlockEntity.class,
+                    nbt -> {
+                        CompoundTag card = new CompoundTag();
+                        card.putString("id", "power_radar:allowlist_card");
+                        card.putInt("count", 1);
+                        nbt.put("Card2", card);
+                        nbt.putByte("CardPresenceMask", (byte) 4);
+                    });
+            scene.overlay()
+                    .showText(100)
+                    .pointAt(util.vector().topOf(2, 1, 1))
+                    .placeNearTarget()
+                    .text("The Allowlist Card lets you add players and Sable structures to an allowlist or blacklist.");
+            scene.idle(110);
+        }
     }
 }

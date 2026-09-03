@@ -1,0 +1,74 @@
+{
+	"parent": "power_radar:item/klystron/klystron_for_editing",
+	"render_type": "minecraft:cutout",
+	"elements": [
+		{
+			"name": "resonator",
+			"from": [4, 4, 8],
+			"to": [12, 12, 9],
+			"rotation": {"angle": 0, "axis": "y", "origin": [3, 2, 8]},
+			"faces": {
+				"north": {"uv": [0, 3, 4, 7], "texture": "#0"},
+				"east": {"uv": [4, 3, 4.5, 7], "texture": "#0"},
+				"south": {"uv": [0, 3, 4, 7], "texture": "#0"},
+				"west": {"uv": [4, 3, 4.5, 7], "texture": "#0"},
+				"up": {"uv": [4, 3, 4.5, 7], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [4, 3, 4.5, 7], "rotation": 90, "texture": "#0"}
+			}
+		},
+		{
+			"name": "resonator",
+			"from": [4, 4, 10],
+			"to": [12, 12, 11],
+			"rotation": {"angle": 0, "axis": "y", "origin": [3, 2, 10]},
+			"faces": {
+				"north": {"uv": [0, 3, 4, 7], "texture": "#0"},
+				"east": {"uv": [4, 3, 4.5, 7], "texture": "#0"},
+				"south": {"uv": [0, 3, 4, 7], "texture": "#0"},
+				"west": {"uv": [4, 3, 4.5, 7], "texture": "#0"},
+				"up": {"uv": [4, 3, 4.5, 7], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [4, 3, 4.5, 7], "rotation": 90, "texture": "#0"}
+			}
+		},
+		{
+			"name": "contact",
+			"from": [6.5, 6.5, 6],
+			"to": [9.5, 9.5, 8],
+			"rotation": {"angle": 0, "axis": "y", "origin": [6, 6, 6]},
+			"faces": {
+				"east": {"uv": [6, 3, 7, 4.5], "rotation": 180, "texture": "#0"},
+				"south": {"uv": [4.5, 3, 6, 4.5], "texture": "#0"},
+				"west": {"uv": [6, 3, 7, 4.5], "rotation": 180, "texture": "#0"},
+				"up": {"uv": [6, 3, 7, 4.5], "rotation": 180, "texture": "#0"},
+				"down": {"uv": [6, 3, 7, 4.5], "rotation": 180, "texture": "#0"}
+			}
+		},
+		{
+			"name": "contact",
+			"from": [7.6, 7.5, 12],
+			"to": [8.6, 8.5, 16],
+			"rotation": {"angle": 0, "axis": "y", "origin": [7, 7, 14]},
+			"faces": {
+				"east": {"uv": [0.5, 10.5, 1, 8.5], "rotation": 90, "texture": "#0"},
+				"south": {"uv": [0.5, 8, 1, 8.5], "texture": "#0"},
+				"west": {"uv": [0.5, 8.5, 1, 10.5], "rotation": 90, "texture": "#0"},
+				"up": {"uv": [0.5, 10.5, 1, 8.5], "texture": "#0"},
+				"down": {"uv": [0.5, 8.5, 1, 10.5], "texture": "#0"}
+			}
+		},
+		{
+			"name": "contact",
+			"from": [6.5, 6.5, 11],
+			"to": [9.5, 9.5, 12],
+			"rotation": {"angle": 0, "axis": "y", "origin": [7, 6, 11]},
+			"faces": {
+				"north": {"uv": [4.5, 4.5, 6, 6], "texture": "#0"},
+				"east": {"uv": [6, 4.5, 6.5, 6], "texture": "#0"},
+				"south": {"uv": [4.5, 4.5, 6, 6], "texture": "#0"},
+				"west": {"uv": [6, 4.5, 6.5, 6], "texture": "#0"},
+				"up": {"uv": [6, 4.5, 6.5, 6], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [6, 4.5, 6.5, 6], "texture": "#0"}
+			}
+		}
+	]
+}

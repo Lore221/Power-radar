@@ -46,17 +46,23 @@ public record RadarScanProfile(
         return controller(mode, range, RadarStructureType.OVERVIEW);
     }
 
+    public static RadarScanProfile aircraftController(int range) {
+        return controller(RadarScanMode.AIRCRAFT, range, RadarStructureType.AIRCRAFT);
+    }
+
     private static RadarScanProfile controller(RadarScanMode mode, int range, RadarStructureType structureType) {
         boolean overview = structureType == RadarStructureType.OVERVIEW;
         int minOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMinYOffset();
             case GROUND -> -PowerRadarCeeConstants.groundDownBlocks();
             case SURFACE_SCANNER -> PowerRadarCeeConstants.surfaceMinYOffset();
+            case AIRCRAFT -> PowerRadarRadarParameters.aircraftMinYOffset();
         };
         int maxOffset = switch (mode) {
             case SKY -> PowerRadarCeeConstants.airMaxYOffset();
             case GROUND -> PowerRadarCeeConstants.groundUpBlocks();
             case SURFACE_SCANNER -> PowerRadarCeeConstants.surfaceMaxYOffset();
+            case AIRCRAFT -> PowerRadarRadarParameters.aircraftMaxYOffset();
         };
         return new RadarScanProfile(
                 overview ? RadarProfileType.OVERVIEW_CONTROLLER : RadarProfileType.SECTOR_CONTROLLER,
@@ -143,6 +149,12 @@ public record RadarScanProfile(
     }
 
     public RadarScanProfile withFullHorizontalCoverage() {
+        // Aircraft Radar keeps its three-dimensional cone on Sable. The broad phase
+        // is already a conservative 400x400x400 cube; disabling the FOV here would
+        // accidentally turn the exact server-side check into a full sphere.
+        if (this.scanMode == RadarScanMode.AIRCRAFT) {
+            return this;
+        }
         return new RadarScanProfile(
                 this.radarType,
                 this.structureType,

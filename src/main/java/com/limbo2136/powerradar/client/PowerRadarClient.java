@@ -3,6 +3,7 @@ package com.limbo2136.powerradar.client;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.bridge.AttitudeIndicatorPanelRenderBridge;
 import com.limbo2136.powerradar.bridge.ClientPayloadBridge;
+import com.limbo2136.powerradar.bridge.RadarContraptionClientBridge;
 import com.limbo2136.powerradar.bridge.LogicDockPanelRenderBridge;
 import com.limbo2136.powerradar.bridge.ShellAlarmIconBridge;
 import com.limbo2136.powerradar.bridge.TooltipInputBridge;
@@ -12,6 +13,7 @@ import com.limbo2136.powerradar.client.panel.PowerRadarPanelAttachmentRenderer;
 import com.limbo2136.powerradar.client.radarlink.RadarLinkClientRuntime;
 import com.limbo2136.powerradar.client.compass.RadarCompassItemProperties;
 import com.limbo2136.powerradar.client.compass.RadarCompassClientHooks;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import com.limbo2136.powerradar.registry.ModEntities;
@@ -36,9 +38,17 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.createmod.ponder.foundation.PonderIndex;
 import com.limbo2136.powerradar.client.ponder.PowerRadarPonderPlugin;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 
 @Mod(value = PowerRadar.MOD_ID, dist = Dist.CLIENT)
 public final class PowerRadarClient {
+    private static final ResourceLocation AIRCRAFT_RADAR_MODEL = PowerRadar.id("aircraft_radar");
+    private static final ResourceLocation AIRCRAFT_RADAR_PART_MODEL = PowerRadar.id("aircraft_radar_part");
+    private static final ResourceLocation AIRCRAFT_RADAR_BREAKING_MODEL =
+            PowerRadar.id("block/aircraft_radar_breaking");
+
     public PowerRadarClient(IEventBus modEventBus) {
         ClientPayloadBridge.configure(
                 RadarMonitorClientHooks::handleSnapshot,
@@ -50,6 +60,7 @@ public final class PowerRadarClient {
                 TargetingCardClientHooks::open,
                 AllowlistCardClientHooks::open,
                 RadarCompassClientHooks::handleTarget);
+        RadarContraptionClientBridge.configure(RadarContraptionClientHooks::handleAngle);
         ShellAlarmIconBridge.configure(ShellAlarmIcons::dimensions);
         TrajectoryIconBridge.configure(TrajectoryIcons::icon);
         TooltipInputBridge.configure(
@@ -58,6 +69,7 @@ public final class PowerRadarClient {
                         && GogglesItem.isWearingGoggles(Minecraft.getInstance().player));
         modEventBus.addListener(PowerRadarClient::registerRenderers);
         modEventBus.addListener(PowerRadarClient::registerAdditionalModels);
+        modEventBus.addListener(PowerRadarClient::modifyBakingResults);
         modEventBus.addListener(PowerRadarClient::registerPonder);
         modEventBus.addListener(PowerRadarClient::registerConfigScreen);
     }
@@ -86,23 +98,49 @@ public final class PowerRadarClient {
         MechanicalSirenClientAudioRuntime.init();
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_DISPLAY.get(), RadarMonitorRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.MECHANICAL_SIREN.get(), MechanicalSirenRenderer::new);
-        event.registerBlockEntityRenderer(ModBlockEntities.RADAR_LINK.get(), RadarLinkRenderer::new);
+        if (ModBlockEntities.RADAR_LINK.isBound()) {
+            event.registerBlockEntityRenderer(ModBlockEntities.RADAR_LINK.get(), RadarLinkRenderer::new);
+        }
         event.registerBlockEntityRenderer(ModBlockEntities.LOGIC_DOCK.get(), LogicDockRenderer::new);
-        event.registerBlockEntityRenderer(ModBlockEntities.ONBOARD_COMPUTER.get(), OnboardComputerRenderer::new);
+        if (SableRadarIntegration.isAeronauticsLoaded()) {
+            event.registerBlockEntityRenderer(ModBlockEntities.ONBOARD_COMPUTER.get(), OnboardComputerRenderer::new);
+        }
         event.registerEntityRenderer(ModEntities.RADAR_STRUCTURE.get(), RadarStructureEntityRenderer::new);
     }
 
     public static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
-        OnboardComputerRenderer.registerAdditionalModels(event);
+        if (SableRadarIntegration.isAeronauticsLoaded()) {
+            event.register(ModelResourceLocation.standalone(AIRCRAFT_RADAR_BREAKING_MODEL));
+            OnboardComputerRenderer.registerAdditionalModels(event);
+        }
         RadarLinkRenderer.registerAdditionalModels(event);
         LogicDockRenderer.registerAdditionalModels(event);
         PowerRadarPanelAttachmentRenderer.registerAdditionalModels(event);
         RadarMonitorRenderer.registerAdditionalModels(event);
     }
 
+    public static void modifyBakingResults(ModelEvent.ModifyBakingResult event) {
+        if (!SableRadarIntegration.isAeronauticsLoaded()) {
+            return;
+        }
+        BakedModel breakingModel = event.getModels().get(
+                ModelResourceLocation.standalone(AIRCRAFT_RADAR_BREAKING_MODEL));
+        if (breakingModel == null) {
+            return;
+        }
+
+        for (var entry : event.getModels().entrySet()) {
+            ResourceLocation modelId = entry.getKey().id();
+            if (modelId.equals(AIRCRAFT_RADAR_MODEL) || modelId.equals(AIRCRAFT_RADAR_PART_MODEL)) {
+                entry.setValue(new AircraftRadarBakedModel(entry.getValue(), breakingModel));
+            }
+        }
+    }
+
     public static void registerPonder(FMLClientSetupEvent event) {
         CreateRegistrate.connectedTextures(RadarPanelCTBehaviour::new).accept(ModBlocks.RADAR_PANEL.get());
         CreateRegistrate.connectedTextures(RadarDisplayCTBehaviour::new).accept(ModBlocks.RADAR_DISPLAY.get());
+        CreateRegistrate.connectedTextures(OverviewModuleCTBehaviour::new).accept(ModBlocks.OVERVIEW_MODULE.get());
         PonderIndex.addPlugin(new PowerRadarPonderPlugin());
         event.enqueueWork(() -> {
             RadarCompassItemProperties.register();

@@ -2,13 +2,19 @@
   "replace": false,
   "values": [
     "power_radar:radar_controller",
-    "power_radar:surface_radar_controller",
+    {
+      "id": "power_radar:surface_radar_controller",
+      "required": false
+    },
     "power_radar:air_radar_controller",
     {
       "id": "power_radar:shell_alarm",
       "required": false
     },
     "power_radar:mechanical_siren",
-    "power_radar:onboard_computer"
+    {
+      "id": "power_radar:onboard_computer",
+      "required": false
+    }
   ]
 }

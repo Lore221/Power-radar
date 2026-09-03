@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,model_visible=false": { "model": "power_radar:block/aircraft_radar" },
+    "facing=east,model_visible=false": { "model": "power_radar:block/aircraft_radar", "y": 90 },
+    "facing=south,model_visible=false": { "model": "power_radar:block/aircraft_radar", "y": 180 },
+    "facing=west,model_visible=false": { "model": "power_radar:block/aircraft_radar", "y": 270 },
+    "facing=north,model_visible=true": { "model": "power_radar:block/aircraft_radar" },
+    "facing=east,model_visible=true": { "model": "power_radar:block/aircraft_radar", "y": 90 },
+    "facing=south,model_visible=true": { "model": "power_radar:block/aircraft_radar", "y": 180 },
+    "facing=west,model_visible=true": { "model": "power_radar:block/aircraft_radar", "y": 270 }
+  }
+}

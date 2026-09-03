@@ -3,14 +3,34 @@
   "values": [
     "power_radar:radar_controller",
     "power_radar:air_radar_controller",
-    "power_radar:surface_radar_controller",
+    {
+      "id": "power_radar:surface_radar_controller",
+      "required": false
+    },
+    {
+      "id": "power_radar:aircraft_radar",
+      "required": false
+    },
+    {
+      "id": "power_radar:aircraft_radar_part",
+      "required": false
+    },
     "power_radar:radar_panel",
     "power_radar:overview_module",
     "power_radar:logic_dock",
-    "power_radar:ew_system",
-    "power_radar:onboard_computer",
+    {
+      "id": "power_radar:ew_system",
+      "required": false
+    },
+    {
+      "id": "power_radar:onboard_computer",
+      "required": false
+    },
     "power_radar:radar_display",
-    "power_radar:radar_link",
+    {
+      "id": "power_radar:radar_link",
+      "required": false
+    },
     {
       "id": "power_radar:target_controller",
       "required": false

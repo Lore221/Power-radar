@@ -2,7 +2,7 @@ package com.limbo2136.powerradar.block.entity;
 
 import com.limbo2136.powerradar.advancement.PowerRadarAdvancementTriggers;
 import com.limbo2136.powerradar.RadarConstants;
-import com.limbo2136.powerradar.block.RadarControllerBlock;
+import com.limbo2136.powerradar.block.AircraftRadarBlock;
 import com.limbo2136.powerradar.block.RadarLinkBlock;
 import com.limbo2136.powerradar.bridge.RadarNetworkNodeClientCacheBridge;
 import com.limbo2136.powerradar.radar.network.RadarLinkEndpointRole;
@@ -131,8 +131,15 @@ public class RadarLinkBlockEntity extends BlockEntity {
         GlobalPos newEndpointPos = GlobalPos.of(serverLevel.dimension(), frontPos);
         RadarNetworkManager manager = RadarNetworkManager.get(serverLevel.getServer());
 
-        if (frontState.getBlock() instanceof RadarControllerBlock
-                && serverLevel.getBlockEntity(frontPos) instanceof RadarControllerBlockEntity) {
+        RadarControllerBlockEntity radarController = null;
+        if (serverLevel.getBlockEntity(frontPos) instanceof RadarControllerBlockEntity directController) {
+            radarController = directController;
+        } else if (AircraftRadarBlock.findController(serverLevel, frontPos)
+                instanceof RadarControllerBlockEntity aircraftController) {
+            radarController = aircraftController;
+        }
+        if (radarController != null) {
+            newEndpointPos = GlobalPos.of(serverLevel.dimension(), radarController.getBlockPos());
             if (this.endpointRole == RadarLinkEndpointRole.RADAR_MONITOR) {
                 manager.detachMonitorFromLink(this.networkId, linkGlobalPos);
             }

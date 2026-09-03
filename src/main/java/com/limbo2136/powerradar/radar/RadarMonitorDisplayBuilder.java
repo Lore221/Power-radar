@@ -4,7 +4,6 @@ import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.compat.aeronautics.RadarWorldPose;
-import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarElectricalParameters;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeState;
 import com.limbo2136.powerradar.radar.network.RadarNetworkConnectionStatus;

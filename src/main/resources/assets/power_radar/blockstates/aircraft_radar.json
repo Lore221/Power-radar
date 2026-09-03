@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "power_radar:block/aircraft_radar" },
+    "facing=east": { "model": "power_radar:block/aircraft_radar", "y": 90 },
+    "facing=south": { "model": "power_radar:block/aircraft_radar", "y": 180 },
+    "facing=west": { "model": "power_radar:block/aircraft_radar", "y": 270 }
+  }
+}

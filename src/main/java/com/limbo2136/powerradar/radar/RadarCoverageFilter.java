@@ -47,6 +47,7 @@ public final class RadarCoverageFilter {
         private final RadarScanContext context;
         private final double rangeSquared;
         private final double forwardX;
+        private final double forwardY;
         private final double forwardZ;
         private final double cosineHalfAngleSquared;
 
@@ -55,13 +56,20 @@ public final class RadarCoverageFilter {
             this.context = context;
             this.rangeSquared = (double) profile.range() * profile.range();
             if (profile.useFovCheck()) {
-                double radians = Math.toRadians(context.radarYawDegrees());
-                this.forwardX = Math.sin(radians);
-                this.forwardZ = -Math.cos(radians);
+                Vec3 forward = profile.scanMode() == RadarScanMode.AIRCRAFT
+                        ? context.radarForward()
+                        : horizontalForward(context.radarYawDegrees());
+                Vec3 normalizedForward = forward.lengthSqr() < 1.0E-12D
+                        ? new Vec3(0.0D, 0.0D, -1.0D)
+                        : forward.normalize();
+                this.forwardX = normalizedForward.x;
+                this.forwardY = normalizedForward.y;
+                this.forwardZ = normalizedForward.z;
                 double cosineHalfAngle = Math.cos(Math.toRadians(profile.sectorAngle() * 0.5D));
                 this.cosineHalfAngleSquared = cosineHalfAngle * cosineHalfAngle;
             } else {
                 this.forwardX = 0.0D;
+                this.forwardY = 0.0D;
                 this.forwardZ = 0.0D;
                 this.cosineHalfAngleSquared = 0.0D;
             }
@@ -102,7 +110,10 @@ public final class RadarCoverageFilter {
             double deltaY = position.y - this.context.radarOriginY();
             double deltaZ = position.z - this.context.radarOriginZ();
             double horizontalDistanceSquared = deltaX * deltaX + deltaZ * deltaZ;
-            boolean insideHorizontalCoverage = this.profile.structureType() == RadarStructureType.OVERVIEW
+            double distanceSquared = horizontalDistanceSquared + deltaY * deltaY;
+            boolean insideHorizontalCoverage = this.profile.scanMode() == RadarScanMode.AIRCRAFT
+                    ? distanceSquared <= this.rangeSquared
+                    : this.profile.structureType() == RadarStructureType.OVERVIEW
                     ? isInsideOverviewFootprint(deltaX, deltaZ, this.profile.range())
                     : horizontalDistanceSquared <= this.rangeSquared;
             if (!insideHorizontalCoverage
@@ -111,10 +122,14 @@ public final class RadarCoverageFilter {
                 return false;
             }
             if (this.profile.useFovCheck()) {
-                double forwardDistance = deltaX * this.forwardX + deltaZ * this.forwardZ;
+                double forwardDistance = deltaX * this.forwardX
+                        + (this.profile.scanMode() == RadarScanMode.AIRCRAFT ? deltaY * this.forwardY : 0.0D)
+                        + deltaZ * this.forwardZ;
                 if (forwardDistance < 0.0D
                         || forwardDistance * forwardDistance + horizontalDistanceSquared * 1.0E-12D
-                                < horizontalDistanceSquared * this.cosineHalfAngleSquared) {
+                                < (this.profile.scanMode() == RadarScanMode.AIRCRAFT
+                                        ? (deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
+                                        : horizontalDistanceSquared) * this.cosineHalfAngleSquared) {
                     return false;
                 }
             }
@@ -125,13 +140,19 @@ public final class RadarCoverageFilter {
                     return false;
                 }
             }
-            if (this.profile.scanMode() == RadarScanMode.SURFACE_SCANNER) {
+            if (this.profile.scanMode() == RadarScanMode.SURFACE_SCANNER
+                    || this.profile.scanMode() == RadarScanMode.AIRCRAFT) {
                 int surfaceY = surfaceHeight(blockX, blockZ, surfaceHeights);
                 if (position.y < surfaceY - 10.0D) {
                     return false;
                 }
             }
             return true;
+        }
+
+        private static Vec3 horizontalForward(float yawDegrees) {
+            double radians = Math.toRadians(yawDegrees);
+            return new Vec3(Math.sin(radians), 0.0D, -Math.cos(radians));
         }
 
         private int surfaceHeight(int blockX, int blockZ, RadarSurfaceHeightCache surfaceHeights) {

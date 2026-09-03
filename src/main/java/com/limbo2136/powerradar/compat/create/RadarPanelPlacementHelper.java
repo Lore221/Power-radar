@@ -45,8 +45,13 @@ public class RadarPanelPlacementHelper implements IPlacementHelper {
         }
 
         BlockPos targetPos = pos.relative(directions.getFirst());
-        return PlacementOffset.success(targetPos, newState -> newState.hasProperty(RadarPanelBlock.FACING)
-                ? newState.setValue(RadarPanelBlock.FACING, clickedFacing)
-                : newState);
+        return PlacementOffset.success(targetPos, newState -> {
+            if (!newState.hasProperty(RadarPanelBlock.FACING)) {
+                return newState;
+            }
+            return newState
+                    .setValue(RadarPanelBlock.FACING, clickedFacing)
+                    .setValue(RadarPanelBlock.CONTROLLER_TYPE, RadarPanelBlock.ControllerType.SURFACE);
+        });
     }
 }

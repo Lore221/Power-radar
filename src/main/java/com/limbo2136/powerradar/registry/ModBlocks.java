@@ -12,9 +12,12 @@ import com.limbo2136.powerradar.block.TargetControllerBlock;
 import com.limbo2136.powerradar.block.InterceptionControllerBlock;
 import com.limbo2136.powerradar.block.AirRadarControllerBlock;
 import com.limbo2136.powerradar.block.SurfaceRadarControllerBlock;
+import com.limbo2136.powerradar.block.AircraftRadarBlock;
+import com.limbo2136.powerradar.block.AircraftRadarPartBlock;
 import com.limbo2136.powerradar.block.LogicDockBlock;
 import com.limbo2136.powerradar.block.OnboardComputerBlock;
 import com.limbo2136.powerradar.block.EwSystemBlock;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
@@ -33,18 +36,30 @@ public final class ModBlocks {
     public static final DeferredBlock<AirRadarControllerBlock> AIR_RADAR_CONTROLLER = BLOCKS.registerBlock(
             "air_radar_controller", AirRadarControllerBlock::new, standardProperties());
 
-    public static final DeferredBlock<SurfaceRadarControllerBlock> SURFACE_RADAR_CONTROLLER = BLOCKS.registerBlock(
-            "surface_radar_controller", SurfaceRadarControllerBlock::new, standardProperties());
+    public static final DeferredBlock<SurfaceRadarControllerBlock> SURFACE_RADAR_CONTROLLER =
+            registerAeronauticsBlock(() -> BLOCKS.registerBlock(
+                    "surface_radar_controller", SurfaceRadarControllerBlock::new, standardProperties()));
+
+    public static final DeferredBlock<AircraftRadarBlock> AIRCRAFT_RADAR = registerAeronauticsBlock(() ->
+            BLOCKS.registerBlock("aircraft_radar", AircraftRadarBlock::new, standardProperties().noOcclusion()));
+
+    /**
+     * Companion blocks used to give Aircraft Radar its real three-block footprint.
+     * One carries the shared visual model; neither has its own item or electrical device.
+     */
+    public static final DeferredBlock<AircraftRadarPartBlock> AIRCRAFT_RADAR_PART = registerAeronauticsBlock(() ->
+            BLOCKS.registerBlock(
+                    "aircraft_radar_part", AircraftRadarPartBlock::new, standardProperties().noOcclusion()));
 
     public static final DeferredBlock<LogicDockBlock> LOGIC_DOCK = BLOCKS.registerBlock(
             "logic_dock", LogicDockBlock::new, standardProperties());
 
-    public static final DeferredBlock<OnboardComputerBlock> ONBOARD_COMPUTER = BLOCKS.registerBlock(
-            "onboard_computer", OnboardComputerBlock::new,
-            standardProperties().noOcclusion());
+    public static final DeferredBlock<OnboardComputerBlock> ONBOARD_COMPUTER = registerAeronauticsBlock(() ->
+            BLOCKS.registerBlock(
+                    "onboard_computer", OnboardComputerBlock::new, standardProperties().noOcclusion()));
 
-    public static final DeferredBlock<EwSystemBlock> EW_SYSTEM = BLOCKS.registerBlock(
-            "ew_system", EwSystemBlock::new, standardProperties().noOcclusion());
+    public static final DeferredBlock<EwSystemBlock> EW_SYSTEM = registerAeronauticsBlock(() ->
+            BLOCKS.registerBlock("ew_system", EwSystemBlock::new, standardProperties().noOcclusion()));
 
     public static final DeferredBlock<RadarPanelBlock> RADAR_PANEL = BLOCKS.registerBlock(
             "radar_panel", RadarPanelBlock::new, lightProperties());
@@ -55,8 +70,9 @@ public final class ModBlocks {
     public static final DeferredBlock<RadarDisplayBlock> RADAR_DISPLAY = BLOCKS.registerBlock(
             "radar_display", RadarDisplayBlock::new, lightProperties());
 
-    public static final DeferredBlock<RadarLinkBlock> RADAR_LINK = BLOCKS.registerBlock(
-            "radar_link", RadarLinkBlock::new, mediumProperties().noOcclusion());
+    /** Dormant holder for Radar Link; intentionally not registered until its rework is restored. */
+    public static final DeferredBlock<RadarLinkBlock> RADAR_LINK =
+            DeferredBlock.createBlock(PowerRadar.id("radar_link"));
 
     public static final DeferredBlock<TargetControllerBlock> TARGET_CONTROLLER = registerCbcBlock(() ->
             BLOCKS.registerBlock(
@@ -81,15 +97,22 @@ public final class ModBlocks {
     }
 
     private static BlockBehaviour.Properties standardProperties() {
-        return BlockBehaviour.Properties.of().strength(3.0F, 6.0F);
+        return BlockBehaviour.Properties.of()
+                .strength(1.5F, 6.0F)
+                .requiresCorrectToolForDrops();
     }
 
     private static BlockBehaviour.Properties mediumProperties() {
-        return BlockBehaviour.Properties.of().strength(2.5F, 4.0F);
+        return BlockBehaviour.Properties.of()
+                .strength(1.5F, 6.0F)
+                .requiresCorrectToolForDrops();
     }
 
     private static BlockBehaviour.Properties lightProperties() {
-        return BlockBehaviour.Properties.of().strength(1.5F, 3.0F).noOcclusion();
+        return BlockBehaviour.Properties.of()
+                .strength(1.5F, 6.0F)
+                .requiresCorrectToolForDrops()
+                .noOcclusion();
     }
 
     @Nullable
@@ -97,5 +120,12 @@ public final class ModBlocks {
             Supplier<DeferredBlock<T>> registration
     ) {
         return CreateBigCannonsIntegration.isLoaded() ? registration.get() : null;
+    }
+
+    @Nullable
+    private static <T extends Block> DeferredBlock<T> registerAeronauticsBlock(
+            Supplier<DeferredBlock<T>> registration
+    ) {
+        return SableRadarIntegration.isAeronauticsLoaded() ? registration.get() : null;
     }
 }

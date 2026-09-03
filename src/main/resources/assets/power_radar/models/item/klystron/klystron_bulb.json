@@ -1,0 +1,20 @@
+{
+	"parent": "power_radar:item/klystron/klystron_for_editing",
+	"render_type": "minecraft:translucent",
+	"elements": [
+		{
+			"name": "bulb",
+			"from": [5, 5, 6],
+			"to": [11, 11, 14],
+			"rotation": {"angle": 0, "axis": "y", "origin": [8, 8, 8]},
+			"faces": {
+				"north": {"uv": [0, 0, 3, 3], "texture": "#0"},
+				"east": {"uv": [9, 0, 5, 3], "texture": "#0"},
+				"south": {"uv": [9, 0, 12, 3], "texture": "#0"},
+				"west": {"uv": [5, 0, 9, 3], "texture": "#0"},
+				"up": {"uv": [5, 0, 9, 3], "rotation": 90, "texture": "#0"},
+				"down": {"uv": [9, 0, 5, 3], "rotation": 90, "texture": "#0"}
+			}
+		}
+	]
+}

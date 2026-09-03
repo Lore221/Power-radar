@@ -1,9 +1,12 @@
 package com.limbo2136.powerradar.radar;
 
 import com.limbo2136.powerradar.block.RadarPanelBlock;
+import com.limbo2136.powerradar.block.RadarControllerBlock;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.electroenergetics.PowerRadarCeeConstants;
 import com.limbo2136.powerradar.registry.ModBlocks;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -18,37 +21,59 @@ public final class RadarAssemblyValidator {
     }
 
     public static RadarStructure validate(ServerLevel level, BlockPos controllerPos) {
+        return discover(level, controllerPos).structure();
+    }
+
+    /**
+     * Finds the complete connected assembly once and returns both its
+     * metadata and the exact block positions that can be captured.  Keeping
+     * the positions beside the structure prevents assembly from repeating the
+     * same plane traversal for texture profiles and the Create contraption.
+     */
+    public static Discovery discover(ServerLevel level, BlockPos controllerPos) {
+        BlockState controllerState = level.getBlockState(controllerPos);
+        if (SableRadarIntegration.isAeronauticsLoaded()
+                && controllerState.is(ModBlocks.AIRCRAFT_RADAR.get())) {
+            Direction facing = controllerState.getValue(RadarControllerBlock.FACING);
+            return new Discovery(RadarStructure.aircraft(controllerPos, facing), List.of());
+        }
+
         BlockPos processorPos = controllerPos.above();
         BlockState processorState = level.getBlockState(processorPos);
 
         if (processorState.is(ModBlocks.OVERVIEW_MODULE.get())) {
-            int overviewModuleCount = countOverviewModules(level, processorPos);
-            return new RadarStructure(
-                    true,
+            List<BlockPos> positions = findOverviewModules(level, processorPos);
+            RadarStructure structure = new RadarStructure(
+                    !positions.isEmpty(),
                     controllerPos,
                     controllerPos,
                     processorPos,
                     Direction.NORTH,
                     0,
-                    overviewModuleCount,
+                    positions.size(),
                     RadarStructureType.OVERVIEW,
                     RadarOrientationState.fixed(
                             RadarStructureType.OVERVIEW,
                             RadarGeometry.yawDegrees(Direction.NORTH),
                             level.getGameTime()));
+            return new Discovery(structure, positions);
         }
 
         if (!isBasicRadarPanel(processorState)) {
-            return RadarStructure.invalid(controllerPos);
+            return new Discovery(RadarStructure.invalid(controllerPos), List.of());
         }
 
         Direction facing = processorState.getValue(RadarPanelBlock.FACING);
-        int panelCount = countConnectedBasicPanels(level, processorPos, facing);
-        return new RadarStructure(
-                panelCount > 0, controllerPos, controllerPos, processorPos, facing, panelCount, 0);
+        List<BlockPos> positions = findConnectedBasicPanels(level, processorPos, facing);
+        RadarStructure structure = new RadarStructure(
+                !positions.isEmpty(), controllerPos, controllerPos, processorPos, facing, positions.size(), 0);
+        return new Discovery(structure, positions);
     }
 
     public static int calculateRange(RadarScanMode mode, int phasedArrayPanelCount) {
+        if (mode == RadarScanMode.AIRCRAFT) {
+            return PowerRadarRadarParameters.aircraftRangeBlocks();
+        }
         int groundRange = PowerRadarCeeConstants.radarBaseRangeBlocks(phasedArrayPanelCount);
         return mode == RadarScanMode.SKY
                 ? (int) Math.floor(groundRange * PowerRadarCeeConstants.airRangeMultiplier())
@@ -62,50 +87,49 @@ public final class RadarAssemblyValidator {
                 : groundRange;
     }
 
-    private static int countConnectedBasicPanels(ServerLevel level, BlockPos firstPanelPos, Direction facing) {
+    private static List<BlockPos> findConnectedBasicPanels(
+            ServerLevel level,
+            BlockPos firstPanelPos,
+            Direction facing
+    ) {
         Direction horizontalStep = facing.getClockWise();
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         Set<BlockPos> visited = new HashSet<>();
         queue.add(firstPanelPos);
         visited.add(firstPanelPos);
 
-        int maxPanels = PowerRadarCeeConstants.maxRadarPanels();
-        while (!queue.isEmpty() && visited.size() < maxPanels) {
+        // Обходим только связанную компоненту в плоскости первой панели.
+        // Произвольного лимита количества панелей и полного перебора AABB нет.
+        while (!queue.isEmpty()) {
             BlockPos current = queue.removeFirst();
             for (BlockPos next : List.of(
                     current.above(),
                     current.below(),
                     current.relative(horizontalStep),
                     current.relative(horizontalStep.getOpposite()))) {
-                if (visited.size() >= maxPanels) {
-                    break;
-                }
                 if (!visited.contains(next)
-                        && isInDirectPanelPlane(firstPanelPos, next, facing)
+                        && level.hasChunkAt(next)
+                        && RadarPanelBlock.isInPanelPlane(firstPanelPos, next, facing)
                         && isCompatibleBasicPanel(level, next, facing)) {
                     visited.add(next);
                     queue.add(next);
                 }
             }
         }
-        return visited.size();
+        return new ArrayList<>(visited);
     }
 
-    private static int countOverviewModules(ServerLevel level, BlockPos firstModulePos) {
-        int count = 0;
+    private static List<BlockPos> findOverviewModules(ServerLevel level, BlockPos firstModulePos) {
+        ArrayList<BlockPos> positions = new ArrayList<>();
         int maxModules = RadarModuleConstants.maxOverviewModules();
-        while (count < maxModules
-                && level.getBlockState(firstModulePos.above(count)).is(ModBlocks.OVERVIEW_MODULE.get())) {
-            count++;
+        while (positions.size() < maxModules) {
+            BlockPos position = firstModulePos.above(positions.size());
+            if (!level.getBlockState(position).is(ModBlocks.OVERVIEW_MODULE.get())) {
+                break;
+            }
+            positions.add(position);
         }
-        return count;
-    }
-
-    private static boolean isInDirectPanelPlane(BlockPos firstPanelPos, BlockPos panelPos, Direction facing) {
-        int depth = (panelPos.getX() - firstPanelPos.getX()) * facing.getStepX()
-                + (panelPos.getY() - firstPanelPos.getY()) * facing.getStepY()
-                + (panelPos.getZ() - firstPanelPos.getZ()) * facing.getStepZ();
-        return depth == 0;
+        return List.copyOf(positions);
     }
 
     private static boolean isCompatibleBasicPanel(ServerLevel level, BlockPos pos, Direction facing) {
@@ -115,5 +139,11 @@ public final class RadarAssemblyValidator {
 
     private static boolean isBasicRadarPanel(BlockState state) {
         return state.is(ModBlocks.RADAR_PANEL.get()) && state.hasProperty(RadarPanelBlock.FACING);
+    }
+
+    public record Discovery(RadarStructure structure, List<BlockPos> capturedPositions) {
+        public Discovery {
+            capturedPositions = List.copyOf(capturedPositions);
+        }
     }
 }

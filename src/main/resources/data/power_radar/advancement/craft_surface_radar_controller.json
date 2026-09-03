@@ -1,4 +1,8 @@
 {
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "aeronautics" },
+    { "type": "neoforge:mod_loaded", "modid": "sable" }
+  ],
   "parent": "power_radar:root",
   "display": {
     "icon": { "id": "power_radar:surface_radar_controller" },

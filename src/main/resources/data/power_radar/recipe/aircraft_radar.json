@@ -1,0 +1,34 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "aeronautics" },
+    { "type": "neoforge:mod_loaded", "modid": "sable" }
+  ],
+  "type": "create:mechanical_crafting",
+  "accept_mirrored": true,
+  "key": {
+    "A": {
+        "tag": "c:plates/obsidian"
+    },
+    "B": {
+        "item": "power_radar:radar_controller"
+    },
+    "C": {
+        "item": "power_radar:radar_panel"
+    },
+    "D": {
+        "item": "simulated:gyroscopic_mechanism"
+    }
+  },
+
+  "pattern": [
+    "CCAA",
+    "CCDB",
+    "CCAA"
+  ],
+  
+  "result": {
+    "id": "power_radar:aircraft_radar",
+    "count": 1
+  },
+  "show_notification": false
+}

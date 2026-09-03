@@ -44,6 +44,9 @@ public final class PowerRadarCeeConstants {
     ) {
         int panels = clampedRadarPanelCount(phasedArrayPanelCount);
         int overviewModules = Math.max(0, Math.min(overviewModuleCount, RadarModuleConstants.maxOverviewModules()));
+        if (structureType == RadarStructureType.AIRCRAFT) {
+            return PowerRadarElectricalParameters.Ratings.aircraftRadarPowerWatts();
+        }
         if (structureType == RadarStructureType.OVERVIEW) {
             return overviewModules <= 0
                     ? 0.0
@@ -84,6 +87,9 @@ public final class PowerRadarCeeConstants {
     }
 
     public static int radarModeRangeBlocks(com.limbo2136.powerradar.radar.RadarScanMode mode, int phasedArrayPanelCount) {
+        if (mode == com.limbo2136.powerradar.radar.RadarScanMode.AIRCRAFT) {
+            return com.limbo2136.powerradar.radar.PowerRadarRadarParameters.aircraftRangeBlocks();
+        }
         int range = radarBaseRangeBlocks(phasedArrayPanelCount);
         if (mode == com.limbo2136.powerradar.radar.RadarScanMode.SKY) {
             return (int) Math.floor(range * airRangeMultiplier());

@@ -6,7 +6,7 @@
 		"0": "power_radar:block/connects",
 		"1": "power_radar:block/surface_radar_controller",
 		"2": "power_radar:block/radar_link",
-		"particle": "power_radar:block/connects"
+		"particle": "power_radar:block/surface_radar_controller"
 	},
 	"elements": [
 		{

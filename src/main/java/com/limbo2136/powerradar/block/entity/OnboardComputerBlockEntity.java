@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
-import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;

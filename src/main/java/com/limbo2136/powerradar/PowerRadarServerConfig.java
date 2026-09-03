@@ -98,6 +98,13 @@ public final class PowerRadarServerConfig {
     private PowerRadarServerConfig() {
     }
 
+    /**
+     * Гарантирует запуск статической инициализации серверного конфига.
+     * Вызывается каталогами настроек при раннем доступе к их полям.
+     */
+    public static void ensureInitialized() {
+    }
+
     public static int radarScanUpdateIntervalTicks() {
         return value(RADAR_SCAN_UPDATE_INTERVAL_TICKS);
     }

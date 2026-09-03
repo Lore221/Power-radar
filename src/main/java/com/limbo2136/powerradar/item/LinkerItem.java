@@ -5,6 +5,7 @@ import com.limbo2136.powerradar.block.entity.OnboardComputerBlockEntity;
 import com.limbo2136.powerradar.block.entity.RadarLinkBlockEntity;
 import com.limbo2136.powerradar.block.entity.ShellAlarmBlockEntity;
 import com.limbo2136.powerradar.block.entity.TargetControllerBlockEntity;
+import com.limbo2136.powerradar.block.entity.RadarControllerBlockEntity;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.radar.network.RadarNetworkMember;
 import com.limbo2136.powerradar.registry.ModDataComponents;
@@ -41,7 +42,8 @@ public final class LinkerItem extends Item {
             return InteractionResult.PASS;
         }
 
-        BlockEntity blockEntity = context.getLevel().getBlockEntity(context.getClickedPos());
+        BlockEntity blockEntity = RadarNetworkTuning.resolveBlockEntityAt(
+                context.getLevel(), context.getClickedPos());
         if (!isSupported(blockEntity)) {
             return InteractionResult.PASS;
         }
@@ -220,6 +222,11 @@ public final class LinkerItem extends Item {
 
     private static void applyRadarNetwork(BlockEntity blockEntity, UUID networkId, Player player) {
         if (blockEntity instanceof RadarNetworkMember member) {
+            if (member instanceof RadarControllerBlockEntity controller
+                    && !controller.canJoinRadarNetwork(networkId)) {
+                message(player, "message.power_radar.network.radar_type_mismatch");
+                return;
+            }
             member.setRadarNetworkId(networkId);
             return;
         }

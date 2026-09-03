@@ -17,6 +17,7 @@ public final class PowerRadarTooltipSettings {
                 RADAR_CONTROLLER,
                 AIR_RADAR_CONTROLLER,
                 SURFACE_RADAR_CONTROLLER,
+                AIRCRAFT_RADAR,
                 PHASED_ARRAY_PANEL,
                 OVERVIEW_MODULE,
                 RADAR_DISPLAY,
@@ -92,6 +93,9 @@ public final class PowerRadarTooltipSettings {
                         Map.entry(Target.SURFACE_RADAR_CONTROLLER, List.of(
                                         field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.NOMINAL_VOLTAGE))),
+                        Map.entry(Target.AIRCRAFT_RADAR, List.of(
+                                        field(InventoryField.NOMINAL_POWER),
+                                        field(InventoryField.NOMINAL_VOLTAGE))),
                         Map.entry(Target.PHASED_ARRAY_PANEL, List.of(
                                         field(InventoryField.NOMINAL_POWER),
                                         field(InventoryField.RANGE_BONUS))),
@@ -131,7 +135,11 @@ public final class PowerRadarTooltipSettings {
                         Map.entry(Target.RADAR_CONTROLLER, List.of(text("radar_controller_text"))),
                         Map.entry(Target.AIR_RADAR_CONTROLLER, List.of(text("air_radar_controller_text"))),
                         Map.entry(Target.SURFACE_RADAR_CONTROLLER, List.of(text("surface_radar_controller_text"))),
-                        Map.entry(Target.EW_SYSTEM, List.of(text("ew_system_text"))));
+                        Map.entry(Target.AIRCRAFT_RADAR, List.of(text("aircraft_radar_text"))),
+                        Map.entry(Target.ONBOARD_COMPUTER, List.of(text("onboard_computer_rework_text"))),
+                        Map.entry(Target.EW_SYSTEM, List.of(
+                                        text("ew_system_text"),
+                                        text("ew_system_rework_text"))));
 
         // Подсказка в мире при взгляде на установленный блок через инженерные очки
         // Create.

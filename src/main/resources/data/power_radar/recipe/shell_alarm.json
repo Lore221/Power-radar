@@ -3,24 +3,17 @@
     {
       "type": "neoforge:mod_loaded",
       "modid": "createbigcannons"
-    },
-    {
-      "type": "neoforge:not",
-      "value": {
-        "type": "neoforge:tag_empty",
-        "tag": "c:ingots/steel"
-      }
     }
   ],
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "ACA",
-    "FEF",
-    "BDB"
+    "EDE",
+    "BFB"
   ],
   "key": {
     "A": {
-      "tag": "c:ingots/steel"
+      "tag": "c:plates/obsidian"
     },
     "B": {
       "item": "electroenergetics:connector"
@@ -29,7 +22,7 @@
       "item": "power_radar:radar_display"
     },
     "D": {
-      "item": "electroenergetics:transformer"
+      "item": "create:precision_mechanism"
     },
     "E": {
       "item": "create:electron_tube"

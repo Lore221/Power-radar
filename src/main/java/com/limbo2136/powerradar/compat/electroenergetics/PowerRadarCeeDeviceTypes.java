@@ -4,12 +4,15 @@ import com.george_vi.electroenergetics.CEERegistries;
 import com.george_vi.electroenergetics.devices.device.SimulatedDeviceType;
 import com.limbo2136.powerradar.PowerRadar;
 import com.limbo2136.powerradar.registry.ModBlocks;
+import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.createbigcannons.CreateBigCannonsIntegration;
 import java.util.List;
 import java.util.function.Supplier;
+import javax.annotation.Nullable;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraft.world.level.block.Block;
 
 public final class PowerRadarCeeDeviceTypes {
     private static final DeferredRegister<SimulatedDeviceType<?>> DEVICE_TYPES =
@@ -19,8 +22,7 @@ public final class PowerRadarCeeDeviceTypes {
             register("radar_controller", () -> new SimulatedDeviceType<RadarControllerCeeDevice>(
                     PowerRadar.id("radar_controller"),
                     (type, level, pos, devicesSavedData) -> new RadarControllerCeeDevice(level, pos, devicesSavedData, type),
-                    List.of(ModBlocks.RADAR_CONTROLLER.get(), ModBlocks.AIR_RADAR_CONTROLLER.get(),
-                            ModBlocks.SURFACE_RADAR_CONTROLLER.get())));
+                    List.of(radarControllerBlocks())));
 
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<RadarDisplayCeeDevice>> RADAR_DISPLAY =
             register("radar_display", () -> new SimulatedDeviceType<RadarDisplayCeeDevice>(
@@ -28,11 +30,15 @@ public final class PowerRadarCeeDeviceTypes {
                     (type, level, pos, devicesSavedData) -> new RadarDisplayCeeDevice(level, pos, devicesSavedData, type),
                     List.of(ModBlocks.RADAR_DISPLAY.get())));
 
+    @Nullable
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<OnboardComputerCeeDevice>> ONBOARD_COMPUTER =
-            register("onboard_computer", () -> new SimulatedDeviceType<OnboardComputerCeeDevice>(
-                    PowerRadar.id("onboard_computer"),
-                    (type, level, pos, devicesSavedData) -> new OnboardComputerCeeDevice(level, pos, devicesSavedData, type),
-                    List.of(ModBlocks.ONBOARD_COMPUTER.get())));
+            SableRadarIntegration.isAeronauticsLoaded()
+                    ? register("onboard_computer", () -> new SimulatedDeviceType<OnboardComputerCeeDevice>(
+                            PowerRadar.id("onboard_computer"),
+                            (type, level, pos, devicesSavedData) ->
+                                    new OnboardComputerCeeDevice(level, pos, devicesSavedData, type),
+                            List.of(ModBlocks.ONBOARD_COMPUTER.get())))
+                    : null;
 
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<LogicDockCeeDevice>> LOGIC_DOCK =
             register("logic_dock", () -> new SimulatedDeviceType<LogicDockCeeDevice>(
@@ -40,11 +46,14 @@ public final class PowerRadarCeeDeviceTypes {
                     (type, level, pos, data) -> new LogicDockCeeDevice(level, pos, data, type),
                     List.of(ModBlocks.LOGIC_DOCK.get())));
 
+    @Nullable
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<EwSystemCeeDevice>> EW_SYSTEM =
-            register("ew_system", () -> new SimulatedDeviceType<EwSystemCeeDevice>(
-                    PowerRadar.id("ew_system"),
-                    (type, level, pos, data) -> new EwSystemCeeDevice(level, pos, data, type),
-                    List.of(ModBlocks.EW_SYSTEM.get())));
+            SableRadarIntegration.isAeronauticsLoaded()
+                    ? register("ew_system", () -> new SimulatedDeviceType<EwSystemCeeDevice>(
+                            PowerRadar.id("ew_system"),
+                            (type, level, pos, data) -> new EwSystemCeeDevice(level, pos, data, type),
+                            List.of(ModBlocks.EW_SYSTEM.get())))
+                    : null;
 
     public static final DeferredHolder<SimulatedDeviceType<?>, SimulatedDeviceType<TargetControllerCeeDevice>> TARGET_CONTROLLER =
             CreateBigCannonsIntegration.isLoaded() ? register("target_controller", () -> new SimulatedDeviceType<TargetControllerCeeDevice>(
@@ -77,5 +86,20 @@ public final class PowerRadarCeeDeviceTypes {
             Supplier<SimulatedDeviceType<T>> supplier
     ) {
         return DEVICE_TYPES.register(name, supplier);
+    }
+
+    private static Block[] radarControllerBlocks() {
+        if (!SableRadarIntegration.isAeronauticsLoaded()) {
+            return new Block[] {
+                    ModBlocks.RADAR_CONTROLLER.get(),
+                    ModBlocks.AIR_RADAR_CONTROLLER.get()
+            };
+        }
+        return new Block[] {
+                ModBlocks.RADAR_CONTROLLER.get(),
+                ModBlocks.AIR_RADAR_CONTROLLER.get(),
+                ModBlocks.SURFACE_RADAR_CONTROLLER.get(),
+                ModBlocks.AIRCRAFT_RADAR.get()
+        };
     }
 }

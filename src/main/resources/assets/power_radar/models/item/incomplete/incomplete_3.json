@@ -5,8 +5,11 @@
   "flip_v": true,
   "model": "power_radar:models/item/incomplete/incomplete_3.obj",
   "textures": {
-    "0": "power_radar:block/overview_module",
-    "particle": "power_radar:block/overview_module"
+    "0": "power_radar:block/overview_module/overview_module",
+    "front": "power_radar:block/overview_module/overview_module_front",
+    "side": "power_radar:block/overview_module/overview_module_side",
+    "back": "power_radar:block/overview_module/overview_module_back",
+    "particle": "power_radar:block/overview_module/overview_module"
   },
   "display": {
     "gui": {

@@ -155,6 +155,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
         return switch (target) {
             case RADAR_CONTROLLER, AIR_RADAR_CONTROLLER, SURFACE_RADAR_CONTROLLER ->
                 PowerRadarElectricalParameters.Ratings.radarControllerPowerWatts();
+            case AIRCRAFT_RADAR -> PowerRadarElectricalParameters.Ratings.aircraftRadarPowerWatts();
             case PHASED_ARRAY_PANEL -> PowerRadarElectricalParameters.Ratings.phasedArrayPanelPowerWatts();
             case OVERVIEW_MODULE -> PowerRadarElectricalParameters.Ratings.overviewModulePowerWatts();
             case RADAR_DISPLAY -> PowerRadarElectricalParameters.Ratings.radarDisplayBasePowerWatts();
@@ -184,7 +185,7 @@ public class PowerRadarElectricalBlockItem extends BlockItem {
 
     private static double nominalVoltageVolts(Target target) {
         return switch (target) {
-            case RADAR_CONTROLLER, AIR_RADAR_CONTROLLER, SURFACE_RADAR_CONTROLLER, PHASED_ARRAY_PANEL,
+            case RADAR_CONTROLLER, AIR_RADAR_CONTROLLER, SURFACE_RADAR_CONTROLLER, AIRCRAFT_RADAR, PHASED_ARRAY_PANEL,
                     OVERVIEW_MODULE ->
                 PowerRadarElectricalParameters.Voltages.radar().nominal();
             case SHELL_ALARM -> PowerRadarElectricalParameters.Voltages.shellAlarm().nominal();
