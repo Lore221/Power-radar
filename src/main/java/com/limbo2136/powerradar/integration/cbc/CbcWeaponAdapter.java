@@ -67,6 +67,11 @@ public final class CbcWeaponAdapter {
         return TargetControllerCbcCompat.sableProjectilesInheritPhysicsObjectVelocity();
     }
 
+    public static Optional<com.limbo2136.powerradar.api.weapon.WeaponPitchLimits> pitchLimits(
+            ServerLevel level, WeaponMount mount) {
+        return TargetControllerCbcCompat.pitchLimits(level, mount.mountPos());
+    }
+
     private static WeaponKind mapKind(TargetControllerCbcCompat.CannonKind kind) {
         return switch (kind) {
             case NONE -> WeaponKind.NONE;

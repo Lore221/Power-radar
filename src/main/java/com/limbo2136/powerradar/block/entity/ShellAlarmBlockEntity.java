@@ -184,6 +184,11 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         // считать повторно
         // на каждом серверном тике.
         if (radarScanGameTime == previousRadarScanGameTime) {
+            if (!maintainKnownThreats(level)) {
+                clearInactiveState(level, state);
+                return;
+            }
+            updateThreatAlarm(level, state);
             return;
         }
         this.lastProcessedRadarScanGameTime = radarScanGameTime;
@@ -207,7 +212,13 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             }
         });
         shellCount = tracks.size();
+        if (this.interceptionNetworkId != null) {
+            tracks.removeIf(track -> InterceptionCoordinator.isKnownThreat(
+                    level.getServer(), this.interceptionNetworkId, track.targetUuid()));
+        }
         MovingProtectedZone zone = this.protectedZone;
+        boolean knownThreats = this.interceptionNetworkId != null
+                && InterceptionCoordinator.hasKnownThreats(level.getServer(), this.interceptionNetworkId);
         // Дорогие геометрия и кинематика Sable обновляются поэтапно только для
         // снарядов,
         // прошедших дешёвую широкую фазу на текущем снимке радара.
@@ -216,7 +227,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                 zone,
                 tracks,
                 PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.refreshGeometryIfDue(
                     level, zone, sableProtectionMarginPercent());
             this.protectedZone = zone;
@@ -225,7 +236,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
             clearInactiveState(level, state);
             return;
         }
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.sampleVelocity(level, zone);
             this.protectedZone = zone;
         }
@@ -238,7 +249,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                 zone,
                 candidateTracks,
                 PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.completeMotionSample(zone);
             this.protectedZone = zone;
         }
@@ -261,8 +272,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         this.trackedShellCount = shellCount;
         UUID interceptionChannelId = this.interceptionNetworkId;
         if (powered && this.networkConnected && connectedNetworkId != null && interceptionChannelId != null) {
-            // Публикация — полный авторитетный снимок: отсутствие UUID немедленно отзывает
-            // прежнюю угрозу и связанные с ней назначения перехватчиков.
+            // Снимок добавляет новые угрозы. Уже обнаруженные UUID сопровождает координатор.
             Set<UUID> dangerousShells = new HashSet<>();
             List<ThreatSnapshot> threatSnapshots = new ArrayList<>();
             for (Map.Entry<UUID, ThreatEvaluation> entry : this.evaluations.entrySet()) {
@@ -278,7 +288,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                                 level.dimension(),
                                 evaluation.projectilePosition(),
                                 evaluation.projectileVelocity(),
-                                track.lastSeenGameTime(),
+                                level.getGameTime(),
                                 evaluation.ballistics().gravity(),
                                 evaluation.ballistics().drag(),
                                 evaluation.ballistics().quadraticDrag(),
@@ -291,6 +301,7 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                     }
                 }
             }
+            InterceptionCoordinator.maintainThreats(level, interceptionChannelId, zone);
             InterceptionCoordinator.publishThreats(
                     level,
                     interceptionChannelId,
@@ -312,20 +323,43 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
                         dangerousShells.size());
             }
         }
-        boolean nextActive = powered && this.networkConnected
-                && this.evaluations.values().stream().anyMatch(ThreatEvaluation::dangerous);
-        if (nextActive && !this.alarmActive) {
-            for (ServerPlayer player : projectileLevel.players()) {
-                if (zone.bounds().contains(player.position())) {
+        updateThreatAlarm(level, state);
+        setChanged();
+    }
+
+    private boolean maintainKnownThreats(ServerLevel level) {
+        if (this.interceptionNetworkId == null || this.protectedZone == null) return false;
+        if ((this.protectedZone.onSable() || level.getGameTime() % 5L == 0L)
+                && InterceptionCoordinator.hasKnownThreats(level.getServer(), this.interceptionNetworkId)) {
+            MovingProtectedZone zone = this.protectedZoneTracker.broadPhaseZone(
+                    level, this.worldPosition, configuredGroundBounds(), sableProtectionMarginPercent());
+            if (zone != null) zone = this.protectedZoneTracker.refreshGeometryIfDue(
+                    level, zone, sableProtectionMarginPercent());
+            if (zone != null) zone = this.protectedZoneTracker.sampleVelocity(level, zone);
+            if (zone != null) zone = this.protectedZoneTracker.completeMotionSample(zone);
+            this.protectedZone = zone;
+            if (zone == null) return false;
+        }
+        InterceptionCoordinator.maintainThreats(level, this.interceptionNetworkId, this.protectedZone);
+        return true;
+    }
+
+    private void updateThreatAlarm(ServerLevel level, BlockState state) {
+        boolean nextActive = this.interceptionNetworkId != null
+                && InterceptionCoordinator.activeThreatCount(
+                        level.getServer(), this.interceptionNetworkId, level.getGameTime()) > 0;
+        if (nextActive && !this.alarmActive && this.protectedZone != null) {
+            for (ServerPlayer player : authoritativeLevel(level).players()) {
+                if (this.protectedZone.bounds().contains(player.position())) {
                     PowerRadarAdvancementTriggers.INCOMING_PROJECTILE.get().trigger(player);
                 }
             }
         }
         if (nextActive != this.alarmActive) {
             this.alarmActive = nextActive;
-            updateRedstoneSignal(level, state, powered);
+            updateRedstoneSignal(level, state, true);
+            setChanged();
         }
-        setChanged();
     }
 
     private void logStatus(
@@ -363,6 +397,10 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
         boolean changed = !this.evaluations.isEmpty() || this.trackedShellCount != 0 || this.alarmActive;
         this.evaluations.clear();
         this.trackedShellCount = 0;
+        if (this.interceptionNetworkId != null) {
+            InterceptionCoordinator.clearPublishedThreats(
+                    level.getServer(), this.interceptionNetworkId, level.getGameTime());
+        }
         if (this.alarmActive) {
             this.alarmActive = false;
         }
@@ -503,9 +541,11 @@ public class ShellAlarmBlockEntity extends SmartBlockEntity
     }
 
     public int dangerousShellCount() {
-        return (int) this.evaluations.values().stream()
-                .filter(ThreatEvaluation::dangerous)
-                .count();
+        return this.level instanceof ServerLevel serverLevel && this.interceptionNetworkId != null
+                && this.electrical.electricalState() == PowerRadarCeeState.POWERED
+                ? InterceptionCoordinator.activeThreatCount(
+                        serverLevel.getServer(), this.interceptionNetworkId, serverLevel.getGameTime())
+                : 0;
     }
 
     @Nullable

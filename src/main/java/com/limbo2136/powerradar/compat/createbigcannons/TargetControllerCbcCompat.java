@@ -132,6 +132,21 @@ public final class TargetControllerCbcCompat {
         return applyAdjustableMountAngles(level, mountPos, yawDegrees, logicalPitchDegrees, null);
     }
 
+    public static Optional<com.limbo2136.powerradar.api.weapon.WeaponPitchLimits> pitchLimits(
+            ServerLevel level, BlockPos mountPos) {
+        Object mount = level.getBlockEntity(mountPos);
+        Object contraption = mount == null ? null : invokeObject(mount, "getContraption");
+        if (contraption == null) return Optional.empty();
+        Object elevation = invokeObjectRecursive(contraption, "maximumElevation");
+        Object depression = invokeObjectRecursive(contraption, "maximumDepression");
+        if (!(elevation instanceof Number upper) || !(depression instanceof Number lower)
+                || !Double.isFinite(upper.doubleValue()) || !Double.isFinite(lower.doubleValue())) {
+            return Optional.empty();
+        }
+        return Optional.of(new com.limbo2136.powerradar.api.weapon.WeaponPitchLimits(
+                -lower.doubleValue(), upper.doubleValue()));
+    }
+
     public static boolean applyAdjustableMountAngles(
             ServerLevel level,
             BlockPos mountPos,

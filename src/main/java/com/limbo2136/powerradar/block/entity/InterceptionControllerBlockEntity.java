@@ -18,6 +18,10 @@ import com.limbo2136.powerradar.interception.InterceptionBallistics;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.interception.InterceptionCoordinator.ThreatSnapshot;
 import com.limbo2136.powerradar.interception.InterceptionPlan;
+import com.limbo2136.powerradar.interception.SableInterceptSearch;
+import com.limbo2136.powerradar.api.weapon.WeaponPitchLimits;
+import java.util.function.BiPredicate;
+import java.util.function.DoubleFunction;
 import com.limbo2136.powerradar.integration.cbc.CbcWeaponAdapter;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
 import com.limbo2136.powerradar.targeting.LinearDragTrajectory;
@@ -61,7 +65,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private static final double MIN_LINEAR_DRAG = 1.0E-6;
     private static final double INTERCEPT_PITCH_HINT_RANGE_DEGREES = 10.0;
     private static final double MAX_TIMING_ERROR_TICKS = 3.0;
-    private static final double SABLE_PLAN_IMPROVEMENT_TICKS = 0.25;
     private static final double AIM_TOLERANCE_DEGREES = 2.0;
     private static final double AIM_REACTION_TICKS = 1.0;
     private static final double CBC_FIRE_SIGNAL_DELAY_TICKS = 1.0;
@@ -96,6 +99,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private UUID unsolvedThreatUuid;
     private int consecutiveUnsolvedTicks;
     private InterceptionPlan interceptionPlan;
+    @Nullable private SableInterceptSearch.Pose lastSableSearchPose;
     private UUID engagedThreatUuid;
 
     // Кэши CBC ограничивают дорогую инспекцию установки и периодически сверяются с живым mount.
@@ -123,6 +127,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private long lastAimRateGameTime = Long.MIN_VALUE;
     private double yawFeedForwardDegreesPerTick;
     private double pitchFeedForwardDegreesPerTick;
+    private long lastSableDebugLogGameTime = Long.MIN_VALUE;
 
     public InterceptionControllerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.INTERCEPTION_CONTROLLER.get(), pos, state);
@@ -245,16 +250,32 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         if (nextReady && this.interceptionNetworkId != null && this.assignedThreatUuid != null) {
             this.engagedThreatUuid = this.assignedThreatUuid;
             this.trackingThreatUuid = this.assignedThreatUuid;
+            InterceptionCoordinator.LaunchDebugSnapshot debugSnapshot = null;
+            if (PowerRadarDebugOptions.sableInterceptionDebugLogging()
+                    && RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)
+                    && solution.cannonState() != null) {
+                debugSnapshot = new InterceptionCoordinator.LaunchDebugSnapshot(
+                        solution.muzzle(),
+                        solution.aimPoint(),
+                        solution.desiredYaw(),
+                        solution.desiredPitch(),
+                        solution.currentYaw(),
+                        solution.currentPitch(),
+                        solution.interceptTicks(),
+                        solution.timingError(),
+                        solution.cannonState().ballistics().speedBlocksPerTick());
+            }
             InterceptionCoordinator.registerPendingLaunch(
                     level,
                     this.interceptionNetworkId,
                     this.worldPosition,
                     solution.muzzle,
-                    this.assignedThreatUuid);
+                    this.assignedThreatUuid,
+                    debugSnapshot);
         }
         setReadyToFire(level, state, nextReady);
         this.status = statusFor(solution, powered, nextReady);
-        logControllerState(solution, aim, powered, nextReady);
+        logControllerState(level, solution, aim, powered, nextReady);
         setChanged();
         syncClient(level, state);
     }
@@ -384,21 +405,50 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
         ServerLevel worldLevel = authoritativeLevel(level);
         Entity targetEntity = worldLevel.getEntity(this.assignedThreatUuid);
-        if (targetEntity == null
-                || !targetEntity.isAlive()) {
-            rejectAssignment(level);
-            this.lastSolveReason = "invalid-threat";
-            return Solution.invalid();
+        boolean liveTarget = targetEntity != null && targetEntity.isAlive();
+        if (!liveTarget || ShellAlarmCbcCompat.isInGround(targetEntity)) {
+            this.lastSolveReason = "threat-not-flying";
+            clearInterceptionPlan();
+            clearEngagement();
+            return Solution.hold(cannon, currentAngles);
         }
-        long trackAgeTicks = Math.max(0L, level.getGameTime() - threatSnapshot.lastSeenGameTime());
+        long trackAgeTicks = 0L;
         Vec3 trackedPosition = targetEntity.position();
         Vec3 trackedVelocity = targetEntity.getDeltaMovement();
-        ProtectedReferenceMotion threatReference = protectedReferenceMotion(threatSnapshot, gameTime);
+        double remainingTicks = InterceptionCoordinator.remainingInterceptionTicks(
+                level.getServer(), resolvedNetworkId, this.assignedThreatUuid, gameTime);
+        InterceptionWindow threatReference = new InterceptionWindow(
+                Math.min(MAX_INTERCEPTION_TICKS, remainingTicks - 1.0D));
+        if (threatReference.maximumTicks() < MIN_INTERCEPTION_TICKS) {
+            rejectAssignment(level);
+            this.lastSolveReason = "protected-boundary-too-close";
+            return Solution.hold(cannon, currentAngles);
+        }
         ShellAlarmCbcCompat.Ballistics threatBallistics = new ShellAlarmCbcCompat.Ballistics(
                 threatSnapshot.gravity(),
                 threatSnapshot.drag(),
                 threatSnapshot.quadraticDrag());
         boolean onSable = RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition);
+        SableInterceptSearch.Pose sablePose = onSable ? sampleSablePose(level) : null;
+        WeaponPitchLimits pitchLimits = onSable ? CbcWeaponAdapter.pitchLimits(level, cannon).orElse(null) : null;
+        BiPredicate<Vec3, Intercept> candidateAllowed = (muzzle, candidate) -> {
+            if (!candidate.reachable) return false;
+            Vec3 direction = TargetingMath.directionFromAngles(
+                    TargetingMath.yawTo(candidate.position.subtract(muzzle)), candidate.pitchDegrees);
+            double localPitch = sablePose == null ? candidate.pitchDegrees
+                    : Math.toDegrees(Math.asin(Math.clamp(direction.dot(sablePose.up().normalize()), -1.0D, 1.0D)));
+            return (pitchLimits == null || pitchLimits.contains(localPitch))
+                    && hasClearLine(worldLevel, worldMuzzle, candidate.position);
+        };
+        if (onSable && this.interceptionPlan != null) {
+            double planTicks = this.interceptionPlan.remainingTicks(gameTime);
+            if (planTicks >= 0.0D && planTicks <= threatReference.maximumTicks()
+                    && projectilePositionAt(trackedPosition, trackedVelocity, threatBallistics, planTicks)
+                            .distanceToSqr(this.interceptionPlan.aimPoint()) > 0.25D) {
+                clearInterceptionPlan();
+                this.trackingThreatUuid = null;
+            }
+        }
         boolean engaging = engagementActiveFor(this.assignedThreatUuid);
         if (engaging) {
             clearInterceptionPlan();
@@ -416,8 +466,11 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     worldCurrentPitch,
                     interceptorBallistics,
                     gameTime,
-                    onSable);
-            if (!onSable && planned != null) {
+                    onSable,
+                    threatReference.maximumTicks(),
+                    pitchLimits);
+            if (planned != null && (!onSable || !sablePose.differsFrom(this.lastSableSearchPose))) {
+                if (onSable) this.lastSolveReason = "planned-sable-stationary";
                 return planned.solution();
             }
             if (planned == null) {
@@ -426,18 +479,19 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             }
         }
 
-        // На земле полный поиск нужен только при назначении или потере плана. На Sable он
-        // каждый тик ищет более выгодную замену ещё достижимой мировой точке.
+        // На земле прежний режим. На Sable новый поиск нужен при изменении позы
+        // носителя или непригодности плана, а не из-за самого течения времени.
         // После открытия огня обе платформы переходят к точному сопровождению живой угрозы.
         boolean preAim = !engaging
                 && (onSable || !this.assignedThreatUuid.equals(this.trackingThreatUuid));
-        boolean maximizeCorrectionReserve = onSable && !engaging;
+        boolean earlySablePlan = onSable && !engaging;
+        if (earlySablePlan) this.lastSableSearchPose = sablePose;
         Vec3 interceptMuzzle = launchMuzzle;
         Intercept intercept = findIntercept(
                 interceptMuzzle, threatReference, trackedPosition, trackedVelocity,
                 threatBallistics, interceptorBallistics, worldCurrentYaw, worldCurrentPitch,
                 maxStepDegreesPerTick(), aimAccelerationDegreesPerTickSquared(),
-                preAim, maximizeCorrectionReserve);
+                preAim, earlySablePlan, candidateAllowed);
         if (onSable) {
             for (int iteration = 0;
                     iteration < SABLE_MUZZLE_PREDICTION_ITERATIONS && intercept.reachable;
@@ -447,11 +501,12 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                         interceptMuzzle, threatReference, trackedPosition, trackedVelocity,
                         threatBallistics, interceptorBallistics, worldCurrentYaw, worldCurrentPitch,
                         maxStepDegreesPerTick(), aimAccelerationDegreesPerTickSquared(),
-                        preAim, maximizeCorrectionReserve);
+                        preAim, earlySablePlan, candidateAllowed);
             }
         }
         if (!intercept.reachable
-                || !planningTimingAccepted(intercept, maximizeCorrectionReserve)) {
+                || !(earlySablePlan ? correctionReserveTicks(intercept) >= 0.0D
+                        : intercept.timingError <= MAX_TIMING_ERROR_TICKS)) {
             if (planned != null) {
                 this.lastSolveReason = "planned-sable-no-alternative";
                 return planned.solution();
@@ -462,7 +517,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     : "no-intercept-solution";
             return Solution.unreachable(cannon, currentAngles);
         }
-        boolean clearShot = hasClearLine(worldLevel, worldMuzzle, intercept.position);
+        boolean clearShot = onSable ? candidateAllowed.test(interceptMuzzle, intercept)
+                : hasClearLine(worldLevel, worldMuzzle, intercept.position);
         if (!clearShot) {
             if (planned != null) {
                 this.lastSolveReason = "planned-sable-alternative-obstructed";
@@ -479,11 +535,12 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
         if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
             PowerRadar.LOGGER.info(
-                    "[PowerRadar BugReport][Interception][Target] controller={} network={} target={} trackAge={} trackingSource=entity shellPos={} shellVelocity={} shellGravity={} shellDrag={} shellQuadraticDrag={} cannon={} interceptorSpeed={} interceptorGravity={} interceptorDrag={} muzzle={} logicalPitch={} physicalPitch={} pitchMultiplier={} interceptPos={} clearShot={} targetTicks={} aimTicks={} shotTicks={} timingError={}",
+                    "[PowerRadar BugReport][Interception][Target] controller={} network={} target={} trackAge={} trackingSource={} shellPos={} shellVelocity={} shellGravity={} shellDrag={} shellQuadraticDrag={} cannon={} interceptorSpeed={} interceptorGravity={} interceptorDrag={} muzzle={} logicalPitch={} physicalPitch={} pitchMultiplier={} interceptPos={} clearShot={} targetTicks={} aimTicks={} shotTicks={} timingError={}",
                     this.worldPosition,
                     resolvedNetworkId,
                     this.assignedThreatUuid,
                     trackAgeTicks,
+                    liveTarget ? "entity" : "snapshot",
                     shortVec(trackedPosition),
                     shortVec(trackedVelocity),
                     round(threatBallistics.gravity()),
@@ -533,11 +590,8 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             resetUnsolvedAssignment();
             return candidateSolution;
         }
-        double candidateCorrectionReserve = correctionReserveTicks(intercept);
-        if (planned != null && !InterceptionPlan.hasMeaningfullyLargerCorrectionReserve(
-                candidateCorrectionReserve,
-                planned.correctionReserveTicks(),
-                SABLE_PLAN_IMPROVEMENT_TICKS)) {
+        if (planned != null && !SableInterceptSearch.earlierReplacement(
+                intercept.targetTicks, this.interceptionPlan.remainingTicks(gameTime))) {
             this.lastSolveReason = "planned-sable-no-better-alternative";
             return planned.solution();
         }
@@ -565,14 +619,16 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             float worldCurrentPitch,
             WeaponBallistics interceptorBallistics,
             long gameTime,
-            boolean onSable
+            boolean onSable,
+            double maximumTicks,
+            @Nullable WeaponPitchLimits pitchLimits
     ) {
         InterceptionPlan plan = this.interceptionPlan;
         if (plan == null) {
             return null;
         }
         double remainingTicks = plan.remainingTicks(gameTime);
-        if (remainingTicks < MIN_INTERCEPTION_TICKS) {
+        if (remainingTicks < MIN_INTERCEPTION_TICKS || remainingTicks > maximumTicks) {
             this.lastSolveReason = "plan-expired";
             return null;
         }
@@ -617,6 +673,10 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 TargetingMath.directionFromAngles(worldDesiredYaw, aim.pitchDegrees));
         float desiredYaw = TargetingMath.yawTo(localAimDirection);
         float desiredPitch = pitchTo(localAimDirection);
+        if (onSable && pitchLimits != null && !pitchLimits.contains(desiredPitch)) {
+            this.lastSolveReason = "plan-pitch-limit";
+            return null;
+        }
         this.lastSolveReason = onSable ? "planned-sable" : "planned-ground";
         this.trackingThreatUuid = this.assignedThreatUuid;
         resetUnsolvedAssignment();
@@ -636,7 +696,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 Mth.wrapDegrees(desiredPitch - currentAngles.pitchDegrees()),
                 aim.flightTicks,
                 Math.abs(signedTimingError));
-        return new PlannedIntercept(solution, -signedTimingError);
+        return new PlannedIntercept(solution);
     }
 
     private Optional<WeaponMount> inspectWeaponMount(ServerLevel level, BlockPos mountPos) {
@@ -683,9 +743,50 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         this.lastControllerSnapshotGameTime = gameTime;
     }
 
+    private SableInterceptSearch.Pose sampleSablePose(ServerLevel level) {
+        return new SableInterceptSearch.Pose(
+                RadarWorldPoseResolver.worldPosition(level, this.worldPosition),
+                RadarWorldPoseResolver.worldDirection(level, this.worldPosition, new Vec3(0, 0, 1)),
+                RadarWorldPoseResolver.worldDirection(level, this.worldPosition, new Vec3(0, 1, 0)));
+    }
+
+    private static Vec3 projectilePositionAt(Vec3 position, Vec3 velocity,
+            ShellAlarmCbcCompat.Ballistics ballistics, double ticks) {
+        return shellTrajectory(position, velocity, ballistics, ticks).apply(ticks);
+    }
+
+    private static DoubleFunction<Vec3> shellTrajectory(Vec3 position, Vec3 velocity,
+            ShellAlarmCbcCompat.Ballistics ballistics, double maximumTicks) {
+        if (!ballistics.quadraticDrag() && LinearDragTrajectory.supported(ballistics.drag())) {
+            return ticks -> LinearDragTrajectory.positionAfterTicks(
+                    position, velocity, ballistics.gravity(), ballistics.drag(), ticks);
+        }
+        if (!ballistics.quadraticDrag() && ballistics.drag() <= MIN_LINEAR_DRAG) {
+            return ticks -> position.add(velocity.scale(ticks))
+                    .add(0.0D, -0.5D * ballistics.gravity() * ticks * ticks, 0.0D);
+        }
+        // Редкий нелинейный случай: один проход CBC, затем переиспользование позиций.
+        List<Vec3> positions = new ArrayList<>();
+        positions.add(position);
+        Vec3 currentPosition = position;
+        Vec3 currentVelocity = velocity;
+        for (int tick = 0; tick < Math.ceil(maximumTicks); tick++) {
+            Vec3 nextVelocity = InterceptionBallistics.applyBallistics(currentVelocity,
+                    ballistics.gravity(), ballistics.drag(), ballistics.quadraticDrag());
+            currentPosition = currentPosition.add(currentVelocity.add(nextVelocity).scale(0.5D));
+            currentVelocity = nextVelocity;
+            positions.add(currentPosition);
+        }
+        return ticks -> {
+            int lower = Math.clamp((int) Math.floor(ticks), 0, positions.size() - 1);
+            int upper = Math.min(lower + 1, positions.size() - 1);
+            return positions.get(lower).lerp(positions.get(upper), ticks - lower);
+        };
+    }
+
     private static Intercept findIntercept(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -695,8 +796,20 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             double maxStep,
             double acceleration,
             boolean preAim,
-            boolean maximizeCorrectionReserve
+            boolean earlySablePlan,
+            BiPredicate<Vec3, Intercept> candidateAllowed
     ) {
+        if (earlySablePlan) {
+            DoubleFunction<Vec3> trajectory = shellTrajectory(shellPosition, shellVelocity,
+                    shellBallistics, threatReference.maximumTicks());
+            Intercept early = SableInterceptSearch.find(MIN_INTERCEPTION_TICKS, threatReference.maximumTicks(),
+                    ticks -> evaluateIntercept(muzzle, trajectory.apply(ticks), ticks, interceptorBallistics,
+                            currentYaw, currentPitch, maxStep, acceleration),
+                    candidate -> candidate.reachable && correctionReserveTicks(candidate) >= 0.0D
+                            && candidateAllowed.test(muzzle, candidate),
+                    InterceptionControllerBlockEntity::correctionReserveTicks);
+            return early == null ? Intercept.UNREACHABLE : early;
+        }
         // Линейное сопротивление допускает быстрый аналитический прогноз позиции снаряда.
         Intercept fastIntercept = findLinearDragIntercept(
                 muzzle,
@@ -709,8 +822,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 currentPitch,
                 maxStep,
                 acceleration,
-                preAim,
-                maximizeCorrectionReserve);
+                preAim);
         if (fastIntercept.reachable) {
             return fastIntercept;
         }
@@ -720,7 +832,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         Vec3 velocity = shellVelocity;
         Intercept best = Intercept.UNREACHABLE;
         List<Intercept> window = preAim ? new ArrayList<>() : List.of();
-        for (int tick = 1; tick <= MAX_INTERCEPTION_TICKS; tick++) {
+        for (int tick = 1; tick <= threatReference.maximumTicks(); tick++) {
             position = position.add(velocity);
             velocity = InterceptionBallistics.applyBallistics(velocity, shellBallistics.gravity(),
                     shellBallistics.drag(), shellBallistics.quadraticDrag());
@@ -731,7 +843,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                     && (tick - MIN_INTERCEPTION_TICKS) % INTERCEPT_COARSE_STEP_TICKS != 0) {
                 continue;
             }
-            if (hasPassedReference(position, velocity, threatReference, tick)) {
+            if (threatReference.expired(tick)) {
                 break;
             }
             Intercept evaluated = evaluateIntercept(
@@ -741,7 +853,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 best = evaluated;
             }
             if (preAim && evaluated.reachable
-                    && planningTimingAccepted(evaluated, maximizeCorrectionReserve)) {
+                    && evaluated.timingError <= MAX_TIMING_ERROR_TICKS) {
                 window.add(evaluated);
             }
             if (!preAim && best.reachable && best.timingError <= 0.35) {
@@ -749,7 +861,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             }
         }
         if (preAim && !window.isEmpty()) {
-            best = selectPreAimIntercept(window, maximizeCorrectionReserve);
+            best = selectPreAimIntercept(window);
         }
         if (!best.reachable) {
             return best;
@@ -757,7 +869,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
         int refineStart = Math.max(MIN_INTERCEPTION_TICKS,
                 (int) Math.floor(best.targetTicks) - INTERCEPT_COARSE_STEP_TICKS);
-        int refineEnd = Math.min(MAX_INTERCEPTION_TICKS,
+        int refineEnd = Math.min((int) Math.floor(threatReference.maximumTicks()),
                 (int) Math.ceil(best.targetTicks) + INTERCEPT_COARSE_STEP_TICKS);
         position = shellPosition;
         velocity = shellVelocity;
@@ -768,15 +880,13 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             if (tick < refineStart) {
                 continue;
             }
-            if (hasPassedReference(position, velocity, threatReference, tick)) {
+            if (threatReference.expired(tick)) {
                 break;
             }
             Intercept evaluated = evaluateIntercept(
                     muzzle, position, tick, interceptorBallistics,
                     currentYaw, currentPitch, maxStep, acceleration);
-            if (maximizeCorrectionReserve
-                    ? betterCorrectionReserve(evaluated, best)
-                    : betterIntercept(evaluated, best)) {
+            if (betterIntercept(evaluated, best)) {
                 best = evaluated;
             }
         }
@@ -785,7 +895,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static Intercept findLinearDragIntercept(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -794,8 +904,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
             float currentPitch,
             double maxStep,
             double acceleration,
-            boolean preAim,
-            boolean maximizeCorrectionReserve
+            boolean preAim
     ) {
         if (shellBallistics.quadraticDrag()
                 || shellBallistics.drag() <= MIN_LINEAR_DRAG
@@ -811,9 +920,11 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         CheapTimingSample previous = null;
         double pitchHint = Double.NaN;
 
-        for (double tick = MIN_INTERCEPTION_TICKS;
-                tick <= MAX_INTERCEPTION_TICKS + 0.0001;
-                tick += INTERCEPT_FAST_STEP_TICKS) {
+        int sampleCount = (int) Math.ceil(
+                (threatReference.maximumTicks() - MIN_INTERCEPTION_TICKS) / INTERCEPT_FAST_STEP_TICKS);
+        for (int sampleIndex = 0; sampleIndex <= sampleCount; sampleIndex++) {
+            double tick = Math.min(threatReference.maximumTicks(),
+                    MIN_INTERCEPTION_TICKS + sampleIndex * INTERCEPT_FAST_STEP_TICKS);
             CheapTimingSample sample = approximateLinearDragInterceptAt(
                     muzzle,
                     threatReference,
@@ -837,21 +948,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 signChangeBrackets.add(new TimingBracket(previous.tick, sample.tick));
             }
             previous = sample;
-        }
-
-        if (preAim && maximizeCorrectionReserve) {
-            return findMaximumCorrectionReserveLinearIntercept(
-                    muzzle,
-                    threatReference,
-                    shellPosition,
-                    shellVelocity,
-                    shellBallistics,
-                    interceptorBallistics,
-                    currentYaw,
-                    currentPitch,
-                    maxStep,
-                    acceleration,
-                    samples);
         }
 
         for (TimingBracket bracket : signChangeBrackets) {
@@ -906,86 +1002,14 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         }
 
         if (preAim && !window.isEmpty()) {
-            return selectPreAimIntercept(window, maximizeCorrectionReserve);
+            return selectPreAimIntercept(window);
         }
         return best;
     }
 
-    private static Intercept selectPreAimIntercept(
-            List<Intercept> window,
-            boolean maximizeCorrectionReserve
-    ) {
-        if (maximizeCorrectionReserve) {
-            return window.stream()
-                    .max(java.util.Comparator.comparingDouble(
-                            InterceptionControllerBlockEntity::correctionReserveTicks))
-                    .orElse(Intercept.UNREACHABLE);
-        }
+    private static Intercept selectPreAimIntercept(List<Intercept> window) {
         window.sort(java.util.Comparator.comparingDouble(Intercept::targetTicks));
         return window.get((window.size() - 1) / 3);
-    }
-
-    private static Intercept findMaximumCorrectionReserveLinearIntercept(
-            Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
-            Vec3 shellPosition,
-            Vec3 shellVelocity,
-            ShellAlarmCbcCompat.Ballistics shellBallistics,
-            WeaponBallistics interceptorBallistics,
-            float currentYaw,
-            float currentPitch,
-            double maxStep,
-            double acceleration,
-            List<CheapTimingSample> samples
-    ) {
-        Intercept best = Intercept.UNREACHABLE;
-        double pitchHint = Double.NaN;
-        for (CheapTimingSample sample : samples) {
-            Intercept candidate = evaluateLinearDragInterceptAt(
-                    muzzle, threatReference, shellPosition, shellVelocity, shellBallistics,
-                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration,
-                    sample.tick, pitchHint);
-            if (candidate.reachable) {
-                pitchHint = candidate.pitchDegrees;
-            }
-            if (betterCorrectionReserve(candidate, best)) {
-                best = candidate;
-            }
-        }
-        if (!best.reachable) {
-            return best;
-        }
-
-        double lowTick = Math.max(MIN_INTERCEPTION_TICKS,
-                best.targetTicks - INTERCEPT_FAST_STEP_TICKS);
-        double highTick = Math.min(MAX_INTERCEPTION_TICKS,
-                best.targetTicks + INTERCEPT_FAST_STEP_TICKS);
-        for (double tick = lowTick; tick <= highTick + 0.0001D; tick += 1.0D) {
-            Intercept candidate = evaluateLinearDragInterceptAt(
-                    muzzle, threatReference, shellPosition, shellVelocity, shellBallistics,
-                    interceptorBallistics, currentYaw, currentPitch, maxStep, acceleration,
-                    tick, pitchHint);
-            if (candidate.reachable) {
-                pitchHint = candidate.pitchDegrees;
-            }
-            if (betterCorrectionReserve(candidate, best)) {
-                best = candidate;
-            }
-        }
-        return best;
-    }
-
-    private static boolean planningTimingAccepted(Intercept intercept, boolean maximizeCorrectionReserve) {
-        return maximizeCorrectionReserve
-                ? interceptTimingErrorSigned(intercept) <= MAX_TIMING_ERROR_TICKS
-                : intercept.timingError <= MAX_TIMING_ERROR_TICKS;
-    }
-
-    private static boolean betterCorrectionReserve(Intercept candidate, Intercept current) {
-        return candidate.reachable
-                && planningTimingAccepted(candidate, true)
-                && (!current.reachable
-                || correctionReserveTicks(candidate) > correctionReserveTicks(current));
     }
 
     private static double correctionReserveTicks(Intercept intercept) {
@@ -999,7 +1023,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static Intercept refineBestLinearDragMinimum(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -1032,7 +1056,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 : Math.max(MIN_INTERCEPTION_TICKS, bestSample.tick - INTERCEPT_FAST_STEP_TICKS);
         double high = index + 1 < samples.size()
                 ? samples.get(index + 1).tick
-                : Math.min(MAX_INTERCEPTION_TICKS, bestSample.tick + INTERCEPT_FAST_STEP_TICKS);
+                : Math.min(threatReference.maximumTicks(), bestSample.tick + INTERCEPT_FAST_STEP_TICKS);
         return minimizeLinearDragIntercept(
                 muzzle,
                 threatReference,
@@ -1051,7 +1075,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static Intercept minimizeLinearDragIntercept(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -1095,7 +1119,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static Intercept refineLinearDragInterceptRoot(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -1175,7 +1199,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static CheapTimingSample approximateLinearDragInterceptAt(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -1194,7 +1218,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 targetTicks);
         Vec3 position = shellState.position();
         Vec3 velocity = shellState.velocity();
-        if (hasPassedReference(position, velocity, threatReference, targetTicks)) {
+        if (threatReference.expired(targetTicks)) {
             return new CheapTimingSample(targetTicks, Double.NaN, Double.MAX_VALUE, true);
         }
 
@@ -1224,7 +1248,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
 
     private static Intercept evaluateLinearDragInterceptAt(
             Vec3 muzzle,
-            ProtectedReferenceMotion threatReference,
+            InterceptionWindow threatReference,
             Vec3 shellPosition,
             Vec3 shellVelocity,
             ShellAlarmCbcCompat.Ballistics shellBallistics,
@@ -1244,7 +1268,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
                 targetTicks);
         Vec3 position = shellState.position();
         Vec3 velocity = shellState.velocity();
-        if (hasPassedReference(position, velocity, threatReference, targetTicks)) {
+        if (threatReference.expired(targetTicks)) {
             return Intercept.PASSED_REFERENCE;
         }
         return evaluateIntercept(
@@ -1256,19 +1280,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         return intercept.reachable
                 ? intercept.flightTicks + intercept.aimTicks - intercept.targetTicks
                 : Double.NaN;
-    }
-
-    private static boolean hasPassedReference(
-            Vec3 shellPosition,
-            Vec3 shellVelocity,
-            ProtectedReferenceMotion reference,
-            double ticks
-    ) {
-        Vec3 referencePoint = reference.positionAt(ticks);
-        Vec3 relativeVelocity = shellVelocity.subtract(reference.velocityAt(ticks));
-        double deltaX = shellPosition.x - referencePoint.x;
-        double deltaZ = shellPosition.z - referencePoint.z;
-        return deltaX * relativeVelocity.x + deltaZ * relativeVelocity.z >= 0.0;
     }
 
     private static Intercept evaluateIntercept(
@@ -1401,18 +1412,6 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     private static ServerLevel authoritativeLevel(ServerLevel level) {
         ServerLevel worldLevel = level.getServer().getLevel(level.dimension());
         return worldLevel == null ? level : worldLevel;
-    }
-
-    private static ProtectedReferenceMotion protectedReferenceMotion(
-            ThreatSnapshot snapshot,
-            long gameTime
-    ) {
-        double elapsedTicks = Math.max(0L, gameTime - snapshot.referenceGameTime());
-        Vec3 velocity = snapshot.referenceVelocity().add(snapshot.referenceAcceleration().scale(elapsedTicks));
-        return new ProtectedReferenceMotion(
-                snapshot.referencePositionAt(gameTime),
-                velocity,
-                snapshot.referenceAcceleration());
     }
 
     private static float pitchTo(Vec3 direction) {
@@ -1644,7 +1643,10 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         this.consecutiveUnsolvedTicks++;
         this.trackingThreatUuid = null;
         resetAimFeedForward();
-        if (this.consecutiveUnsolvedTicks < UNSOLVED_ASSIGNMENT_RETRY_TICKS) {
+        boolean alternatives = this.interceptionNetworkId != null
+                && InterceptionCoordinator.activeThreatCount(
+                        level.getServer(), this.interceptionNetworkId, level.getGameTime()) > 1;
+        if (!alternatives && this.consecutiveUnsolvedTicks < UNSOLVED_ASSIGNMENT_RETRY_TICKS) {
             return true;
         }
         rejectAssignment(level);
@@ -1665,6 +1667,7 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private void resetSableTrackingState() {
+        this.lastSableSearchPose = null;
         this.lastWorldMuzzle = null;
         this.lastWorldMuzzleGameTime = Long.MIN_VALUE;
         this.worldMuzzleVelocity = Vec3.ZERO;
@@ -1842,38 +1845,70 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
     }
 
     private void logControllerState(
+            ServerLevel level,
             Solution solution,
             AimStep aim,
             boolean powered,
             boolean ready
     ) {
-        if (!PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
-            return;
+        if (PowerRadarDebugOptions.interceptionSystemBugReportLogging()) {
+            PowerRadar.LOGGER.info(
+                    "[PowerRadar BugReport][Interception][Controller] pos={} reason={} networkStatus={} network={} target={} status={} voltage={} current={} power={} powered={} solution={} ammo={} desiredYaw={} currentYaw={} yawError={} desiredPitch={} currentPitch={} pitchError={} applied={} timingError={} interceptTicks={} ready={}",
+                    this.worldPosition,
+                    this.lastSolveReason,
+                    this.lastNetworkStatus,
+                    this.interceptionNetworkId,
+                    this.assignedThreatUuid,
+                    this.status,
+                    round(this.powerVoltageVolts),
+                    round(this.currentAmps),
+                    round(this.powerWatts),
+                    powered,
+                    solution.valid,
+                    solution.ammunitionAvailable,
+                    round(solution.desiredYaw),
+                    round(solution.currentYaw),
+                    round(solution.yawError),
+                    round(solution.desiredPitch),
+                    round(solution.currentPitch),
+                    round(solution.pitchError),
+                    aim.applied,
+                    round(solution.timingError),
+                    round(solution.interceptTicks),
+                    ready);
         }
-        PowerRadar.LOGGER.info(
-                "[PowerRadar BugReport][Interception][Controller] pos={} reason={} networkStatus={} network={} target={} status={} voltage={} current={} power={} powered={} solution={} ammo={} desiredYaw={} currentYaw={} yawError={} desiredPitch={} currentPitch={} pitchError={} applied={} timingError={} interceptTicks={} ready={}",
-                this.worldPosition,
-                this.lastSolveReason,
-                this.lastNetworkStatus,
-                this.interceptionNetworkId,
-                this.assignedThreatUuid,
-                this.status,
-                round(this.powerVoltageVolts),
-                round(this.currentAmps),
-                round(this.powerWatts),
-                powered,
-                solution.valid,
-                solution.ammunitionAvailable,
-                round(solution.desiredYaw),
-                round(solution.currentYaw),
-                round(solution.yawError),
-                round(solution.desiredPitch),
-                round(solution.currentPitch),
-                round(solution.pitchError),
-                aim.applied,
-                round(solution.timingError),
-                round(solution.interceptTicks),
-                ready);
+        if (PowerRadarDebugOptions.sableInterceptionDebugLogging()
+                && (this.lastSableDebugLogGameTime == Long.MIN_VALUE
+                        || level.getGameTime() - this.lastSableDebugLogGameTime >= 5L)
+                && RadarWorldPoseResolver.isOnSableStructure(level, this.worldPosition)) {
+            this.lastSableDebugLogGameTime = level.getGameTime();
+            PowerRadar.LOGGER.info(
+                    "[PowerRadar Debug][SableInterception] event=controller-tick gameTime={} controller={} network={} target={} reason={} status={} powered={} solution={} clearShot={} ammo={} desiredYaw={} desiredPitch={} currentYaw={} currentPitch={} yawError={} pitchError={} remainingYaw={} remainingPitch={} applied={} interceptTicks={} timingError={} ready={} muzzle={} aimPoint={}",
+                    level.getGameTime(),
+                    this.worldPosition,
+                    this.interceptionNetworkId,
+                    this.assignedThreatUuid,
+                    this.lastSolveReason,
+                    this.status,
+                    powered,
+                    solution.valid,
+                    solution.clearShot,
+                    solution.ammunitionAvailable,
+                    round(solution.desiredYaw),
+                    round(solution.desiredPitch),
+                    round(solution.currentYaw),
+                    round(solution.currentPitch),
+                    round(solution.yawError),
+                    round(solution.pitchError),
+                    round(aim.remainingYawError),
+                    round(aim.remainingPitchError),
+                    aim.applied,
+                    round(solution.interceptTicks),
+                    round(solution.timingError),
+                    ready,
+                    shortVec(solution.muzzle),
+                    shortVec(solution.aimPoint));
+        }
     }
 
     private static String shortVec(Vec3 vec) {
@@ -1922,18 +1957,12 @@ public class InterceptionControllerBlockEntity extends SmartBlockEntity implemen
         private static final AimFeedForward ZERO = new AimFeedForward(0.0D, 0.0D);
     }
 
-    private record PlannedIntercept(Solution solution, double correctionReserveTicks) {
+    private record PlannedIntercept(Solution solution) {
     }
 
-    private record ProtectedReferenceMotion(Vec3 position, Vec3 velocity, Vec3 acceleration) {
-        private Vec3 positionAt(double ticks) {
-            return this.position
-                    .add(this.velocity.scale(ticks))
-                    .add(this.acceleration.scale(0.5D * ticks * ticks));
-        }
-
-        private Vec3 velocityAt(double ticks) {
-            return this.velocity.add(this.acceleration.scale(ticks));
+    private record InterceptionWindow(double maximumTicks) {
+        private boolean expired(double ticks) {
+            return ticks > this.maximumTicks;
         }
     }
 

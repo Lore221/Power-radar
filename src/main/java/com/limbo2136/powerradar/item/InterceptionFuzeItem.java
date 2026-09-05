@@ -58,7 +58,11 @@ public class InterceptionFuzeItem extends FuzeItem {
                 ? null
                 : InterceptionCoordinator.interceptorTarget(level, interceptorUuid);
         if (targetUuid == null && !wasAutomaticallyAssigned) {
-            targetUuid = InterceptionCoordinator.bindInterceptor(level, interceptorUuid, projectile.position());
+            targetUuid = InterceptionCoordinator.bindInterceptor(
+                    level,
+                    interceptorUuid,
+                    projectile.position(),
+                    projectile.getDeltaMovement());
         }
         if (targetUuid != null) {
             projectileData.putBoolean(AUTOMATIC_ASSIGNMENT_TAG, true);
@@ -92,9 +96,16 @@ public class InterceptionFuzeItem extends FuzeItem {
         if (!(target instanceof AbstractBigCannonProjectile)
                 || target == projectile
                 || !target.isAlive()) {
-            InterceptionCoordinator.clearInterceptor(level.getServer(), interceptorUuid);
             // После потери назначенной цели снаряд продолжает штатный баллистический полёт.
             logFuze(projectile, targetUuid, target, "target-invalid", 0.0, 0.0);
+            InterceptionCoordinator.logSableInterceptorOutcome(
+                    level,
+                    interceptorUuid,
+                    projectile.position(),
+                    projectile.getDeltaMovement(),
+                    projectile.tickCount,
+                    "target-invalid");
+            InterceptionCoordinator.clearInterceptor(level.getServer(), interceptorUuid);
             return false;
         }
         Vec3 toTarget = target.position().subtract(projectile.position());
@@ -129,6 +140,13 @@ public class InterceptionFuzeItem extends FuzeItem {
                 destruction.probability(),
                 destruction.roll(),
                 destruction.nextProbability());
+        InterceptionCoordinator.logSableInterceptorOutcome(
+                level,
+                interceptorUuid,
+                projectile.position(),
+                projectile.getDeltaMovement(),
+                projectile.tickCount,
+                destruction.destroyed() ? "detonated-destroyed" : "detonated-shell-survived");
         InterceptionCoordinator.clearInterceptor(level.getServer(), interceptorUuid);
         return true;
     }

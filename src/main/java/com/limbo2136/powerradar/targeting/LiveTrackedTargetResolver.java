@@ -157,7 +157,7 @@ public final class LiveTrackedTargetResolver {
 
         @Override
         public Vec3 velocity() {
-            return this.entity.getDeltaMovement();
+            return TargetVelocityNormalizer.normalize(this.entity);
         }
 
         @Override

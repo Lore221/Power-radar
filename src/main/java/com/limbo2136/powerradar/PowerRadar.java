@@ -13,6 +13,7 @@ import com.limbo2136.powerradar.radar.RadarScanCoordinator;
 import com.limbo2136.powerradar.compat.aeronautics.SableWarningManager;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.EwSystemManager;
+import com.limbo2136.powerradar.interception.InterceptionCoordinator;
 import com.limbo2136.powerradar.radar.network.RadarLinkConnectionResolver;
 import com.limbo2136.powerradar.radar.network.RadarNetworkManager;
 import com.limbo2136.powerradar.registry.ModBlockEntities;
@@ -31,6 +32,7 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
@@ -67,6 +69,7 @@ public final class PowerRadar {
         NeoForge.EVENT_BUS.addListener(PowerRadar::onServerStopped);
         NeoForge.EVENT_BUS.addListener(PowerRadar::onBlockPlaced);
         NeoForge.EVENT_BUS.addListener(PowerRadar::onBlockBroken);
+        NeoForge.EVENT_BUS.addListener(PowerRadar::onEntityLeaveLevel);
     }
 
     private static void onCommonSetup(FMLCommonSetupEvent event) {
@@ -95,6 +98,17 @@ public final class PowerRadar {
 
     private static void onBlockBroken(BlockEvent.BreakEvent event) {
         markSableSilhouetteDirty(event);
+    }
+
+    private static void onEntityLeaveLevel(EntityLeaveLevelEvent event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            InterceptionCoordinator.logSableInterceptorRemoved(
+                    level,
+                    event.getEntity().getUUID(),
+                    event.getEntity().position(),
+                    event.getEntity().getDeltaMovement(),
+                    event.getEntity().tickCount);
+        }
     }
 
     private static void markSableSilhouetteDirty(BlockEvent event) {

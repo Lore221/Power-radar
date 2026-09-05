@@ -148,6 +148,12 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
         long scanGameTime = radar.lastScanGameTime();
         long previousScanGameTime = this.lastProcessedThreatScanGameTime;
         if (scanGameTime == previousScanGameTime) {
+            if (!maintainKnownThreats(level)) {
+                deactivateShellAlarm(level, state);
+                return;
+            }
+            setAlarmActive(level, state, InterceptionCoordinator.activeThreatCount(
+                    level.getServer(), this.interceptionNetworkId, level.getGameTime()) > 0);
             return;
         }
         this.lastProcessedThreatScanGameTime = scanGameTime;
@@ -169,9 +175,13 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
         }
         ServerLevel projectileLevel = worldLevel;
         MovingProtectedZone zone = this.protectedZone;
+        boolean knownThreats = InterceptionCoordinator.hasKnownThreats(
+                level.getServer(), this.interceptionNetworkId);
         Vec3 alarmReference = zone.referencePosition();
         List<TrackedTargetView> tracks = new ArrayList<>();
         radar.forEachTrackedTargetBySource(TargetSourceType.CBC_BIG_CANNON_PROJECTILE, tracks::add);
+        tracks.removeIf(track -> track.targetUuid() != null && InterceptionCoordinator.isKnownThreat(
+                level.getServer(), this.interceptionNetworkId, track.targetUuid()));
         List<ThreatSnapshot> threats = new ArrayList<>();
         // Дорогие геометрия и кинематика конструкции нужны только кандидатам,
         // прошедшим дешёвую широкую фазу по последнему снимку.
@@ -180,7 +190,7 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
                 zone,
                 tracks,
                 PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.refreshGeometryIfDue(level, zone, 10.0D);
             this.protectedZone = zone;
         }
@@ -188,7 +198,7 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
             deactivateShellAlarm(level, state);
             return;
         }
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.sampleVelocity(level, zone);
             this.protectedZone = zone;
         }
@@ -201,7 +211,7 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
                 zone,
                 candidateTracks,
                 PowerRadarCeeConstants.SHELL_ALARM_MAX_SIMULATION_TICKS);
-        if (!candidateTracks.isEmpty()) {
+        if (knownThreats || !candidateTracks.isEmpty()) {
             zone = this.protectedZoneTracker.completeMotionSample(zone);
             this.protectedZone = zone;
         }
@@ -220,6 +230,7 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
             }
         }
 
+        InterceptionCoordinator.maintainThreats(level, this.interceptionNetworkId, zone);
         InterceptionCoordinator.publishThreats(
                 projectileLevel,
                 this.interceptionNetworkId,
@@ -227,8 +238,26 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
                 threats,
                 InterceptionCoordinator.threatTtlTicksForScanInterval(
                         radarScanIntervalTicks(scanGameTime, previousScanGameTime)));
-        this.publishedThreats = !threats.isEmpty();
-        setAlarmActive(level, state, !threats.isEmpty());
+        this.publishedThreats = true;
+        setAlarmActive(level, state, InterceptionCoordinator.activeThreatCount(
+                level.getServer(), this.interceptionNetworkId, level.getGameTime()) > 0);
+    }
+
+    private boolean maintainKnownThreats(ServerLevel level) {
+        if (this.interceptionNetworkId == null || this.protectedZone == null) return false;
+        if ((this.protectedZone.onSable() || level.getGameTime() % 5L == 0L)
+                && InterceptionCoordinator.hasKnownThreats(level.getServer(), this.interceptionNetworkId)) {
+            MovingProtectedZone zone = this.protectedZoneTracker.broadPhaseZone(
+                    level, this.worldPosition, new AABB(this.worldPosition), 10.0D);
+            if (zone != null) zone = this.protectedZoneTracker.refreshGeometryIfDue(level, zone, 10.0D);
+            if (zone != null) zone = this.protectedZoneTracker.sampleVelocity(level, zone);
+            if (zone != null) zone = this.protectedZoneTracker.completeMotionSample(zone);
+            this.protectedZone = zone;
+            if (zone == null) return false;
+        }
+        InterceptionCoordinator.maintainThreats(level, this.interceptionNetworkId, this.protectedZone);
+        this.publishedThreats = true;
+        return true;
     }
 
     private void deactivateShellAlarm(ServerLevel level, BlockState state) {
@@ -259,7 +288,7 @@ public final class OnboardComputerBlockEntity extends AbstractRadarMonitorBlockE
                 worldLevel.dimension(),
                 evaluation.projectilePosition(),
                 evaluation.projectileVelocity(),
-                track.lastSeenGameTime(),
+                worldLevel.getGameTime(),
                 evaluation.ballistics().gravity(),
                 evaluation.ballistics().drag(),
                 evaluation.ballistics().quadraticDrag(),

@@ -9,6 +9,30 @@ public final class ShellAlarmCbcCompat {
     private ShellAlarmCbcCompat() {
     }
 
+    private static final ClassValue<java.util.Optional<Method>> IN_GROUND = new ClassValue<>() {
+        @Override
+        protected java.util.Optional<Method> computeValue(Class<?> type) {
+            try {
+                return java.util.Optional.of(type.getMethod("isInGround"));
+            } catch (NoSuchMethodException exception) {
+                return java.util.Optional.empty();
+            }
+        }
+    };
+
+    /** Флаг CBC отличает застрявший снаряд от вершины траектории и рикошета. */
+    public static boolean isInGround(Entity projectile) {
+        var method = IN_GROUND.get(projectile.getClass());
+        if (method.isEmpty()) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(method.get().invoke(projectile));
+        } catch (IllegalAccessException | InvocationTargetException exception) {
+            return false;
+        }
+    }
+
     public static Ballistics ballistics(Entity projectile) {
         Object properties = invokeRecursive(projectile, "getBallisticProperties");
         if (properties == null) {

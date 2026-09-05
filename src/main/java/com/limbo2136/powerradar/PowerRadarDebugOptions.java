@@ -4,6 +4,7 @@ public final class PowerRadarDebugOptions {
     private static final boolean SCAN_OPTIMIZATION_LOGGING = false;
     private static final boolean TARGET_SYSTEM_BUG_REPORT_LOGGING = false;
     private static final boolean INTERCEPTION_SYSTEM_BUG_REPORT_LOGGING = false;
+    private static final boolean SABLE_INTERCEPTION_DEBUG_LOGGING = false;
     private static final boolean SHELL_ALARM_BUG_REPORT_LOGGING = false;
 
     private PowerRadarDebugOptions() {
@@ -46,6 +47,13 @@ public final class PowerRadarDebugOptions {
                 INTERCEPTION_SYSTEM_BUG_REPORT_LOGGING,
                 "power_radar.interceptionSystemBugReportDebug",
                 "POWER_RADAR_INTERCEPTION_SYSTEM_BUG_REPORT_DEBUG");
+    }
+
+    public static boolean sableInterceptionDebugLogging() {
+        return enabled(
+                SABLE_INTERCEPTION_DEBUG_LOGGING,
+                "power_radar.sableInterceptionDebug",
+                "POWER_RADAR_SABLE_INTERCEPTION_DEBUG");
     }
 
     public static boolean shellAlarmBugReportLogging() {

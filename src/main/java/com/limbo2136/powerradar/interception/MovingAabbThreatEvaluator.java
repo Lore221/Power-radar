@@ -13,6 +13,45 @@ public final class MovingAabbThreatEvaluator {
     private MovingAabbThreatEvaluator() {
     }
 
+    /** Первый контакт с границей. Резервный проход сохраняет дискретную кинематику CBC. */
+    public static double firstEntryTicks(AABB bounds, Vec3 zoneVelocity, Vec3 zoneAcceleration,
+            Vec3 position, Vec3 velocity, ShellAlarmCbcCompat.Ballistics ballistics, double maximumTicks) {
+        if (!(maximumTicks > 0.0D) || !Double.isFinite(maximumTicks)) return Double.POSITIVE_INFINITY;
+        if (bounds.contains(position)) {
+            return 0.0D;
+        }
+        if (!ballistics.quadraticDrag()) {
+            double entry = AnalyticMovingAabbIntersection.firstEntryTicks(bounds, zoneVelocity,
+                    zoneAcceleration, position, velocity, ballistics.gravity(), ballistics.drag(), maximumTicks);
+            if (!Double.isNaN(entry)) {
+                return entry;
+            }
+        }
+        Vec3 relativeStart = position;
+        for (int tick = 0; tick < Math.ceil(maximumTicks); tick++) {
+            Vec3 nextVelocity = InterceptionBallistics.applyBallistics(
+                    velocity, ballistics.gravity(), ballistics.drag(), ballistics.quadraticDrag());
+            // CBC перемещает снаряд со средней скоростью до и после приложения сил.
+            Vec3 nextPosition = position.add(velocity.add(nextVelocity).scale(0.5D));
+            double dt = Math.min(1.0D, maximumTicks - tick);
+            Vec3 end = position.lerp(nextPosition, dt);
+            Vec3 relativeEnd = relativePosition(end, zoneVelocity, zoneAcceleration, tick + dt);
+            var hit = bounds.clip(relativeStart, relativeEnd);
+            if (hit.isPresent()) {
+                double length = relativeStart.distanceTo(relativeEnd);
+                return tick + dt * (length < 1.0E-12D ? 0.0D
+                        : relativeStart.distanceTo(hit.get()) / length);
+            }
+            if (bounds.contains(relativeEnd)) {
+                return tick + dt;
+            }
+            position = nextPosition;
+            velocity = nextVelocity;
+            relativeStart = relativeEnd;
+        }
+        return Double.POSITIVE_INFINITY;
+    }
+
     /** Дешёвый первый этап намеренно не читает ускорение и баллистические параметры. */
     public static boolean passesInitialBroadPhase(
             MovingProtectedZone zone,

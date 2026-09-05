@@ -29,6 +29,18 @@ final class AnalyticMovingAabbIntersection {
             double drag,
             double maximumTicks
     ) {
+        double entry = firstEntryTicks(bounds, shipVelocity, shipAcceleration,
+                projectilePosition, projectileVelocity, gravity, drag, maximumTicks);
+        return Double.isNaN(entry) ? Result.INDETERMINATE
+                : Double.isFinite(entry) ? Result.HIT : Result.MISS;
+    }
+
+    /** Время первого входа; infinity — промах, NaN — требуется резервный расчёт. */
+    static double firstEntryTicks(
+            AABB bounds, Vec3 shipVelocity, Vec3 shipAcceleration,
+            Vec3 projectilePosition, Vec3 projectileVelocity,
+            double gravity, double drag, double maximumTicks
+    ) {
         if (!(maximumTicks > 0.0D) || !finite(
                 bounds,
                 shipVelocity,
@@ -38,7 +50,7 @@ final class AnalyticMovingAabbIntersection {
                 gravity,
                 drag,
                 maximumTicks)) {
-            return Result.INDETERMINATE;
+            return Double.NaN;
         }
         Vec3 center = bounds.getCenter();
         RelativeTrajectory trajectory;
@@ -69,7 +81,7 @@ final class AnalyticMovingAabbIntersection {
                             shipVelocity.z,
                             shipAcceleration.z));
         } catch (IllegalArgumentException ignored) {
-            return Result.INDETERMINATE;
+            return Double.NaN;
         }
 
         // Сфера только дёшево отвергает далёкие траектории; окончательное решение дают интервалы трёх осей.
@@ -80,32 +92,32 @@ final class AnalyticMovingAabbIntersection {
         ClosestApproachResult closest = closestApproachWithinSphere(
                 trajectory, sphereRadius, maximumTicks);
         if (closest == ClosestApproachResult.OUTSIDE) {
-            return Result.MISS;
+            return Double.POSITIVE_INFINITY;
         }
 
         List<TimeInterval> intervals = List.of(new TimeInterval(0.0D, maximumTicks));
         intervals = intersect(intervals, axisIntervals(
                 trajectory.x(), -bounds.getXsize() * 0.5D, bounds.getXsize() * 0.5D, maximumTicks));
         if (intervals == null) {
-            return Result.INDETERMINATE;
+            return Double.NaN;
         }
         if (intervals.isEmpty()) {
-            return Result.MISS;
+            return Double.POSITIVE_INFINITY;
         }
         intervals = intersect(intervals, axisIntervals(
                 trajectory.y(), -bounds.getYsize() * 0.5D, bounds.getYsize() * 0.5D, maximumTicks));
         if (intervals == null) {
-            return Result.INDETERMINATE;
+            return Double.NaN;
         }
         if (intervals.isEmpty()) {
-            return Result.MISS;
+            return Double.POSITIVE_INFINITY;
         }
         intervals = intersect(intervals, axisIntervals(
                 trajectory.z(), -bounds.getZsize() * 0.5D, bounds.getZsize() * 0.5D, maximumTicks));
         if (intervals == null) {
-            return Result.INDETERMINATE;
+            return Double.NaN;
         }
-        return intervals.isEmpty() ? Result.MISS : Result.HIT;
+        return intervals.isEmpty() ? Double.POSITIVE_INFINITY : intervals.getFirst().start();
     }
 
     private static LinearDragTrajectory.AxisTrajectory relativeAxis(

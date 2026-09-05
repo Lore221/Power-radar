@@ -634,7 +634,8 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         this.panelContraptionUuid = entity.getUUID();
         this.panelContraptionTargetAngle = targetAssemblyAngle(
                 detectedStructure.facing(),
-                fixedScanMode());
+                fixedScanMode(),
+                detectedStructure.structureType());
         this.panelContraptionAnimating = this.panelContraptionTargetAngle != 0.0F;
         AllSoundEvents.CONTRAPTION_ASSEMBLE.playOnServer(serverLevel, this.worldPosition);
         this.ticksSinceStructureValidation = 0L;
@@ -728,8 +729,15 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         }
     }
 
-    private static float targetAssemblyAngle(Direction facing, RadarScanMode scanMode) {
-        if (scanMode != RadarScanMode.SKY && scanMode != RadarScanMode.SURFACE_SCANNER) {
+    private static float targetAssemblyAngle(
+            Direction facing,
+            RadarScanMode scanMode,
+            RadarStructureType structureType) {
+        // Overview modules are assembled into a contraption as well, but they
+        // form a vertical stack and must remain upright. Only panel arrays get
+        // the presentation tilt for sky/surface scanning.
+        if (structureType == RadarStructureType.OVERVIEW
+                || (scanMode != RadarScanMode.SKY && scanMode != RadarScanMode.SURFACE_SCANNER)) {
             return 0.0F;
         }
         // ControlledContraptionEntity stores only the axis (not its direction).
@@ -1262,7 +1270,10 @@ public class RadarControllerBlockEntity extends SmartBlockEntity
         // The tilt is a code-defined presentation setting. Recalculate it so
         // an already saved radar also picks up a changed angle (for example,
         // the 10° -> 15° adjustment) instead of keeping the old NBT value.
-        this.panelContraptionTargetAngle = targetAssemblyAngle(this.radarFacing, this.scanMode);
+        this.panelContraptionTargetAngle = targetAssemblyAngle(
+                this.radarFacing,
+                this.scanMode,
+                this.orientationState.structureType());
         this.panelContraptionAnimating = this.assemblyConfirmed
                 && this.assembled
                 && (tag.getBoolean("PanelContraptionAnimating")

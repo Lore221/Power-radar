@@ -7,6 +7,7 @@ import com.limbo2136.powerradar.compat.aeronautics.SableStructureObservation;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.EwSystemManager;
 import com.limbo2136.powerradar.entity.RadarStructureEntity;
+import com.limbo2136.powerradar.targeting.TargetVelocityNormalizer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -335,15 +336,12 @@ public final class RadarScanner {
     }
 
     private static Vec3 displayVelocity(Entity entity, RadarTargetCategory category) {
+        if (category != RadarTargetCategory.PROJECTILE) {
+            return TargetVelocityNormalizer.normalize(entity);
+        }
         Vec3 velocity = entity.getDeltaMovement();
         if (velocity == null) {
             return Vec3.ZERO;
-        }
-        if (category != RadarTargetCategory.PROJECTILE) {
-            if (entity.onGround() && velocity.y < 0.0D && Math.abs(velocity.y) <= 0.1D) {
-                return new Vec3(velocity.x, 0.0, velocity.z);
-            }
-            return velocity;
         }
         if (entity.onGround() && velocity.lengthSqr() < 0.01D) {
             return Vec3.ZERO;

@@ -1,5 +1,7 @@
 package com.limbo2136.powerradar.interception;
 
+import com.limbo2136.powerradar.PowerRadar;
+import com.limbo2136.powerradar.PowerRadarDebugOptions;
 import com.limbo2136.powerradar.compat.aeronautics.SableRadarIntegration;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureGeometry;
 import com.limbo2136.powerradar.compat.aeronautics.SableStructureMotion;
@@ -31,6 +33,7 @@ public final class MovingProtectedZoneTracker {
     @Nullable private Vec3 cachedLocalCenter;
     @Nullable private Vec3 cachedGeometryOrigin;
     private long nextGeometryRefreshGameTime = Long.MIN_VALUE;
+    private long lastGeometryLogGameTime = Long.MIN_VALUE;
 
     @Nullable
     public MovingProtectedZone broadPhaseZone(
@@ -126,6 +129,17 @@ public final class MovingProtectedZoneTracker {
         }
         this.cachedStructureBounds = pose.worldBounds();
         this.cachedGeometryOrigin = pose.worldOrigin();
+        if (PowerRadarDebugOptions.sableInterceptionDebugLogging()
+                && (this.lastGeometryLogGameTime == Long.MIN_VALUE
+                || gameTime - this.lastGeometryLogGameTime >= 5L)) {
+            this.lastGeometryLogGameTime = gameTime;
+            PowerRadar.LOGGER.info(
+                    "[PowerRadar Debug][SableInterception] event=protected-zone-geometry gameTime={} structure={} dimension={} localBounds={} localCenter={} worldOrigin={} broadPhaseWorldBounds={} rawWorldBounds={} sizeX={} sizeY={} sizeZ={} expansionPercent={} nextGeometryRefreshTick={}",
+                    gameTime, this.structureUuid, level.dimension().location(), this.cachedLocalBounds,
+                    this.cachedLocalCenter, pose.worldOrigin(), broadPhaseZone.bounds(), pose.worldBounds(),
+                    pose.worldBounds().getXsize(), pose.worldBounds().getYsize(), pose.worldBounds().getZsize(),
+                    sableTotalExpansionPercent, this.nextGeometryRefreshGameTime);
+        }
         return new MovingProtectedZone(
                 pose.worldBounds(),
                 broadPhaseZone.velocity(),
